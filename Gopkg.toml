@@ -1,0 +1,11 @@
+[[constraint]]
+  name = "github.com/aws/aws-sdk-go"
+  version = "1.13.30"
+
+[[constraint]]
+  name = "github.com/sirupsen/logrus"
+  version = "1.0.5"
+
+[[constraint]]
+  name = "github.com/spf13/cobra"
+  version = "0.0.2"

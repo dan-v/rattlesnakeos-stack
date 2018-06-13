@@ -1,0 +1,34 @@
+
+# Created by https://www.gitignore.io/api/go,terraform
+
+### Go ###
+# Binaries for programs and plugins
+*.exe
+*.dll
+*.so
+*.dylib
+
+# Test binary, build with `go test -c`
+*.test
+
+# Output of the go coverage tool, specifically when used with LiteIDE
+*.out
+
+# Project-local glide cache, RE: https://github.com/Masterminds/glide/issues/736
+.glide/
+
+### Terraform ###
+# Compiled files
+*.tfstate
+*.tfstate.backup
+
+# Module directory
+.terraform/
+
+### Terraform Patch ###
+*.tfvars
+
+# End of https://www.gitignore.io/api/go,terraform
+
+artifacts
+rattlesnakes-stack
