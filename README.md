@@ -2,7 +2,7 @@
 RattlesnakeOS is my migration strategy away from CopperheadOS. It is just a standard AOSP build but keeps the verified boot and OTA update features of CopperheadOS.
 
 ## What is rattlesnakeos-stack
-<b>rattlesnakeos-stack</b> is an tool that will deploy all the AWS infrastructure required to run your own [CopperheadOS](https://copperhead.co/android/) build and release environment. It uses AWS Lambda to check for new releases, provisions EC2 spot instances for OS builds on demand, and uploads build artifacts to S3. Resulting OS builds are configured to receive over the air updates from this environment.
+<b>rattlesnakeos-stack</b> is an tool that will deploy all the AWS infrastructure required to run your own RattlesnakeOS build and release environment. It uses AWS Lambda to check for new releases, provisions EC2 spot instances for OS builds on demand, and uploads build artifacts to S3. Resulting OS builds are configured to receive over the air updates from this environment.
 
 ## Features
 * Support for Google Pixel XL
@@ -12,7 +12,7 @@ RattlesnakeOS is my migration strategy away from CopperheadOS. It is just a stan
 * Costs a few dollars a month to run (EC2 spot instance and S3 storage costs)
 
 ## Installation
-The easiest way is to download a pre-built binary from the [GitHub Releases](https://github.com/dan-v/copperheados-stack/releases) page.
+The easiest way is to download a pre-built binary from the [GitHub Releases](https://github.com/dan-v/rattlesnakeos-stack/releases) page.
 
 ## Prerequisites
 You'll need AWS CLI credentials setup with 'AdministratorAccess': https://docs.aws.amazon.com/cli/latest/userguide/cli-chap-getting-started.html
@@ -43,7 +43,7 @@ You'll need AWS CLI credentials setup with 'AdministratorAccess': https://docs.a
 * A SNS topic should be created with your stack name already, all you have to do is create a subscription to this using your email for example.
 
 ## FAQ
-1. <b>Should I use rattlesnakeos-stack?</b> That's up to you. Use at your own risk.
+1. <b>Should I use rattlesnakeos-stack?</b> Probably not. Use at your own risk.
 
 ## Powered by
 * Huimin Zhang - he is the original author of the underlying build script that was written for CopperheadOS.

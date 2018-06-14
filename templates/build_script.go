@@ -30,7 +30,10 @@ RELEASE_URL="https://${AWS_RELEASE_BUCKET}.s3.amazonaws.com"
 
 OFFICIAL_DATE=$(date +%Y.%m.%d.%H)
 OFFICIAL_TIMESTAMP=$(date +%s)
-OFFICIAL_VERSION="OPM4.171019.021.D1"
+OFFICIAL_VERSION=$(curl -s https://source.android.com/setup/start/build-numbers | grep -m1 -B3 'Pixel XL' | head -1 | cut -f2 -d">"|cut -f1 -d"<")
+OFFICIAL_BRANCH=$(curl -s https://source.android.com/setup/start/build-numbers | grep -m1 -B3 'Pixel XL' | head -2 | tail -1 | cut -f2 -d">"|cut -f1 -d"<")
+
+MANIFEST_URL='https://android.googlesource.com/platform/manifest'
 
 # make getopts ignore $1 since it is $DEVICE
 OPTIND=2
@@ -69,9 +72,8 @@ setup_env() {
 
 fetch_build() {
   pushd "${BUILD_DIR}"
-  repo init --manifest-url 'https://github.com/dan-v/platform_manifest.git' --manifest-branch "master"
-  pushd "${BUILD_DIR}"
-  sed -i '/platform_external_chromium/d' .repo/manifest.xml || true
+  repo init --manifest-url "$MANIFEST_URL" --manifest-branch "$OFFICIAL_BRANCH"
+  
   for i in {1..10}; do
     repo sync --jobs 32 && break
   done
@@ -89,19 +91,17 @@ check_chrome() {
 
   mkdir -p $HOME/chromium
   cd $HOME/chromium
-  git clone https://github.com/AndroidHardening/chromium_patches.git || true
-  cd chromium_patches
-  git checkout oreo-m2-s3-release
-  latest=$(awk /android_default_version_name/'{print $3}' args.gn | cut -d'"' -f2)
+  latest=$(curl -s 'https://omahaproxy.appspot.com/all.json' | jq -r '.[] | select(.os == "android") | .versions[] | select(.channel == "stable") | .current_version' || true)
   echo "Chromium latest: $latest"
 
-  if [ "$latest" == "$current" ]; then
-    echo "Chromium latest ($latest) matches current ($current) - just copying s3 chromium artifact"
-    copy_chrome
-  else
-    echo "Building chromium $latest"
-    build_chrome $latest
-  fi
+  #if [ "$latest" == "$current" ]; then
+  #  echo "Chromium latest ($latest) matches current ($current) - just copying s3 chromium artifact"
+  #  copy_chrome
+  #else
+  #  echo "Building chromium $latest"
+  #  build_chrome $latest
+  #fi
+  copy_chrome
 }
 
 copy_chrome() {
@@ -110,6 +110,7 @@ copy_chrome() {
 
 build_chrome() {
   CHROMIUM_REVISION=$1
+  DEFAULT_VERSION=$(echo $CHROMIUM_REVISION | awk -F"." '{ printf "%s%03d52\n",$3,$4}')
   pushd "$BUILD_DIR" 
   git clone https://chromium.googlesource.com/chromium/tools/depot_tools.git $HOME/depot_tools
   export PATH="$PATH:$HOME/depot_tools"
@@ -118,9 +119,23 @@ build_chrome() {
   fetch --nohooks android --target_os_only=true
   echo -e "y\n" | gclient sync --with_branch_heads -r $CHROMIUM_REVISION --jobs 32
   cd src
-  git am ../chromium_patches/*.patch
   mkdir -p out/Default
-  cp ../chromium_patches/args.gn out/Default/args.gn
+cat <<EOF > out/Default/args.gn
+target_os = "android"	
+target_cpu = "arm64"	
+is_debug = false	
+  
+is_official_build = true	
+is_component_build = false	
+symbol_level = 0	
+  
+ffmpeg_branding = "Chrome"	
+proprietary_codecs = true	
+  
+android_channel = "stable"	
+android_default_version_name = "$CHROMIUM_REVISION"	
+android_default_version_code = "$DEFAULT_VERSION"	
+EOF
 
   build/linux/sysroot_scripts/install-sysroot.py --arch=i386
   build/linux/sysroot_scripts/install-sysroot.py --arch=amd64
@@ -149,12 +164,12 @@ ubuntu_setup_packages() {
   sudo apt-get update
   sudo apt-get --assume-yes install openjdk-8-jdk git-core gnupg flex bison build-essential zip curl zlib1g-dev gcc-multilib g++-multilib libc6-dev-i386 lib32ncurses5-dev x11proto-core-dev libx11-dev lib32z-dev ccache libgl1-mesa-dev libxml2-utils xsltproc unzip python-networkx liblz4-tool
   sudo apt-get --assume-yes build-dep "linux-image-$(uname --kernel-release)"
-  sudo apt-get --assume-yes install repo gperf jq
+  sudo apt-get --assume-yes install repo gperf jq fuseext2
 }
 
 setup_git() {
-  git config --get --global user.name || git config --global user.name 'user'
-  git config --get --global user.email || git config --global user.email 'user@localhost'
+  git config --get --global user.name || git config --global user.name 'unknown'
+  git config --get --global user.email || git config --global user.email 'unknown@localhost'
   git config --global color.ui true
 }
 
@@ -227,46 +242,23 @@ aws_import_keys() {
 
 setup_vendor() {
   pushd "${BUILD_DIR}/vendor/android-prepare-vendor"
+  sed -i.bkp 's/  USE_DEBUGFS=true/  USE_DEBUGFS=false/; s/  # SYS_TOOLS/  SYS_TOOLS/; s/  # _UMOUNT=/  _UMOUNT=/' execute-all.sh
 
-  sudo apt-get --assume-yes install fuseext2
-
-  patch -p1 <<'ENDDEBUGFSPATCH'
-diff --git a/execute-all.sh b/execute-all.sh
-index 41c9713..74f3995 100755
---- a/execute-all.sh
-+++ b/execute-all.sh
-@@ -319,9 +319,9 @@ if isDarwin; then
-    SYS_TOOLS+=("umount")
-   _UMOUNT=umount
- else
-   # For Linux use debugfs
--  USE_DEBUGFS=true
--  # SYS_TOOLS+=("fusermount")
--  # _UMOUNT="fusermount -u"
-+  USE_DEBUGFS=false
-+  SYS_TOOLS+=("fusermount")
-+  _UMOUNT="fusermount -u"
- fi
-
- # Check that system tools exist
-ENDDEBUGFSPATCH
-
-  vendor_version="$OFFICIAL_VERSION"
   yes | "${BUILD_DIR}/vendor/android-prepare-vendor/execute-all.sh" --device "${DEVICE}" --buildID "${OFFICIAL_VERSION}" --output "${BUILD_DIR}/vendor/android-prepare-vendor"
-  aws s3 cp - "s3://${AWS_RELEASE_BUCKET}/${DEVICE}-vendor" --acl public-read <<< "${vendor_version}" || true
+  aws s3 cp - "s3://${AWS_RELEASE_BUCKET}/${DEVICE}-vendor" --acl public-read <<< "${OFFICIAL_VERSION}" || true
 
   mkdir --parents "${BUILD_DIR}/vendor/google_devices" || true
   rm --recursive --force "${BUILD_DIR}/vendor/google_devices/$DEVICE" || true
-  mv "${BUILD_DIR}/vendor/android-prepare-vendor/${DEVICE}/$(tr '[:upper:]' '[:lower:]' <<< "${vendor_version}")/vendor/google_devices/${DEVICE}" "${BUILD_DIR}/vendor/google_devices"
+  mv "${BUILD_DIR}/vendor/android-prepare-vendor/${DEVICE}/$(tr '[:upper:]' '[:lower:]' <<< "${OFFICIAL_VERSION}")/vendor/google_devices/${DEVICE}" "${BUILD_DIR}/vendor/google_devices"
 
   if [ "$DEVICE" == 'sailfish' ]; then
     rm --recursive --force "${BUILD_DIR}/vendor/google_devices/marlin" || true
-    mv "${BUILD_DIR}/vendor/android-prepare-vendor/sailfish/$(tr '[:upper:]' '[:lower:]' <<< "${vendor_version}")/vendor/google_devices/marlin" "${BUILD_DIR}/vendor/google_devices"
+    mv "${BUILD_DIR}/vendor/android-prepare-vendor/sailfish/$(tr '[:upper:]' '[:lower:]' <<< "${OFFICIAL_VERSION}")/vendor/google_devices/marlin" "${BUILD_DIR}/vendor/google_devices"
   fi
 
   if [ "$DEVICE" == 'walleye' ]; then
     rm --recursive --force "${BUILD_DIR}/vendor/google_devices/muskie" || true
-    mv "${BUILD_DIR}/vendor/android-prepare-vendor/walleye/$(tr '[:upper:]' '[:lower:]' <<< "${vendor_version}")/vendor/google_devices/muskie" "${BUILD_DIR}/vendor/google_devices"
+    mv "${BUILD_DIR}/vendor/android-prepare-vendor/walleye/$(tr '[:upper:]' '[:lower:]' <<< "${OFFICIAL_VERSION}")/vendor/google_devices/muskie" "${BUILD_DIR}/vendor/google_devices"
   fi
 
   popd
