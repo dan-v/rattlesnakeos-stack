@@ -34,6 +34,7 @@ OFFICIAL_VERSION=$(curl -s https://source.android.com/setup/start/build-numbers 
 OFFICIAL_BRANCH=$(curl -s https://source.android.com/setup/start/build-numbers | grep -m1 -B3 'Pixel XL' | head -2 | tail -1 | cut -f2 -d">"|cut -f1 -d"<")
 
 MANIFEST_URL='https://android.googlesource.com/platform/manifest'
+MARLIN_KERNEL="android-msm-marlin-3.18-oreo-m4"
 
 # make getopts ignore $1 since it is $DEVICE
 OPTIND=2
@@ -65,24 +66,49 @@ full_run() {
 }
 
 setup_env() {
-  ubuntu_setup_packages
-  setup_git
-  aws_setup_build_dir
+  sudo apt-get update
+  sudo apt-get --assume-yes install openjdk-8-jdk git-core gnupg flex bison build-essential zip curl zlib1g-dev gcc-multilib g++-multilib libc6-dev-i386 lib32ncurses5-dev x11proto-core-dev libx11-dev lib32z-dev ccache libgl1-mesa-dev libxml2-utils xsltproc unzip python-networkx liblz4-tool
+  sudo apt-get --assume-yes build-dep "linux-image-$(uname --kernel-release)"
+  sudo apt-get --assume-yes install repo gperf jq fuseext2
+
+  mkdir -p ${HOME}/sdk
+  pushd ${HOME}/sdk
+  wget https://dl.google.com/android/repository/sdk-tools-linux-4333796.zip -O sdk-tools.zip
+  unzip sdk-tools.zip
+  yes | ./tools/bin/sdkmanager --licenses
+  ./tools/android update sdk -u --use-sdk-wrapper
+
+  git config --get --global user.name || git config --global user.name 'unknown'
+  git config --get --global user.email || git config --global user.email 'unknown@localhost'
+  git config --global color.ui true
+
+  mkdir -p "$BUILD_DIR"
 }
 
 fetch_build() {
   pushd "${BUILD_DIR}"
   repo init --manifest-url "$MANIFEST_URL" --manifest-branch "$OFFICIAL_BRANCH"
-  
+
+  # make modifications to default AOSP
+  awk -i inplace -v MARLIN_KERNEL="$MARLIN_KERNEL" '1;/<repo-hooks in-project=/{
+    print "  ";
+    print "  <remove-project name=\"platform/external/chromium-webview\" />";
+    print "  ";
+    print "  <remote name=\"github\" fetch=\"https://github.com/RattlesnakeOS/\" revision=\"master\" />";
+    print "  <remote name=\"fdroid\" fetch=\"https://gitlab.com/fdroid/\" />";
+    print "  <remote name=\"prepare-vendor\" fetch=\"https://github.com/anestisb/\" revision=\"master\" />";
+    print "  ";
+    print "  <project path=\"script\" name=\"script\" remote=\"github\" />";
+    print "  <project path=\"external/chromium\" name=\"platform_external_chromium\" remote=\"github\" />";
+    print "  <project path=\"packages/apps/Updater\" name=\"platform_packages_apps_Updater\" remote=\"github\" />";
+    print "  <project path=\"packages/apps/F-Droid\" name=\"fdroidclient\" remote=\"fdroid\" revision=\"refs/tags/1.2.2\" />"
+    print "  <project path=\"packages/apps/F-DroidPrivilegedExtension\" name=\"privileged-extension\" remote=\"fdroid\" revision=\"refs/tags/0.2.8\" />";
+    print "  <project path=\"kernel/google/marlin\" name=\"kernel/msm\" remote=\"aosp\" revision=\"" MARLIN_KERNEL "\" />";
+    print "  <project path=\"vendor/android-prepare-vendor\" name=\"android-prepare-vendor\" remote=\"prepare-vendor\" />"}' .repo/manifest.xml
+
   for i in {1..10}; do
     repo sync --jobs 32 && break
   done
-}
-
-patch() {
-  patch_manifest
-  patch_updater
-  patch_priv_ext
 }
 
 check_chrome() {
@@ -96,15 +122,11 @@ check_chrome() {
 
   #if [ "$latest" == "$current" ]; then
   #  echo "Chromium latest ($latest) matches current ($current) - just copying s3 chromium artifact"
-  #  copy_chrome
+  #  aws s3 cp "s3://${AWS_RELEASE_BUCKET}/chromium/MonochromePublic.apk" ${BUILD_DIR}/external/chromium/prebuilt/arm64/
   #else
   #  echo "Building chromium $latest"
   #  build_chrome $latest
   #fi
-  copy_chrome
-}
-
-copy_chrome() {
   aws s3 cp "s3://${AWS_RELEASE_BUCKET}/chromium/MonochromePublic.apk" ${BUILD_DIR}/external/chromium/prebuilt/arm64/
 }
 
@@ -160,42 +182,51 @@ build() {
   "${BUILD_DIR}/script/release.sh" "$DEVICE"
 }
 
-ubuntu_setup_packages() {
-  sudo apt-get update
-  sudo apt-get --assume-yes install openjdk-8-jdk git-core gnupg flex bison build-essential zip curl zlib1g-dev gcc-multilib g++-multilib libc6-dev-i386 lib32ncurses5-dev x11proto-core-dev libx11-dev lib32z-dev ccache libgl1-mesa-dev libxml2-utils xsltproc unzip python-networkx liblz4-tool
-  sudo apt-get --assume-yes build-dep "linux-image-$(uname --kernel-release)"
-  sudo apt-get --assume-yes install repo gperf jq fuseext2
-}
-
-setup_git() {
-  git config --get --global user.name || git config --global user.name 'unknown'
-  git config --get --global user.email || git config --global user.email 'unknown@localhost'
-  git config --global color.ui true
-}
-
-aws_setup_build_dir() {
-  mkdir --parents "$BUILD_DIR"
-}
-
 # call with argument: .x509.pem file
 fdpe_hash() {
   keytool -list -printcert -file "$1" | grep 'SHA256:' | tr --delete ':' | cut --delimiter ' ' --fields 3
 }
 
-patch_manifest() {
+patch() {
+  patch_apps
+  patch_updater
+  patch_fdroid
+  patch_priv_ext
+}
+
+patch_fdroid() {
+  echo "sdk.dir=${HOME}/sdk" > ${BUILD_DIR}/packages/apps/F-Droid/local.properties
+  echo "sdk.dir=${HOME}/sdk" > ${BUILD_DIR}/packages/apps/F-Droid/app/local.properties
+  sed -i 's/gradle assembleRelease/..\/gradlew assembleRelease/' ${BUILD_DIR}/packages/apps/F-Droid/Android.mk
+  pushd ${BUILD_DIR}/packages/apps/F-Droid
+  # for some reason first install fails - so do it now
+  ./gradlew assembleRelease || true
+  popd
+}
+
+patch_apps() {
   if [ "$DEVICE" == 'sailfish' ] || [ "$DEVICE" == 'marlin' ]; then
-    pushd "$BUILD_DIR"/device/google/marlin
-    perl -0777 -i.original -pe 's/ifeq \(\$\(OFFICIAL_BUILD\),true\)\n    PRODUCT_PACKAGES \+= Updater\nendif/PRODUCT_PACKAGES \+= Updater/' device-common.mk  
+    pushd "$BUILD_DIR"/device/google/marlin 
+    sed -i.original "\$aPRODUCT_PACKAGES += Updater" device-common.mk
+    sed -i.original "\$aPRODUCT_PACKAGES += F-DroidPrivilegedExtension" device-common.mk
+    sed -i.original "\$aPRODUCT_PACKAGES += F-Droid" device-common.mk
+    sed -i.original "\$aPRODUCT_PACKAGES += chromium" device-common.mk
   fi
 
   if [ "$DEVICE" == 'walleye' ]; then
     pushd "$BUILD_DIR"/device/google/muskie
     sed -i.original "\$aPRODUCT_PACKAGES += Updater" device-common.mk
+    sed -i.original "\$aPRODUCT_PACKAGES += F-DroidPrivilegedExtension" device-common.mk
+    sed -i.original "\$aPRODUCT_PACKAGES += F-Droid" device-common.mk
+    sed -i.original "\$aPRODUCT_PACKAGES += chromium" device-common.mk
   fi
 
   if [ "$DEVICE" == 'taimen' ]; then
     pushd "$BUILD_DIR"/device/google/taimen
     sed -i.original "\$aPRODUCT_PACKAGES += Updater" device.mk
+    sed -i.original "\$aPRODUCT_PACKAGES += F-DroidPrivilegedExtension" device.mk
+    sed -i.original "\$aPRODUCT_PACKAGES += F-Droid" device.mk
+    sed -i.original "\$aPRODUCT_PACKAGES += chromium" device.mk
   fi
 }
 
@@ -227,7 +258,7 @@ patch_priv_ext() {
     --expression "s/${official_sailfish_platform_hash}/${unofficial_sailfish_platform_hash}/g" \
     --expression "s/${official_taimen_releasekey_hash}/${unofficial_taimen_releasekey_hash}/g" \
     --expression "s/${official_walleye_releasekey_hash}/${unofficial_walleye_releasekey_hash}/g" \
-    "${BUILD_DIR}/packages/apps/F-Droid/privileged-extension/app/src/main/java/org/fdroid/fdroid/privileged/ClientWhitelist.java"
+    "${BUILD_DIR}/packages/apps/F-DroidPrivilegedExtension/app/src/main/java/org/fdroid/fdroid/privileged/ClientWhitelist.java"
 }
 
 aws_import_keys() {
