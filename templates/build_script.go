@@ -119,13 +119,12 @@ build_kernel() {
     cd ${BUILD_DIR};
     . build/envsetup.sh;
     make -j$(nproc --all) dtc mkdtimg;
-    export AOSP_FOLDER=${BUILD_DIR};
     export PATH=${AOSP_FOLDER}/out/host/linux-x86/bin:${PATH};
     cd ${BUILD_DIR}/kernel/google/marlin;
     make -j$(nproc --all) ARCH=arm64 marlin_defconfig;
-    make -j$(nproc --all) ARCH=arm64 CROSS_COMPILE=${AOSP_FOLDER}/prebuilts/gcc/linux-x86/aarch64/aarch64-linux-android-4.9/bin/aarch64-linux-android-;
+    make -j$(nproc --all) ARCH=arm64 CROSS_COMPILE=${BUILD_DIR}/prebuilts/gcc/linux-x86/aarch64/aarch64-linux-android-4.9/bin/aarch64-linux-android-;
     cp -f arch/arm64/boot/Image.lz4-dtb ${BUILD_DIR}/device/google/marlin-kernel/;
-    rm -rf ${BUILD_DIR}/out/*;
+    rm -f ${BUILD_DIR}/out/build_*;
   "
 }
 
@@ -207,9 +206,14 @@ fdpe_hash() {
 
 patch() {
   patch_apps
+  patch_chromium_webview
   patch_updater
   patch_fdroid
   patch_priv_ext
+}
+
+patch_chromium_webview() {
+  sed -i -e 's/Android WebView/Chromium/; s/com.android.webview/org.chromium.chrome/;' ${BUILD_DIR}/frameworks/base/core/res/res/xml/config_webview_packages.xml
 }
 
 patch_fdroid() {
