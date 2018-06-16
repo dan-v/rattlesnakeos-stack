@@ -43,7 +43,7 @@ runcmd:
     """.format(SRC_PATH, DEVICE).encode('ascii')).decode('ascii')
 
     now_utc = datetime.utcnow().replace(microsecond=0)
-    valid_until = now_utc + timedelta(hours=12)
+    valid_until = now_utc + timedelta(hours=24)
     response = client.request_spot_fleet(
         SpotFleetRequestConfig={
             'IamFleetRole': FLEET_ROLE.format(account_id),
