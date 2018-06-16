@@ -94,8 +94,6 @@ fetch_build() {
   # make modifications to default AOSP
   awk -i inplace -v KERNEL="$KERNEL" -v FDROID_CLIENT_VERSION="$FDROID_CLIENT_VERSION" -v FDROID_PRIV_EXT_VERSION="$FDROID_PRIV_EXT_VERSION" '1;/<repo-hooks in-project=/{
     print "  ";
-    print "  <remove-project name=\"platform/external/chromium-webview\" />";
-    print "  ";
     print "  <remote name=\"github\" fetch=\"https://github.com/RattlesnakeOS/\" revision=\"master\" />";
     print "  <remote name=\"fdroid\" fetch=\"https://gitlab.com/fdroid/\" />";
     print "  <remote name=\"prepare-vendor\" fetch=\"https://github.com/anestisb/\" revision=\"master\" />";
@@ -107,6 +105,9 @@ fetch_build() {
     print "  <project path=\"packages/apps/F-DroidPrivilegedExtension\" name=\"privileged-extension\" remote=\"fdroid\" revision=\"refs/tags/" FDROID_PRIV_EXT_VERSION "\" />";
     print "  <project path=\"kernel/google/marlin\" name=\"kernel/msm\" remote=\"aosp\" revision=\"" KERNEL "\" />";
     print "  <project path=\"vendor/android-prepare-vendor\" name=\"android-prepare-vendor\" remote=\"prepare-vendor\" />"}' .repo/manifest.xml
+
+  sed -i '/chromium-webview/d' .repo/manifest.xml
+  rm -rf platform/external/chromium-webview
 
   for i in {1..10}; do
     repo sync --jobs 32 && break
@@ -252,13 +253,6 @@ patch_updater() {
 }
 
 patch_priv_ext() {
-  official_sailfish_releasekey_hash='B919FFF979EAC18DF3E65C6D2EBE63F393F11B4BAB344ADE255B2465F49836BC'
-  official_sailfish_platform_hash='1C3FBC736E9B7B09E309B8379FF954BF5BD9F95ED399741D7D1D3A42F8ADB757'
-  official_marlin_releasekey_hash='6425C9DE6219056CCE62F73E7AD9F92C940B83BAC1D5516ABEBCE1D38F85E4CF'
-  official_marlin_platform_hash='CC1E06EAD3E9CA2C4E46073172E92BAD4AFB02D4D21EDDC3F4D9A50C2FBD639D'
-  official_taimen_releasekey_hash='12AB56E8D6411DC215448EAC69DFC21AB28164B79DBD3EADD1C70D6A70CD862A'
-  official_walleye_releasekey_hash='7CF1C0DD717C52C6EB2B6430E140A586AC5E7652BF0F0D40F428302D735E4CC2'
-
   unofficial_sailfish_releasekey_hash=$(fdpe_hash "${BUILD_DIR}/keys/sailfish/releasekey.x509.pem")
   unofficial_sailfish_platform_hash=$(fdpe_hash "${BUILD_DIR}/keys/sailfish/platform.x509.pem")
   unofficial_marlin_releasekey_hash=$(fdpe_hash "${BUILD_DIR}/keys/marlin/releasekey.x509.pem")
@@ -266,13 +260,8 @@ patch_priv_ext() {
   unofficial_taimen_releasekey_hash=$(fdpe_hash "${BUILD_DIR}/keys/taimen/releasekey.x509.pem")
   unofficial_walleye_releasekey_hash=$(fdpe_hash "${BUILD_DIR}/keys/walleye/releasekey.x509.pem")
 
-  sed --in-place \
-    --expression "s/${official_marlin_releasekey_hash}/${unofficial_marlin_releasekey_hash}/g" \
-    --expression "s/${official_marlin_platform_hash}/${unofficial_marlin_platform_hash}/g" \
-    --expression "s/${official_sailfish_releasekey_hash}/${unofficial_sailfish_releasekey_hash}/g" \
-    --expression "s/${official_sailfish_platform_hash}/${unofficial_sailfish_platform_hash}/g" \
-    --expression "s/${official_taimen_releasekey_hash}/${unofficial_taimen_releasekey_hash}/g" \
-    --expression "s/${official_walleye_releasekey_hash}/${unofficial_walleye_releasekey_hash}/g" \
+  OFFICIAL_FDROID_KEY="43238d512c1e5eb2d6569f4a3afbf5523418b82e0a3ed1552770abb9a9c9ccab"
+  sed -i --expression "s/${OFFICIAL_FDROID_KEY}/${unofficial_marlin_releasekey_hash}/g" \
     "${BUILD_DIR}/packages/apps/F-DroidPrivilegedExtension/app/src/main/java/org/fdroid/fdroid/privileged/ClientWhitelist.java"
 }
 
