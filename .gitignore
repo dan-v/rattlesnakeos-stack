@@ -31,4 +31,4 @@
 # End of https://www.gitignore.io/api/go,terraform
 
 artifacts
-rattlesnakes-stack
+rattlesnakeos-stack

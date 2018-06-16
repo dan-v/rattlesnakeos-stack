@@ -8,7 +8,6 @@ RattlesnakeOS is my migration strategy away from CopperheadOS. It is just a stan
 * Support for Google Pixel XL
 * End to end setup of build environment for RattlesnakeOS in AWS
 * OTA updates through built in updater app - no need to manually flash your device on each new release
-* Scheduled Lambda function looks for new releases to build on a daily basis
 * Costs a few dollars a month to run (EC2 spot instance and S3 storage costs)
 
 ## Installation
@@ -21,13 +20,13 @@ You'll need AWS CLI credentials setup with 'AdministratorAccess': https://docs.a
 * Deploy environment for Pixel XL in AWS (marlin)
 
     ```sh
-    ./copperheados-stack --region us-west-2 --name rattlesnakeos-dan --device marlin
+    ./rattlesnakeos-stack --region us-west-2 --name rattlesnakeos-dan --device marlin
     ```
 
 * Remove environment and all AWS resources
 
     ```sh
-    ./copperheados-stack --remove --region us-west-2 --name rattlesnakeos-dan
+    ./rattlesnakeos-stack --remove --region us-west-2 --name rattlesnakeos-dan
     ```
 
 ## First Time Setup After Deployment
