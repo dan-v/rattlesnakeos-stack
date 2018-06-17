@@ -115,25 +115,25 @@ build_chrome() {
   export PATH="$PATH:$HOME/depot_tools"
   mkdir -p $HOME/chromium
   cd $HOME/chromium
-  fetch --nohooks android --target_os_only=true
+  fetch --nohooks android --target_os_only=true || true
   yes | gclient sync --with_branch_heads -r $CHROMIUM_REVISION --jobs 32
   cd src
   mkdir -p out/Default
   cat <<EOF > out/Default/args.gn
-target_os = "android"	
-target_cpu = "arm64"	
-is_debug = false	
-  
-is_official_build = true	
-is_component_build = false	
-symbol_level = 0	
-  
-ffmpeg_branding = "Chrome"	
-proprietary_codecs = true	
-  
-android_channel = "stable"	
-android_default_version_name = "$CHROMIUM_REVISION"	
-android_default_version_code = "$DEFAULT_VERSION"	
+target_os = "android"
+target_cpu = "arm64"
+is_debug = false
+
+is_official_build = true
+is_component_build = false
+symbol_level = 0
+
+ffmpeg_branding = "Chrome"
+proprietary_codecs = true
+
+android_channel = "stable"
+android_default_version_name = "$CHROMIUM_REVISION"
+android_default_version_code = "$DEFAULT_VERSION"
 EOF
 
   build/linux/sysroot_scripts/install-sysroot.py --arch=i386
@@ -170,19 +170,8 @@ fetch_build() {
   fi
   
   # get rid of some things
-  sed -i '/chromium-webview/d' .repo/manifest.xml
-  sed -i '/packages\/apps\/Browser2/d' .repo/manifest.xml
-  sed -i '/packages\/apps\/Calendar/d' .repo/manifest.xml
-  sed -i '/packages\/apps\/Email/d' .repo/manifest.xml
-  sed -i '/packages\/apps\/Music/d' .repo/manifest.xml
-  sed -i '/packages\/apps\/QuickSearchBox/d' .repo/manifest.xml
-
-  rm -rf platform/external/chromium-webview
-  rm -rf platform/packages/apps/Browser2
-  rm -rf platform/packages/apps/Calendar
-  rm -rf platform/packages/apps/Email
-  rm -rf platform/packages/apps/Music
-  rm -rf platform/packages/apps/QuickSearchBox
+  sed -i '/Browser2/d' build/make/target/product/core.mk
+  sed -i '/QuickSearchBox/d' build/make/target/product/core.mk
 
   for i in {1..10}; do
     repo sync --jobs 32 && break
