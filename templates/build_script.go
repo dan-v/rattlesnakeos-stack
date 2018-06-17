@@ -36,6 +36,7 @@ MANIFEST_URL='https://android.googlesource.com/platform/manifest'
 KERNEL="android-msm-marlin-3.18-oreo-m4"
 FDROID_CLIENT_VERSION="1.2.2"
 FDROID_PRIV_EXT_VERSION="0.2.8"
+OFFICIAL_FDROID_KEY="43238d512c1e5eb2d6569f4a3afbf5523418b82e0a3ed1552770abb9a9c9ccab"
 
 # make getopts ignore $1 since it is $DEVICE
 OPTIND=2
@@ -223,7 +224,6 @@ patch_fdroid() {
   pushd ${BUILD_DIR}/packages/apps/F-Droid
   # for some reason first install fails - so do it now
   ./gradlew assembleRelease || true
-  popd
 }
 
 patch_apps() {
@@ -255,7 +255,7 @@ patch_apps() {
 patch_updater() {
   pushd "$BUILD_DIR"/packages/apps/Updater/res/values
   sed --in-place \
-    --expression "s@s3bucket@${RELEASE_URL}@g" config.xml
+    --expression "s@s3bucket@${RELEASE_URL}/@g" config.xml
 }
 
 patch_priv_ext() {
@@ -266,9 +266,8 @@ patch_priv_ext() {
   unofficial_taimen_releasekey_hash=$(fdpe_hash "${BUILD_DIR}/keys/taimen/releasekey.x509.pem")
   unofficial_walleye_releasekey_hash=$(fdpe_hash "${BUILD_DIR}/keys/walleye/releasekey.x509.pem")
 
-  OFFICIAL_FDROID_KEY="43238d512c1e5eb2d6569f4a3afbf5523418b82e0a3ed1552770abb9a9c9ccab"
-  sed -i --expression "s/${OFFICIAL_FDROID_KEY}/${unofficial_marlin_releasekey_hash}/g" \
-    "${BUILD_DIR}/packages/apps/F-DroidPrivilegedExtension/app/src/main/java/org/fdroid/fdroid/privileged/ClientWhitelist.java"
+  sed -i 's/'${OFFICIAL_FDROID_KEY}'")/'${unofficial_marlin_releasekey_hash}'"),\n            new Pair<>("org.fdroid.fdroid", "'${unofficial_marlin_platform_hash}'")/' \
+     "${BUILD_DIR}/packages/apps/F-DroidPrivilegedExtension/app/src/main/java/org/fdroid/fdroid/privileged/ClientWhitelist.java"
 }
 
 aws_import_keys() {
