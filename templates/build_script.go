@@ -93,20 +93,24 @@ fetch_build() {
   repo init --manifest-url "$MANIFEST_URL" --manifest-branch "$BUILD_BRANCH"
 
   # make modifications to default AOSP
-  awk -i inplace -v KERNEL="$KERNEL" -v FDROID_CLIENT_VERSION="$FDROID_CLIENT_VERSION" -v FDROID_PRIV_EXT_VERSION="$FDROID_PRIV_EXT_VERSION" '1;/<repo-hooks in-project=/{
-    print "  ";
-    print "  <remote name=\"github\" fetch=\"https://github.com/RattlesnakeOS/\" revision=\"master\" />";
-    print "  <remote name=\"fdroid\" fetch=\"https://gitlab.com/fdroid/\" />";
-    print "  <remote name=\"prepare-vendor\" fetch=\"https://github.com/anestisb/\" revision=\"master\" />";
-    print "  ";
-    print "  <project path=\"script\" name=\"script\" remote=\"github\" />";
-    print "  <project path=\"external/chromium\" name=\"platform_external_chromium\" remote=\"github\" />";
-    print "  <project path=\"packages/apps/Updater\" name=\"platform_packages_apps_Updater\" remote=\"github\" />";
-    print "  <project path=\"packages/apps/F-Droid\" name=\"fdroidclient\" remote=\"fdroid\" revision=\"refs/tags/" FDROID_CLIENT_VERSION "\" />";
-    print "  <project path=\"packages/apps/F-DroidPrivilegedExtension\" name=\"privileged-extension\" remote=\"fdroid\" revision=\"refs/tags/" FDROID_PRIV_EXT_VERSION "\" />";
-    print "  <project path=\"kernel/google/marlin\" name=\"kernel/msm\" remote=\"aosp\" revision=\"" KERNEL "\" />";
-    print "  <project path=\"vendor/android-prepare-vendor\" name=\"android-prepare-vendor\" remote=\"prepare-vendor\" />"}' .repo/manifest.xml
-
+  if ! grep -q "RattlesnakeOS" .repo/manifest.xml; then
+    awk -i inplace -v KERNEL="$KERNEL" -v FDROID_CLIENT_VERSION="$FDROID_CLIENT_VERSION" -v FDROID_PRIV_EXT_VERSION="$FDROID_PRIV_EXT_VERSION" '1;/<repo-hooks in-project=/{
+      print "  ";
+      print "  <remote name=\"github\" fetch=\"https://github.com/RattlesnakeOS/\" revision=\"master\" />";
+      print "  <remote name=\"fdroid\" fetch=\"https://gitlab.com/fdroid/\" />";
+      print "  <remote name=\"prepare-vendor\" fetch=\"https://github.com/anestisb/\" revision=\"master\" />";
+      print "  ";
+      print "  <project path=\"script\" name=\"script\" remote=\"github\" />";
+      print "  <project path=\"external/chromium\" name=\"platform_external_chromium\" remote=\"github\" />";
+      print "  <project path=\"packages/apps/Updater\" name=\"platform_packages_apps_Updater\" remote=\"github\" />";
+      print "  <project path=\"packages/apps/F-Droid\" name=\"fdroidclient\" remote=\"fdroid\" revision=\"refs/tags/" FDROID_CLIENT_VERSION "\" />";
+      print "  <project path=\"packages/apps/F-DroidPrivilegedExtension\" name=\"privileged-extension\" remote=\"fdroid\" revision=\"refs/tags/" FDROID_PRIV_EXT_VERSION "\" />";
+      print "  <project path=\"kernel/google/marlin\" name=\"kernel/msm\" remote=\"aosp\" revision=\"" KERNEL "\" />";
+      print "  <project path=\"vendor/android-prepare-vendor\" name=\"android-prepare-vendor\" remote=\"prepare-vendor\" />"}' .repo/manifest.xml
+  else
+    echo "Skipping modification of .repo/manifest.xml as they have already been made"
+  fi
+  
   sed -i '/chromium-webview/d' .repo/manifest.xml
   rm -rf platform/external/chromium-webview
 
@@ -222,7 +226,7 @@ patch_fdroid() {
   echo "sdk.dir=${HOME}/sdk" > ${BUILD_DIR}/packages/apps/F-Droid/app/local.properties
   sed -i 's/gradle assembleRelease/..\/gradlew assembleRelease/' ${BUILD_DIR}/packages/apps/F-Droid/Android.mk
   pushd ${BUILD_DIR}/packages/apps/F-Droid
-  # for some reason first install fails - so do it now
+  # for some reason first build fails - so do it now
   ./gradlew assembleRelease || true
 }
 
