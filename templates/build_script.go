@@ -64,7 +64,7 @@ full_run() {
   aws_import_keys
   patch
   build_kernel
-  build
+  build_aosp
   aws_release
 }
 
@@ -88,51 +88,6 @@ setup_env() {
   mkdir -p "$BUILD_DIR"
 }
 
-fetch_build() {
-  pushd "${BUILD_DIR}"
-  repo init --manifest-url "$MANIFEST_URL" --manifest-branch "$BUILD_BRANCH"
-
-  # make modifications to default AOSP
-  if ! grep -q "RattlesnakeOS" .repo/manifest.xml; then
-    awk -i inplace -v KERNEL="$KERNEL" -v FDROID_CLIENT_VERSION="$FDROID_CLIENT_VERSION" -v FDROID_PRIV_EXT_VERSION="$FDROID_PRIV_EXT_VERSION" '1;/<repo-hooks in-project=/{
-      print "  ";
-      print "  <remote name=\"github\" fetch=\"https://github.com/RattlesnakeOS/\" revision=\"master\" />";
-      print "  <remote name=\"fdroid\" fetch=\"https://gitlab.com/fdroid/\" />";
-      print "  <remote name=\"prepare-vendor\" fetch=\"https://github.com/anestisb/\" revision=\"master\" />";
-      print "  ";
-      print "  <project path=\"script\" name=\"script\" remote=\"github\" />";
-      print "  <project path=\"external/chromium\" name=\"platform_external_chromium\" remote=\"github\" />";
-      print "  <project path=\"packages/apps/Updater\" name=\"platform_packages_apps_Updater\" remote=\"github\" />";
-      print "  <project path=\"packages/apps/F-Droid\" name=\"fdroidclient\" remote=\"fdroid\" revision=\"refs/tags/" FDROID_CLIENT_VERSION "\" />";
-      print "  <project path=\"packages/apps/F-DroidPrivilegedExtension\" name=\"privileged-extension\" remote=\"fdroid\" revision=\"refs/tags/" FDROID_PRIV_EXT_VERSION "\" />";
-      print "  <project path=\"kernel/google/marlin\" name=\"kernel/msm\" remote=\"aosp\" revision=\"" KERNEL "\" />";
-      print "  <project path=\"vendor/android-prepare-vendor\" name=\"android-prepare-vendor\" remote=\"prepare-vendor\" />"}' .repo/manifest.xml
-  else
-    echo "Skipping modification of .repo/manifest.xml as they have already been made"
-  fi
-  
-  sed -i '/chromium-webview/d' .repo/manifest.xml
-  rm -rf platform/external/chromium-webview
-
-  for i in {1..10}; do
-    repo sync --jobs 32 && break
-  done
-}
-
-build_kernel() {
-  bash -c "\
-    cd ${BUILD_DIR};
-    . build/envsetup.sh;
-    make -j$(nproc --all) dtc mkdtimg;
-    export PATH=${AOSP_FOLDER}/out/host/linux-x86/bin:${PATH};
-    cd ${BUILD_DIR}/kernel/google/marlin;
-    make -j$(nproc --all) ARCH=arm64 marlin_defconfig;
-    make -j$(nproc --all) ARCH=arm64 CROSS_COMPILE=${BUILD_DIR}/prebuilts/gcc/linux-x86/aarch64/aarch64-linux-android-4.9/bin/aarch64-linux-android-;
-    cp -f arch/arm64/boot/Image.lz4-dtb ${BUILD_DIR}/device/google/marlin-kernel/;
-    rm -f ${BUILD_DIR}/out/build_*;
-  "
-}
-
 check_chrome() {
   current=$(aws s3 cp "s3://${AWS_RELEASE_BUCKET}/chromium/revision" - || true)
   echo "Chromium current: $current"
@@ -147,21 +102,21 @@ check_chrome() {
     aws s3 cp "s3://${AWS_RELEASE_BUCKET}/chromium/MonochromePublic.apk" ${BUILD_DIR}/external/chromium/prebuilt/arm64/
   else
     echo "Building chromium $latest"
-    #build_chrome $latest
-    aws s3 cp "s3://${AWS_RELEASE_BUCKET}/chromium/MonochromePublic.apk" ${BUILD_DIR}/external/chromium/prebuilt/arm64/
+    build_chrome $latest
   fi
+  rm -rf $HOME/chromium
 }
 
 build_chrome() {
   CHROMIUM_REVISION=$1
   DEFAULT_VERSION=$(echo $CHROMIUM_REVISION | awk -F"." '{ printf "%s%03d52\n",$3,$4}')
   pushd "$BUILD_DIR" 
-  git clone https://chromium.googlesource.com/chromium/tools/depot_tools.git $HOME/depot_tools
+  git clone https://chromium.googlesource.com/chromium/tools/depot_tools.git $HOME/depot_tools || true
   export PATH="$PATH:$HOME/depot_tools"
   mkdir -p $HOME/chromium
   cd $HOME/chromium
   fetch --nohooks android --target_os_only=true
-  echo -e "y\n" | gclient sync --with_branch_heads -r $CHROMIUM_REVISION --jobs 32
+  yes | gclient sync --with_branch_heads -r $CHROMIUM_REVISION --jobs 32
   cd src
   mkdir -p out/Default
   cat <<EOF > out/Default/args.gn
@@ -189,24 +144,83 @@ EOF
   cp out/Default/apks/MonochromePublic.apk ${BUILD_DIR}/external/chromium/prebuilt/arm64/
   aws s3 cp "${BUILD_DIR}/external/chromium/prebuilt/arm64/MonochromePublic.apk" "s3://${AWS_RELEASE_BUCKET}/chromium/MonochromePublic.apk" --acl public-read
   echo "${CHROMIUM_REVISION}" | aws s3 cp - "s3://${AWS_RELEASE_BUCKET}/chromium/revision" --acl public-read
-
-  rm -rf $HOME/chromium
 }
 
-build() {
-  pushd "$BUILD_DIR"
-  source "${BUILD_DIR}/script/setup.sh"
+fetch_build() {
+  pushd "${BUILD_DIR}"
+  repo init --manifest-url "$MANIFEST_URL" --manifest-branch "$BUILD_BRANCH" || true
 
-  choosecombo $BUILD_TARGET
-  make -j $(nproc) target-files-package
-  make -j $(nproc) brillo_update_payload
+  # make modifications to default AOSP
+  if ! grep -q "RattlesnakeOS" .repo/manifest.xml; then
+    awk -i inplace -v KERNEL="$KERNEL" -v FDROID_CLIENT_VERSION="$FDROID_CLIENT_VERSION" -v FDROID_PRIV_EXT_VERSION="$FDROID_PRIV_EXT_VERSION" '1;/<repo-hooks in-project=/{
+      print "  ";
+      print "  <remote name=\"github\" fetch=\"https://github.com/RattlesnakeOS/\" revision=\"master\" />";
+      print "  <remote name=\"fdroid\" fetch=\"https://gitlab.com/fdroid/\" />";
+      print "  <remote name=\"prepare-vendor\" fetch=\"https://github.com/anestisb/\" revision=\"master\" />";
+      print "  ";
+      print "  <project path=\"script\" name=\"script\" remote=\"github\" />";
+      print "  <project path=\"external/chromium\" name=\"platform_external_chromium\" remote=\"github\" />";
+      print "  <project path=\"packages/apps/Updater\" name=\"platform_packages_apps_Updater\" remote=\"github\" />";
+      print "  <project path=\"packages/apps/F-Droid\" name=\"fdroidclient\" remote=\"fdroid\" revision=\"refs/tags/" FDROID_CLIENT_VERSION "\" />";
+      print "  <project path=\"packages/apps/F-DroidPrivilegedExtension\" name=\"privileged-extension\" remote=\"fdroid\" revision=\"refs/tags/" FDROID_PRIV_EXT_VERSION "\" />";
+      print "  <project path=\"kernel/google/marlin\" name=\"kernel/msm\" remote=\"aosp\" revision=\"" KERNEL "\" />";
+      print "  <project path=\"vendor/android-prepare-vendor\" name=\"android-prepare-vendor\" remote=\"prepare-vendor\" />"}' .repo/manifest.xml
+  else
+    echo "Skipping modification of .repo/manifest.xml as they have already been made"
+  fi
+  
+  # get rid of some things
+  sed -i '/chromium-webview/d' .repo/manifest.xml
+  sed -i '/packages\/apps\/Browser2/d' .repo/manifest.xml
+  sed -i '/packages\/apps\/Calendar/d' .repo/manifest.xml
+  sed -i '/packages\/apps\/Email/d' .repo/manifest.xml
+  sed -i '/packages\/apps\/Music/d' .repo/manifest.xml
+  sed -i '/packages\/apps\/QuickSearchBox/d' .repo/manifest.xml
 
-  "${BUILD_DIR}/script/release.sh" "$DEVICE"
+  rm -rf platform/external/chromium-webview
+  rm -rf platform/packages/apps/Browser2
+  rm -rf platform/packages/apps/Calendar
+  rm -rf platform/packages/apps/Email
+  rm -rf platform/packages/apps/Music
+  rm -rf platform/packages/apps/QuickSearchBox
+
+  for i in {1..10}; do
+    repo sync --jobs 32 && break
+  done
 }
 
-# call with argument: .x509.pem file
-fdpe_hash() {
-  keytool -list -printcert -file "$1" | grep 'SHA256:' | tr --delete ':' | cut --delimiter ' ' --fields 3
+setup_vendor() {
+  pushd "${BUILD_DIR}/vendor/android-prepare-vendor"
+  sed -i.bkp 's/  USE_DEBUGFS=true/  USE_DEBUGFS=false/; s/  # SYS_TOOLS/  SYS_TOOLS/; s/  # _UMOUNT=/  _UMOUNT=/' execute-all.sh
+
+  yes | "${BUILD_DIR}/vendor/android-prepare-vendor/execute-all.sh" --device "${DEVICE}" --buildID "${BUILD_VERSION}" --output "${BUILD_DIR}/vendor/android-prepare-vendor"
+  aws s3 cp - "s3://${AWS_RELEASE_BUCKET}/${DEVICE}-vendor" --acl public-read <<< "${BUILD_VERSION}" || true
+
+  mkdir --parents "${BUILD_DIR}/vendor/google_devices" || true
+  rm --recursive --force "${BUILD_DIR}/vendor/google_devices/$DEVICE" || true
+  mv "${BUILD_DIR}/vendor/android-prepare-vendor/${DEVICE}/$(tr '[:upper:]' '[:lower:]' <<< "${BUILD_VERSION}")/vendor/google_devices/${DEVICE}" "${BUILD_DIR}/vendor/google_devices"
+
+  if [ "$DEVICE" == 'sailfish' ]; then
+    rm --recursive --force "${BUILD_DIR}/vendor/google_devices/marlin" || true
+    mv "${BUILD_DIR}/vendor/android-prepare-vendor/sailfish/$(tr '[:upper:]' '[:lower:]' <<< "${BUILD_VERSION}")/vendor/google_devices/marlin" "${BUILD_DIR}/vendor/google_devices"
+  fi
+
+  if [ "$DEVICE" == 'walleye' ]; then
+    rm --recursive --force "${BUILD_DIR}/vendor/google_devices/muskie" || true
+    mv "${BUILD_DIR}/vendor/android-prepare-vendor/walleye/$(tr '[:upper:]' '[:lower:]' <<< "${BUILD_VERSION}")/vendor/google_devices/muskie" "${BUILD_DIR}/vendor/google_devices"
+  fi
+
+  popd
+}
+
+aws_import_keys() {
+  if [ "$(aws s3 ls "s3://${AWS_KEYS_BUCKET}/${DEVICE}" | wc -l)" == '0' ]; then
+    aws_gen_keys
+  else
+    mkdir -p "${BUILD_DIR}/keys"
+    aws s3 sync "s3://${AWS_KEYS_BUCKET}" "${BUILD_DIR}/keys"
+    ln --verbose --symbolic "${BUILD_DIR}/keys/${DEVICE}/verity_user.der.x509" "${BUILD_DIR}/kernel/google/marlin/verity_user.der.x509"
+  fi
 }
 
 patch() {
@@ -262,6 +276,10 @@ patch_updater() {
     --expression "s@s3bucket@${RELEASE_URL}/@g" config.xml
 }
 
+fdpe_hash() {
+  keytool -list -printcert -file "$1" | grep 'SHA256:' | tr --delete ':' | cut --delimiter ' ' --fields 3
+}
+
 patch_priv_ext() {
   unofficial_sailfish_releasekey_hash=$(fdpe_hash "${BUILD_DIR}/keys/sailfish/releasekey.x509.pem")
   unofficial_sailfish_platform_hash=$(fdpe_hash "${BUILD_DIR}/keys/sailfish/platform.x509.pem")
@@ -274,38 +292,29 @@ patch_priv_ext() {
      "${BUILD_DIR}/packages/apps/F-DroidPrivilegedExtension/app/src/main/java/org/fdroid/fdroid/privileged/ClientWhitelist.java"
 }
 
-aws_import_keys() {
-  if [ "$(aws s3 ls "s3://${AWS_KEYS_BUCKET}/${DEVICE}" | wc -l)" == '0' ]; then
-    aws_gen_keys
-  else
-    mkdir -p "${BUILD_DIR}/keys"
-    aws s3 sync "s3://${AWS_KEYS_BUCKET}" "${BUILD_DIR}/keys"
-    ln --verbose --symbolic "${BUILD_DIR}/keys/${DEVICE}/verity_user.der.x509" "${BUILD_DIR}/kernel/google/marlin/verity_user.der.x509"
-  fi
+build_kernel() {
+  bash -c "\
+    cd ${BUILD_DIR};
+    . build/envsetup.sh;
+    make -j$(nproc --all) dtc mkdtimg;
+    export PATH=${AOSP_FOLDER}/out/host/linux-x86/bin:${PATH};
+    cd ${BUILD_DIR}/kernel/google/marlin;
+    make -j$(nproc --all) ARCH=arm64 marlin_defconfig;
+    make -j$(nproc --all) ARCH=arm64 CROSS_COMPILE=${BUILD_DIR}/prebuilts/gcc/linux-x86/aarch64/aarch64-linux-android-4.9/bin/aarch64-linux-android-;
+    cp -f arch/arm64/boot/Image.lz4-dtb ${BUILD_DIR}/device/google/marlin-kernel/;
+    rm -f ${BUILD_DIR}/out/build_*;
+  "
 }
 
-setup_vendor() {
-  pushd "${BUILD_DIR}/vendor/android-prepare-vendor"
-  sed -i.bkp 's/  USE_DEBUGFS=true/  USE_DEBUGFS=false/; s/  # SYS_TOOLS/  SYS_TOOLS/; s/  # _UMOUNT=/  _UMOUNT=/' execute-all.sh
+build_aosp() {
+  pushd "$BUILD_DIR"
+  source "${BUILD_DIR}/script/setup.sh"
 
-  yes | "${BUILD_DIR}/vendor/android-prepare-vendor/execute-all.sh" --device "${DEVICE}" --buildID "${BUILD_VERSION}" --output "${BUILD_DIR}/vendor/android-prepare-vendor"
-  aws s3 cp - "s3://${AWS_RELEASE_BUCKET}/${DEVICE}-vendor" --acl public-read <<< "${BUILD_VERSION}" || true
+  choosecombo $BUILD_TARGET
+  make -j $(nproc) target-files-package
+  make -j $(nproc) brillo_update_payload
 
-  mkdir --parents "${BUILD_DIR}/vendor/google_devices" || true
-  rm --recursive --force "${BUILD_DIR}/vendor/google_devices/$DEVICE" || true
-  mv "${BUILD_DIR}/vendor/android-prepare-vendor/${DEVICE}/$(tr '[:upper:]' '[:lower:]' <<< "${BUILD_VERSION}")/vendor/google_devices/${DEVICE}" "${BUILD_DIR}/vendor/google_devices"
-
-  if [ "$DEVICE" == 'sailfish' ]; then
-    rm --recursive --force "${BUILD_DIR}/vendor/google_devices/marlin" || true
-    mv "${BUILD_DIR}/vendor/android-prepare-vendor/sailfish/$(tr '[:upper:]' '[:lower:]' <<< "${BUILD_VERSION}")/vendor/google_devices/marlin" "${BUILD_DIR}/vendor/google_devices"
-  fi
-
-  if [ "$DEVICE" == 'walleye' ]; then
-    rm --recursive --force "${BUILD_DIR}/vendor/google_devices/muskie" || true
-    mv "${BUILD_DIR}/vendor/android-prepare-vendor/walleye/$(tr '[:upper:]' '[:lower:]' <<< "${BUILD_VERSION}")/vendor/google_devices/muskie" "${BUILD_DIR}/vendor/google_devices"
-  fi
-
-  popd
+  "${BUILD_DIR}/script/release.sh" "$DEVICE"
 }
 
 aws_release() {
