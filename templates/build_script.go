@@ -179,6 +179,11 @@ fetch_build() {
   sed -i '/Browser2/d' build/make/target/product/core.mk
   rm -rf platform/packages/apps/Browser2
 
+  # remove Calendar
+  sed -i '/packages\/apps\/Calendar/d' .repo/manifest.xml
+  sed -i '/Calendar/d' build/make/target/product/core.mk
+  rm -rf platform/packages/apps/Calendar
+
   # remove QuickSearchBox
   sed -i '/packages\/apps\/QuickSearchBox/d' .repo/manifest.xml
   sed -i '/QuickSearchBox/d' build/make/target/product/core.mk

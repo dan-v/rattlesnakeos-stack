@@ -169,24 +169,30 @@ EOF
 resource "aws_s3_bucket" "rattlesnake_s3_keys" {
   bucket = "${var.name}-keys"
   acl    = "private"
+
+  server_side_encryption_configuration {
+    rule {
+      apply_server_side_encryption_by_default {
+        sse_algorithm = "AES256"
+      }
+    }
+  }
 }
 resource "aws_s3_bucket" "rattlesnake_s3_logs" {
   bucket = "${var.name}-logs"
   acl    = "private"
+
+  server_side_encryption_configuration {
+    rule {
+      apply_server_side_encryption_by_default {
+        sse_algorithm = "AES256"
+      }
+    }
+  }
 }
 resource "aws_s3_bucket" "rattlesnake_s3_release" {
   bucket = "${var.name}-release"
-  acl    = "public-read"
-
-  lifecycle_rule {
-    id      = "target"
-    enabled = true
-    prefix  = "${var.device}-target/"
-
-    expiration {
-      days = 30
-    }
-  }
+  acl    = "private"
 
   lifecycle_rule {
     id      = "incremental"
@@ -196,21 +202,27 @@ resource "aws_s3_bucket" "rattlesnake_s3_release" {
     expiration {
       days = 30
     }
-  }
+	}
 
-  lifecycle_rule {
-    id      = "ota"
-    enabled = true
-    prefix  = "${var.device}-ota"
-
-    expiration {
-      days = 30
+  server_side_encryption_configuration {
+    rule {
+      apply_server_side_encryption_by_default {
+        sse_algorithm = "AES256"
+      }
     }
   }
 }
 resource "aws_s3_bucket" "rattlesnake_s3_script" {
   bucket = "${var.name}-script"
   acl    = "private"
+
+  server_side_encryption_configuration {
+    rule {
+      apply_server_side_encryption_by_default {
+        sse_algorithm = "AES256"
+      }
+    }
+  }
 }
 
 resource "aws_s3_bucket_object" "rattlesnake_s3_script_file" {
