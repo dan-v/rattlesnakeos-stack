@@ -1,5 +1,5 @@
 ## What is RattlesnakeOS
-RattlesnakeOS is an Android ROM based on [AOSP](https://source.android.com/). It is my migration strategy away from [CopperheadOS](https://en.wikipedia.org/wiki/CopperheadOS). It is stock AOSP with a few things from CopperheadOS: [verified boot](https://source.android.com/security/verifiedboot/), Chromium (webview + browser), F-Droid (with priviledge extension), and OTA updates. This unfortunately doesn't include any of the hardening features from CopperheadOS.
+RattlesnakeOS is privacy focused Android OS based on [AOSP](https://source.android.com/) for Google Pixel phones. It is my migration strategy away from a security hardened OS called [CopperheadOS](https://en.wikipedia.org/wiki/CopperheadOS) that is no longer maintained. RattlesnakeOS is just stock AOSP with a few things from CopperheadOS: [verified boot](https://source.android.com/security/verifiedboot/) with your own keys, latest Chromium ([webview](https://www.chromium.org/developers/how-tos/build-instructions-android-webview) + browser), [F-Droid](https://f-droid.org/) (with [priviledge extension](https://gitlab.com/fdroid/privileged-extension)), no Google apps, and OTA updates.
 
 ## What is rattlesnakeos-stack
 Rather than providing random binaries of RattlesnakeOS to install on your phone, I've gone the route of creating a cross platform tool, `rattlesnakeos-stack`, that provisions all of the [AWS](https://aws.amazon.com/) infrastructure needed to automatically build your own RattlesnakeOS on a regular basis, with your own signing keys, and your own OTA updates. It uses [AWS Lambda](https://aws.amazon.com/lambda/features/) to provision [EC2 Spot Instances](https://aws.amazon.com/ec2/spot/) that build RattlesnakeOS and upload build artifacts to [S3](https://aws.amazon.com/s3/). Resulting OS builds are configured to receive over the air updates from this environment.
@@ -7,9 +7,10 @@ Rather than providing random binaries of RattlesnakeOS to install on your phone,
 ## Features
 * Support for Google Pixel XL
 * Untested support for Google Pixel, Pixel 2, and Pixel 2 XL
-* End to end setup of build environment for RattlesnakeOS in AWS
-* Scheduled builds kicked off through AWS Lambda at regular interval
+* Monthly security updates through scheduled builds kicked off through AWS Lambda at regular interval
 * OTA updates through built in updater app - no need to manually flash your device on each new release
+* End to end setup of build environment for RattlesnakeOS in AWS
+* No google apps installed (this may be a pro/con for you)
 * Costs a few dollars a month to run (EC2 spot instance and S3 storage costs)
 
 ## Installation
