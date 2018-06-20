@@ -16,8 +16,8 @@ var RootCmd = &cobra.Command{
 	Use:   "rattlesnakeos-stack",
 	Short: "Setup AWS infrastructure to build RattlesnakeOS with OTA updates",
 	Args: func(cmd *cobra.Command, args []string) error {
-		if device != "marlin" {
-			return errors.New("Must specify marlin for device type")
+		if device != "marlin" && device != "sailfish" && device != "taimen" && device != "walleye" {
+			return errors.New("Must specify either marlin|sailfish|taimen|walleye for device type")
 		}
 		return nil
 	},
@@ -51,7 +51,7 @@ func init() {
 	RootCmd.MarkFlagRequired("name")
 	RootCmd.Flags().StringVarP(&region, "region", "r", "", "aws region for deployment (e.g. us-west-2)")
 	RootCmd.MarkFlagRequired("region")
-	RootCmd.Flags().StringVarP(&device, "device", "d", "", "device you want to build for: 'marlin' (Pixel XL)")
+	RootCmd.Flags().StringVarP(&device, "device", "d", "", "device you want to build for: 'marlin' (Pixel XL), 'sailfish' (Pixel), 'taimen' (Pixel 2 XL), 'walleye' (Pixel 2)")
 	RootCmd.MarkFlagRequired("device")
 	RootCmd.Flags().StringVar(&sshKey, "ssh-key", "", "aws ssh key to add to ec2 spot instances. this is optional but is useful for debugging build issues on the instance.")
 	RootCmd.Flags().StringVar(&spotPrice, "spot-price", ".80", "spot price for build ec2 instances. if this value is too low you may not obtain an instance or it may terminate during a build.")

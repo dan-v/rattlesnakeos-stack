@@ -12,6 +12,14 @@ ENDHELP
 
 DEVICE=$1
 
+# check if supported device
+if [ "$DEVICE" == 'sailfish' ] || [ "$DEVICE" == 'marlin' ] || [ "$DEVICE" == 'walleye' ] || [ "$DEVICE" == 'taimen' ]; then
+  echo "Supported device $DEVICE - continuing build"
+else 
+  echo "Unsupported device $DEVICE"
+  exit 1
+fi
+
 PREVENT_SHUTDOWN=<% .PreventShutdown %>
 AWS_KEYS_BUCKET='<% .Name %>-keys'
 AWS_RELEASE_BUCKET='<% .Name %>-release'
@@ -20,23 +28,39 @@ AWS_SNS_ARN=$(aws --region <% .Region %> sns list-topics --query 'Topics[0].Topi
 
 BUILD_TARGET="release aosp_${DEVICE} user"
 RELEASE_CHANNEL="${DEVICE}-stable"
-
-BUILD_DIR="$HOME/rattlesnake-os"
-CERTIFICATE_SUBJECT='/CN=RattlesnakeOS'
-
 BUILD_DATE=$(date +%Y.%m.%d.%H)
 BUILD_TIMESTAMP=$(date +%s)
-BUILD_VERSION=$(curl -s https://source.android.com/setup/start/build-numbers | grep -m1 -B3 'Pixel XL' | head -1 | cut -f2 -d">"|cut -f1 -d"<")
-BUILD_BRANCH=$(curl -s https://source.android.com/setup/start/build-numbers | grep -m1 -B3 'Pixel XL' | head -2 | tail -1 | cut -f2 -d">"|cut -f1 -d"<")
+BUILD_DIR="$HOME/rattlesnake-os"
+CERTIFICATE_SUBJECT='/CN=RattlesnakeOS'
 
 RELEASE_URL="https://${AWS_RELEASE_BUCKET}.s3.amazonaws.com"
 ANDROID_SDK_URL="https://dl.google.com/android/repository/sdk-tools-linux-4333796.zip"
 CHROME_URL_LATEST="https://omahaproxy.appspot.com/all.json"
 MANIFEST_URL='https://android.googlesource.com/platform/manifest'
-KERNEL="android-msm-marlin-3.18-oreo-m4"
+
 FDROID_CLIENT_VERSION="1.2.2"
 FDROID_PRIV_EXT_VERSION="0.2.8"
 OFFICIAL_FDROID_KEY="43238d512c1e5eb2d6569f4a3afbf5523418b82e0a3ed1552770abb9a9c9ccab"
+
+# attempt to automatically pick latest build version and branch. note this is likely to break with any page redesign.
+if [ "$DEVICE" == 'sailfish' ] || [ "$DEVICE" == 'marlin' ]; then
+  AOSP_BUILD=$(curl -s https://source.android.com/setup/start/build-numbers | grep -m1 -B3 'Pixel XL' | head -1 | cut -f2 -d">"|cut -f1 -d"<")
+  AOSP_BRANCH=$(curl -s https://source.android.com/setup/start/build-numbers | grep -m1 -B3 'Pixel XL' | head -2 | tail -1 | cut -f2 -d">"|cut -f1 -d"<")
+elif [ "$DEVICE" == 'walleye' ] || [ "$DEVICE" == 'taimen' ]; then
+  AOSP_BUILD=$(curl -s https://source.android.com/setup/start/build-numbers | grep -m1 -B3 'Pixel 2 XL' | head -1 | cut -f2 -d">"|cut -f1 -d"<")
+  AOSP_BRANCH=$(curl -s https://source.android.com/setup/start/build-numbers | grep -m1 -B3 'Pixel 2 XL' | head -2 | tail -1 | cut -f2 -d">"|cut -f1 -d"<")
+fi
+
+# pick kernel
+if [ "$DEVICE" == 'sailfish' ] || [ "$DEVICE" == 'marlin' ]; then
+  KERNEL_REPO="kernel/msm"
+  KERNEL_BRANCH="android-msm-marlin-3.18-oreo-m4"
+  KERNEL_NAME="marlin"
+elif [ "$DEVICE" == 'walleye' ] || [ "$DEVICE" == 'taimen' ]; then
+  KERNEL_REPO="kernel/msm"
+  KERNEL_BRANCH="android-msm-wahoo-4.4-oreo-m4"
+  KERNEL_NAME="wahoo"
+fi
 
 # make getopts ignore $1 since it is $DEVICE
 OPTIND=2
@@ -56,7 +80,7 @@ while getopts ":hA" opt; do
 done
 
 full_run() {
-  aws_notify "Starting RattlesnakeOS build for ${DEVICE} (date=${BUILD_DATE} version=${BUILD_VERSION} branch=${BUILD_BRANCH} kernel=${KERNEL})"
+  aws_notify "Starting RattlesnakeOS build for ${DEVICE} (date=${BUILD_DATE} aosp_build=${AOSP_BUILD} aosp_branch=${AOSP_BRANCH} kernel_branch=${KERNEL_BRANCH})"
   setup_env
   check_chrome
   fetch_build
@@ -69,11 +93,13 @@ full_run() {
 }
 
 setup_env() {
+  # install packages
   sudo apt-get update
   sudo apt-get --assume-yes install openjdk-8-jdk git-core gnupg flex bison build-essential zip curl zlib1g-dev gcc-multilib g++-multilib libc6-dev-i386 lib32ncurses5-dev x11proto-core-dev libx11-dev lib32z-dev ccache libgl1-mesa-dev libxml2-utils xsltproc unzip python-networkx liblz4-tool
   sudo apt-get --assume-yes build-dep "linux-image-$(uname --kernel-release)"
   sudo apt-get --assume-yes install repo gperf jq fuseext2
 
+  # setup android sdk (required for fdroid build)
   mkdir -p ${HOME}/sdk
   pushd ${HOME}/sdk
   wget ${ANDROID_SDK_URL} -O sdk-tools.zip
@@ -81,6 +107,7 @@ setup_env() {
   yes | ./tools/bin/sdkmanager --licenses
   ./tools/android update sdk -u --use-sdk-wrapper
 
+  # setup git
   git config --get --global user.name || git config --global user.name 'unknown'
   git config --get --global user.email || git config --global user.email 'unknown@localhost'
   git config --global color.ui true
@@ -148,11 +175,17 @@ EOF
 
 fetch_build() {
   pushd "${BUILD_DIR}"
-  repo init --manifest-url "$MANIFEST_URL" --manifest-branch "$BUILD_BRANCH" || true
+  repo init --manifest-url "$MANIFEST_URL" --manifest-branch "$AOSP_BRANCH" || true
 
   # make modifications to default AOSP
   if ! grep -q "RattlesnakeOS" .repo/manifest.xml; then
-    awk -i inplace -v KERNEL="$KERNEL" -v FDROID_CLIENT_VERSION="$FDROID_CLIENT_VERSION" -v FDROID_PRIV_EXT_VERSION="$FDROID_PRIV_EXT_VERSION" '1;/<repo-hooks in-project=/{
+    awk -i inplace \
+      -v KERNEL_REPO="$KERNEL_REPO" \
+      -v KERNEL_BRANCH="$KERNEL_BRANCH" \
+      -v KERNEL_NAME="$KERNEL_NAME" \
+      -v FDROID_CLIENT_VERSION="$FDROID_CLIENT_VERSION" \
+      -v FDROID_PRIV_EXT_VERSION="$FDROID_PRIV_EXT_VERSION" \
+      '1;/<repo-hooks in-project=/{
       print "  ";
       print "  <remote name=\"github\" fetch=\"https://github.com/RattlesnakeOS/\" revision=\"master\" />";
       print "  <remote name=\"fdroid\" fetch=\"https://gitlab.com/fdroid/\" />";
@@ -163,7 +196,7 @@ fetch_build() {
       print "  <project path=\"packages/apps/Updater\" name=\"platform_packages_apps_Updater\" remote=\"github\" />";
       print "  <project path=\"packages/apps/F-Droid\" name=\"fdroidclient\" remote=\"fdroid\" revision=\"refs/tags/" FDROID_CLIENT_VERSION "\" />";
       print "  <project path=\"packages/apps/F-DroidPrivilegedExtension\" name=\"privileged-extension\" remote=\"fdroid\" revision=\"refs/tags/" FDROID_PRIV_EXT_VERSION "\" />";
-      print "  <project path=\"kernel/google/marlin\" name=\"kernel/msm\" remote=\"aosp\" revision=\"" KERNEL "\" />";
+      print "  <project path=\"kernel/google/" KERNEL_NAME "\" name=\"" KERNEL_REPO "\" remote=\"aosp\" revision=\"" KERNEL_BRANCH "\" />";
       print "  <project path=\"vendor/android-prepare-vendor\" name=\"android-prepare-vendor\" remote=\"prepare-vendor\" />"}' .repo/manifest.xml
   else
     echo "Skipping modification of .repo/manifest.xml as they have already been made"
@@ -189,6 +222,7 @@ fetch_build() {
   sed -i '/QuickSearchBox/d' build/make/target/product/core.mk
   rm -rf platform/packages/apps/QuickSearchBox
 
+  # sync with retries
   for i in {1..10}; do
     repo sync --jobs 32 && break
   done
@@ -198,21 +232,23 @@ setup_vendor() {
   pushd "${BUILD_DIR}/vendor/android-prepare-vendor"
   sed -i.bkp 's/  USE_DEBUGFS=true/  USE_DEBUGFS=false/; s/  # SYS_TOOLS/  SYS_TOOLS/; s/  # _UMOUNT=/  _UMOUNT=/' execute-all.sh
 
-  yes | "${BUILD_DIR}/vendor/android-prepare-vendor/execute-all.sh" --device "${DEVICE}" --buildID "${BUILD_VERSION}" --output "${BUILD_DIR}/vendor/android-prepare-vendor"
-  aws s3 cp - "s3://${AWS_RELEASE_BUCKET}/${DEVICE}-vendor" --acl public-read <<< "${BUILD_VERSION}" || true
+  # get vendor files
+  yes | "${BUILD_DIR}/vendor/android-prepare-vendor/execute-all.sh" --device "${DEVICE}" --buildID "${AOSP_BUILD}" --output "${BUILD_DIR}/vendor/android-prepare-vendor"
+  aws s3 cp - "s3://${AWS_RELEASE_BUCKET}/${DEVICE}-vendor" --acl public-read <<< "${AOSP_BUILD}" || true
 
+  # copy vendor files to build tree
   mkdir --parents "${BUILD_DIR}/vendor/google_devices" || true
   rm --recursive --force "${BUILD_DIR}/vendor/google_devices/$DEVICE" || true
-  mv "${BUILD_DIR}/vendor/android-prepare-vendor/${DEVICE}/$(tr '[:upper:]' '[:lower:]' <<< "${BUILD_VERSION}")/vendor/google_devices/${DEVICE}" "${BUILD_DIR}/vendor/google_devices"
+  mv "${BUILD_DIR}/vendor/android-prepare-vendor/${DEVICE}/$(tr '[:upper:]' '[:lower:]' <<< "${AOSP_BUILD}")/vendor/google_devices/${DEVICE}" "${BUILD_DIR}/vendor/google_devices"
 
+  # smaller devices need big brother vendor files
   if [ "$DEVICE" == 'sailfish' ]; then
     rm --recursive --force "${BUILD_DIR}/vendor/google_devices/marlin" || true
-    mv "${BUILD_DIR}/vendor/android-prepare-vendor/sailfish/$(tr '[:upper:]' '[:lower:]' <<< "${BUILD_VERSION}")/vendor/google_devices/marlin" "${BUILD_DIR}/vendor/google_devices"
+    mv "${BUILD_DIR}/vendor/android-prepare-vendor/sailfish/$(tr '[:upper:]' '[:lower:]' <<< "${AOSP_BUILD}")/vendor/google_devices/marlin" "${BUILD_DIR}/vendor/google_devices"
   fi
-
   if [ "$DEVICE" == 'walleye' ]; then
     rm --recursive --force "${BUILD_DIR}/vendor/google_devices/muskie" || true
-    mv "${BUILD_DIR}/vendor/android-prepare-vendor/walleye/$(tr '[:upper:]' '[:lower:]' <<< "${BUILD_VERSION}")/vendor/google_devices/muskie" "${BUILD_DIR}/vendor/google_devices"
+    mv "${BUILD_DIR}/vendor/android-prepare-vendor/walleye/$(tr '[:upper:]' '[:lower:]' <<< "${AOSP_BUILD}")/vendor/google_devices/muskie" "${BUILD_DIR}/vendor/google_devices"
   fi
 
   popd
@@ -250,29 +286,10 @@ patch_fdroid() {
 }
 
 patch_apps() {
-  if [ "$DEVICE" == 'sailfish' ] || [ "$DEVICE" == 'marlin' ]; then
-    pushd "$BUILD_DIR"/device/google/marlin 
-    sed -i.original "\$aPRODUCT_PACKAGES += Updater" device-common.mk
-    sed -i.original "\$aPRODUCT_PACKAGES += F-DroidPrivilegedExtension" device-common.mk
-    sed -i.original "\$aPRODUCT_PACKAGES += F-Droid" device-common.mk
-    sed -i.original "\$aPRODUCT_PACKAGES += chromium" device-common.mk
-  fi
-
-  if [ "$DEVICE" == 'walleye' ]; then
-    pushd "$BUILD_DIR"/device/google/muskie
-    sed -i.original "\$aPRODUCT_PACKAGES += Updater" device-common.mk
-    sed -i.original "\$aPRODUCT_PACKAGES += F-DroidPrivilegedExtension" device-common.mk
-    sed -i.original "\$aPRODUCT_PACKAGES += F-Droid" device-common.mk
-    sed -i.original "\$aPRODUCT_PACKAGES += chromium" device-common.mk
-  fi
-
-  if [ "$DEVICE" == 'taimen' ]; then
-    pushd "$BUILD_DIR"/device/google/taimen
-    sed -i.original "\$aPRODUCT_PACKAGES += Updater" device.mk
-    sed -i.original "\$aPRODUCT_PACKAGES += F-DroidPrivilegedExtension" device.mk
-    sed -i.original "\$aPRODUCT_PACKAGES += F-Droid" device.mk
-    sed -i.original "\$aPRODUCT_PACKAGES += chromium" device.mk
-  fi
+  sed -i.original "\$aPRODUCT_PACKAGES += Updater" build/make/target/product/core.mk
+  sed -i.original "\$aPRODUCT_PACKAGES += F-DroidPrivilegedExtension" build/make/target/product/core.mk
+  sed -i.original "\$aPRODUCT_PACKAGES += F-Droid" build/make/target/product/core.mk
+  sed -i.original "\$aPRODUCT_PACKAGES += chromium" build/make/target/product/core.mk
 }
 
 patch_updater() {
@@ -293,20 +310,35 @@ patch_priv_ext() {
   unofficial_taimen_releasekey_hash=$(fdpe_hash "${BUILD_DIR}/keys/taimen/releasekey.x509.pem")
   unofficial_walleye_releasekey_hash=$(fdpe_hash "${BUILD_DIR}/keys/walleye/releasekey.x509.pem")
 
-  sed -i 's/'${OFFICIAL_FDROID_KEY}'")/'${unofficial_marlin_releasekey_hash}'"),\n            new Pair<>("org.fdroid.fdroid", "'${unofficial_marlin_platform_hash}'")/' \
-     "${BUILD_DIR}/packages/apps/F-DroidPrivilegedExtension/app/src/main/java/org/fdroid/fdroid/privileged/ClientWhitelist.java"
+  if [ "$DEVICE" == 'marlin' ]; then
+    sed -i 's/'${OFFICIAL_FDROID_KEY}'")/'${unofficial_marlin_releasekey_hash}'"),\n            new Pair<>("org.fdroid.fdroid", "'${unofficial_marlin_platform_hash}'")/' \
+      "${BUILD_DIR}/packages/apps/F-DroidPrivilegedExtension/app/src/main/java/org/fdroid/fdroid/privileged/ClientWhitelist.java"
+  fi
+  if [ "$DEVICE" == 'sailfish' ]; then
+    sed -i 's/'${OFFICIAL_FDROID_KEY}'")/'${unofficial_sailfish_releasekey_hash}'"),\n            new Pair<>("org.fdroid.fdroid", "'${unofficial_sailfish_platform_hash}'")/' \
+      "${BUILD_DIR}/packages/apps/F-DroidPrivilegedExtension/app/src/main/java/org/fdroid/fdroid/privileged/ClientWhitelist.java"
+  fi
+  if [ "$DEVICE" == 'walleye' ]; then
+    sed -i 's/'${OFFICIAL_FDROID_KEY}'")/'${unofficial_walleye_releasekey_hash}'")/' \
+      "${BUILD_DIR}/packages/apps/F-DroidPrivilegedExtension/app/src/main/java/org/fdroid/fdroid/privileged/ClientWhitelist.java"
+  fi
+  if [ "$DEVICE" == 'taimen' ]; then
+    sed -i 's/'${OFFICIAL_FDROID_KEY}'")/'${unofficial_taimen_releasekey_hash}'")/' \
+      "${BUILD_DIR}/packages/apps/F-DroidPrivilegedExtension/app/src/main/java/org/fdroid/fdroid/privileged/ClientWhitelist.java"
+  fi
 }
 
 build_kernel() {
+  # run in another shell to avoid it mucking with environment variables for normal AOSP build
   bash -c "\
     cd ${BUILD_DIR};
     . build/envsetup.sh;
     make -j$(nproc --all) dtc mkdtimg;
     export PATH=${AOSP_FOLDER}/out/host/linux-x86/bin:${PATH};
-    cd ${BUILD_DIR}/kernel/google/marlin;
-    make -j$(nproc --all) ARCH=arm64 marlin_defconfig;
+    cd ${BUILD_DIR}/kernel/google/${KERNEL_NAME};
+    make -j$(nproc --all) ARCH=arm64 ${KERNEL_NAME}_defconfig;
     make -j$(nproc --all) ARCH=arm64 CROSS_COMPILE=${BUILD_DIR}/prebuilts/gcc/linux-x86/aarch64/aarch64-linux-android-4.9/bin/aarch64-linux-android-;
-    cp -f arch/arm64/boot/Image.lz4-dtb ${BUILD_DIR}/device/google/marlin-kernel/;
+    cp -f arch/arm64/boot/Image.lz4-dtb ${BUILD_DIR}/device/google/${KERNEL_NAME}-kernel/;
     rm -f ${BUILD_DIR}/out/build_*;
   "
 }
@@ -331,12 +363,12 @@ aws_release() {
   old_date="$(cut -d ' ' -f 1 <<< "${old_metadata}")"
   (
   aws s3 cp "${BUILD_DIR}/out/release-${DEVICE}-${build_date}/${DEVICE}-ota_update-${build_date}.zip" "s3://${AWS_RELEASE_BUCKET}" --acl public-read &&
-  echo "${build_date} ${build_timestamp} ${BUILD_VERSION}" | aws s3 cp - "s3://${AWS_RELEASE_BUCKET}/${RELEASE_CHANNEL}" --acl public-read &&
+  echo "${build_date} ${build_timestamp} ${AOSP_BUILD}" | aws s3 cp - "s3://${AWS_RELEASE_BUCKET}/${RELEASE_CHANNEL}" --acl public-read &&
   echo "${BUILD_TIMESTAMP}" | aws s3 cp - "s3://${AWS_RELEASE_BUCKET}/${RELEASE_CHANNEL}-true-timestamp" --acl public-read
   ) && ( aws s3 rm "s3://${AWS_RELEASE_BUCKET}/${DEVICE}-ota_update-${old_date}.zip" || true )
 
   if [ "$(aws s3 ls "s3://${AWS_RELEASE_BUCKET}/${DEVICE}-factory-latest.tar.xz" | wc -l)" == '0' ]; then
-    aws s3 cp "${BUILD_DIR}/out/release-${DEVICE}-${build_date}/${DEVICE}-factory-${build_date}.tar.xz" "s3://${AWS_RELEASE_BUCKET}/${DEVICE}-factory-latest.tar.xz" --acl public-read
+    aws s3 cp "${BUILD_DIR}/out/release-${DEVICE}-${build_date}/${DEVICE}-factory-${build_date}.tar.xz" "s3://${AWS_RELEASE_BUCKET}/${DEVICE}-factory-latest.tar.xz"
   fi
 
   if [ "$(aws s3 ls "s3://${AWS_RELEASE_BUCKET}/${DEVICE}-target" | wc -l)" != '0' ]; then
@@ -411,16 +443,16 @@ gen_verity_key() {
   make clobber
 
   openssl x509 -outform der -in "${BUILD_DIR}/keys/$1/verity.x509.pem" -out "${BUILD_DIR}/keys/$1/verity_user.der.x509"
-  ln --verbose --symbolic "${BUILD_DIR}/keys/$1/verity_user.der.x509" "${BUILD_DIR}/kernel/google/marlin/verity_user.der.x509"
+  ln --verbose --symbolic "${BUILD_DIR}/keys/$1/verity_user.der.x509" "${BUILD_DIR}/kernel/google/${KERNEL_NAME}/verity_user.der.x509"
 }
 
 cleanup() {
   rv=$?
   aws_logging
   if [ $rv -ne 0 ]; then
-    aws_notify "RattlesnakeOS build FAILED for ${DEVICE} (date=${BUILD_DATE} version=${BUILD_VERSION} branch=${BUILD_BRANCH} kernel=${KERNEL})"
+    aws_notify "RattlesnakeOS build FAILED for ${DEVICE} (date=${BUILD_DATE} aosp_build=${AOSP_BUILD} aosp_branch=${AOSP_BRANCH} kernel_branch=${KERNEL_BRANCH})"
   else
-    aws_notify "RattlesnakeOS build SUCCESS for ${DEVICE} (date=${BUILD_DATE} version=${BUILD_VERSION} branch=${BUILD_BRANCH} kernel=${KERNEL})"
+    aws_notify "RattlesnakeOS build SUCCESS for ${DEVICE} (date=${BUILD_DATE} aosp_build=${AOSP_BUILD} aosp_branch=${AOSP_BRANCH} kernel_branch=${KERNEL_BRANCH})"
   fi
   if ${PREVENT_SHUTDOWN}; then
     echo "Skipping shutdown"

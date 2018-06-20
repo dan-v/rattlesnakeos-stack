@@ -43,7 +43,7 @@ runcmd:
     """.format(SRC_PATH, DEVICE).encode('ascii')).decode('ascii')
 
     now_utc = datetime.utcnow().replace(microsecond=0)
-    valid_until = now_utc + timedelta(hours=24)
+    valid_until = now_utc + timedelta(hours=12)
     response = client.request_spot_fleet(
         SpotFleetRequestConfig={
             'IamFleetRole': FLEET_ROLE.format(account_id),
@@ -54,26 +54,6 @@ runcmd:
             'ValidUntil': valid_until,
             'TerminateInstancesWithExpiration': True,
             'LaunchSpecifications': [
-                {
-                    'ImageId': AMI_ID,
-                    'SubnetId': subnets,
-                    'InstanceType': 'c5.4xlarge',
-                    <% if .SSHKey %>'KeyName': SSH_KEY_NAME,<% end %>
-                    'IamInstanceProfile': {
-                        'Arn': IAM_PROFILE.format(account_id)
-                    },
-                    'BlockDeviceMappings': [
-                        {
-                            'DeviceName' : '/dev/sda1',
-                            'Ebs': {
-                                'DeleteOnTermination': True,
-                                'VolumeSize': 200,
-                                'VolumeType': 'gp2'
-                            },
-                        },
-                    ],
-                    'UserData': userdata
-                },
                 {
                     'ImageId': AMI_ID,
                     'SubnetId': subnets,
