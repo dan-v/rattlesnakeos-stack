@@ -55,24 +55,24 @@ Pick a name for your stack and replace 'rattlesnakeos-\<yourstackname>' with you
 
 ## First Time Setup After Deployment
 * Setup email notifications for builds:
-  * Go to [AWS SNS](https://us-west-2.console.aws.amazon.com/sns/v2/home?region=us-west-2#/topics) console
-  * Click on the topic named 'rattlesnakeos-\<yourstackname>'
-  * Click on 'Create subscription' button
-  * In 'Create subscription' dialog, in Protocol dropdown select Email
-  * Enter your email for Endpoint
-  * Click 'Create subscription button'
+  * Go to the [AWS SNS](https://us-west-2.console.aws.amazon.com/sns/v2/home?region=us-west-2#/topics) console
+  * Click on the topic named `rattlesnakeos-<yourstackname>`
+  * Click on `Create subscription` button
+  * In `Create subscription` dialog, in `Protocol` dropdown select `Email`
+  * For `Endpoint`, enter your email address
+  * Click `Create subscription` button
   * You should get an email link that you need to click in order to subscribe to messages in this topic
-* After initial setup with rattlesnakeos-stack tool, a build should have automatically kicked off. You can check this by going to the [EC2 console](https://us-west-2.console.aws.amazon.com/ec2/v2/home) and verifying there is an EC2 instance running. If a build hasn't kicked off, check out the FAQ for how to manually start a build.
-* The initial build will likely take 4+ hours to complete. 
+* After initial setup with `rattlesnakeos-stack` tool, a build should have automatically kicked off. You can check this by going to the [EC2 console](https://us-west-2.console.aws.amazon.com/ec2/v2/home) and verifying there is an EC2 instance running. If a build hasn't kicked off, check out the FAQ for how to manually start a build.
+* The <b>initial build will likely take 4+ hours to complete</b>. 
 * After the build finishes, a factory image should be uploaded to the S3 bucket that you can download:
   * Go to the [S3 console](https://s3.console.aws.amazon.com/s3/buckets/)
-  * Click on 'rattlesnakeos-\<yourstackname>-release' bucket.
-  * From this bucket, download the file '\<device>-factory-latest.tar.xz'
+  * Click on `rattlesnakeos-<yourstackname>-release` bucket.
+  * From this bucket, download the file `<device>-factory-latest.tar.xz`
 * Use this factory image and [follow the instructions on flashing your device](https://copperhead.co/android/docs/install)
 * After successfully flashing your device, you will now be running RattlesnakeOS and all future updates will happen through the built in OTA mechanism.
 
-## Updates
-* Just download the new version of rattlesnakeos-stack and run the same command used previously (e.g. ./rattlesnakeos-stack --region us-west-2 --name rattlesnakeos-\<yourstackname> --device marlin) to apply the updates
+## How to update rattlesnakeos-stack
+* Just download the new version of rattlesnakeos-stack and run the same command used previously (e.g. `rattlesnakeos-stack --region us-west-2 --name rattlesnakeos-<yourstackname> --device marlin`) to apply the updates
 
 ## FAQ
 1. <b>Should I use rattlesnakeos-stack?</b> Probably not. Use at your own risk.
@@ -84,17 +84,18 @@ Pick a name for your stack and replace 'rattlesnakeos-\<yourstackname>' with you
    * Click the 'Test' button again to kick off the build
 3. <b>Where do I find logs for a build?</b> On build failure/success, the instance should terminate and upload its logs to S3 bucket called `<stackname>-logs` and it's in a file called `<device>/<timestamp>`.
 4. <b>How can I connect to the EC2 instance and see the build status?</b> There are a few steps required to be able to do this:
-   * Create an SSH keypair in EC2 (https://us-west-2.console.aws.amazon.com/ec2/v2/home?region=us-west-2#KeyPairs:sort=keyName) and download it
-   * Pass an additional flag to rattlesnakeos-stack command (--ssh-key yourkeypairname)
+   * Create an SSH keypair in the [EC2 console](https://us-west-2.console.aws.amazon.com/ec2/v2/home?region=us-west-2#KeyPairs:sort=keyName) and download it
+   * Pass an additional flag to `rattlesnakeos-stack` command: `--ssh-key yourkeypairname`
    * Kick off a manual build through AWS Lambda console (see FAQ above)
-   * You should be able to SSH into the instance (ssh -i yourkeypairname.pem ubuntu@yourinstancepublicip)
-   * Tail the cloud init logfile to view progress: 'tail -f /var/log/cloud-init-output.log'
+   * You should be able to SSH into the instance: `ssh -i yourkeypairname.pem ubuntu@yourinstancepublicip`
+   * Tail the cloud init logfile to view progress: `tail -f /var/log/cloud-init-output.log`
+5. <b>How can I prevent the EC2 instance from immediately terminating on error so I can debug?</b> There is a flag you can pass `rattlesnakeos-stack` called `--prevent-shutdown`. Note that this will keep the instance online for 12 hours or until you manually terminate it.
 
 ## Powered by
 * Huimin Zhang - he is the original author of the underlying build script that was written for CopperheadOS.
 * [Terraform](https://www.terraform.io/) 
 
-## Build From Source
+## Build from Source
 
   ```sh
   make tools && make
