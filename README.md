@@ -18,6 +18,7 @@ The easiest way is to download a pre-built binary from the [Github Releases](htt
 
 ## Prerequisites
 * An AWS account - you can [create an AWS account](https://portal.aws.amazon.com/billing/signup) if you don't have one.
+* <b>If this is a new AWS account, make sure you launch at least once paid instance before running through these steps.</b>
 * [AWS CLI credentials configured with 'AdministratorAccess'](https://docs.aws.amazon.com/cli/latest/userguide/cli-chap-getting-started.html)
 
 ## Deployment
@@ -76,11 +77,18 @@ Pick a name for your stack and replace 'rattlesnakeos-\<yourstackname>' with you
 ## FAQ
 1. <b>Should I use rattlesnakeos-stack?</b> Probably not. Use at your own risk.
 2. <b>How do I manually start a build?</b>
-  * Go to the [AWS Lambda](https://us-west-2.console.aws.amazon.com/lambda/) console
-  * Click on the function named 'rattlesnakeos-\<yourstackname>-build'
-  * Click on the 'Test' button
-  * In 'Configure test event dialog', set event name to 'rattlesnakeos', keep the defaults, and click 'Create' button.
-  * Click the 'Test' button again to kick off the build
+   * Go to the [AWS Lambda](https://us-west-2.console.aws.amazon.com/lambda/) console
+   * Click on the function named 'rattlesnakeos-\<yourstackname>-build'
+   * Click on the 'Test' button
+   * In 'Configure test event dialog', set event name to 'rattlesnakeos', keep the defaults, and click 'Create' button.
+   * Click the 'Test' button again to kick off the build
+3. <b>Where do I find logs for a build?</b> On build failure/success, the instance should terminate and upload its logs to S3 bucket called `<stackname>-logs` and it's in a file called `<device>/<timestamp>`.
+4. <b>How can I connect to the EC2 instance and see the build status?</b> There are a few steps required to be able to do this:
+   * Create an SSH keypair in EC2 (https://us-west-2.console.aws.amazon.com/ec2/v2/home?region=us-west-2#KeyPairs:sort=keyName) and download it
+   * Pass an additional flag to rattlesnakeos-stack command (--ssh-key yourkeypairname)
+   * Kick off a manual build through AWS Lambda console (see FAQ above)
+   * You should be able to SSH into the instance (ssh -i yourkeypairname.pem ubuntu@yourinstancepublicip)
+   * Tail the cloud init logfile to view progress: 'tail -f /var/log/cloud-init-output.log'
 
 ## Powered by
 * Huimin Zhang - he is the original author of the underlying build script that was written for CopperheadOS.
