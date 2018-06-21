@@ -204,30 +204,32 @@ fetch_build() {
     echo "Skipping modification of .repo/manifest.xml as they have already been made"
   fi
   
-  # remove webview
+  # remove things from manifest
   sed -i '/chromium-webview/d' .repo/manifest.xml
-  rm -rf platform/external/chromium-webview
-  sed -i '/webview \\/d' build/make/target/product/core_minimal.mk
-
-  # remove Browser2
   sed -i '/packages\/apps\/Browser2/d' .repo/manifest.xml
-  sed -i '/Browser2/d' build/make/target/product/core.mk
-  rm -rf platform/packages/apps/Browser2
-
-  # remove Calendar
   sed -i '/packages\/apps\/Calendar/d' .repo/manifest.xml
-  sed -i '/Calendar/d' build/make/target/product/core.mk
-  rm -rf platform/packages/apps/Calendar
-
-  # remove QuickSearchBox
   sed -i '/packages\/apps\/QuickSearchBox/d' .repo/manifest.xml
-  sed -i '/QuickSearchBox/d' build/make/target/product/core.mk
-  rm -rf platform/packages/apps/QuickSearchBox
 
   # sync with retries
   for i in {1..10}; do
     repo sync --jobs 32 && break
   done
+
+  # remove webview
+  rm -rf platform/external/chromium-webview
+  sed -i '/webview \\/d' build/make/target/product/core_minimal.mk
+
+  # remove Browser2
+  sed -i '/Browser2/d' build/make/target/product/core.mk
+  rm -rf platform/packages/apps/Browser2
+
+  # remove Calendar
+  sed -i '/Calendar/d' build/make/target/product/core.mk
+  rm -rf platform/packages/apps/Calendar
+
+  # remove QuickSearchBox
+  sed -i '/QuickSearchBox/d' build/make/target/product/core.mk
+  rm -rf platform/packages/apps/QuickSearchBox
 }
 
 setup_vendor() {
