@@ -17,16 +17,13 @@
 **Actual behavior:** [What actually happened]
 
 ### Version
-
 You can get this information from executing `rattlesnakeos-stack --version`.
 
 ### Platform
 e.g. OSX, Linux, Windows
 
 ### Full Command Used for Setup
-
 e.g. ./rattlesnakeos-stack --region us-west-2 --name rattlesnakeos-dan --device marlin
 
 ### Log output
-
-You can find log files in your S3 bucket '\<stackname>-logs/\<device>'
+You can find log files in your S3 bucket `<stackname>-logs/<device>/<timestamp>`

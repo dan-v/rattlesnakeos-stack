@@ -143,8 +143,10 @@ build_chrome() {
   mkdir -p $HOME/chromium
   cd $HOME/chromium
   fetch --nohooks android --target_os_only=true || true
-  yes | gclient sync --with_branch_heads -r $CHROMIUM_REVISION --jobs 32
   cd src
+  git checkout "$CHROMIUM_REVISION" -f || true
+  git clean -dff || true
+  yes | gclient sync --with_branch_heads --jobs 32 -RDf
   mkdir -p out/Default
   cat <<EOF > out/Default/args.gn
 target_os = "android"
