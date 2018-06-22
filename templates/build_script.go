@@ -142,7 +142,7 @@ build_chrome() {
   export PATH="$PATH:$HOME/depot_tools"
   mkdir -p $HOME/chromium
   cd $HOME/chromium
-  fetch --nohooks android --target_os_only=true || true
+  fetch --nohooks android --target_os_only=true --no-history || true
   cd src
   git checkout "$CHROMIUM_REVISION" -f || true
   git clean -dff || true
