@@ -5,8 +5,8 @@ RattlesnakeOS is privacy focused Android OS based on [AOSP](https://source.andro
 Rather than providing random binaries of RattlesnakeOS to install on your phone, I've gone the route of creating a cross platform tool, `rattlesnakeos-stack`, that provisions all of the [AWS](https://aws.amazon.com/) infrastructure needed to automatically build your own RattlesnakeOS on a regular basis, with your own signing keys, and your own OTA updates. It uses [AWS Lambda](https://aws.amazon.com/lambda/features/) to provision [EC2 Spot Instances](https://aws.amazon.com/ec2/spot/) that build RattlesnakeOS and upload build artifacts to [S3](https://aws.amazon.com/s3/). Resulting OS builds are configured to receive over the air updates from this environment.
 
 ## Features
-* Support for Google Pixel XL
-* Untested support for Google Pixel, Pixel 2, and Pixel 2 XL
+* Support for Google Pixel and Pixel XL
+* Untested support for Pixel 2, and Pixel 2 XL
 * Monthly security updates through scheduled builds kicked off through AWS Lambda at regular interval
 * OTA updates through built in updater app - no need to manually flash your device on each new release
 * End to end setup of build environment for RattlesnakeOS in AWS
