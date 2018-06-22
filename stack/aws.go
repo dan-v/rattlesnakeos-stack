@@ -103,7 +103,7 @@ func checkAWSCreds(region string) error {
 	s3Client := s3.New(sess, &aws.Config{Region: &region})
 	_, err = s3Client.ListBuckets(&s3.ListBucketsInput{})
 	if err != nil {
-		return fmt.Errorf("Unable to list S3 buckets - make sure you have valid admin AWS credentials")
+		return fmt.Errorf("Unable to list S3 buckets - make sure you have valid admin AWS credentials: %v", err)
 	}
 	return nil
 }

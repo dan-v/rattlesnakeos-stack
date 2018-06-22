@@ -144,7 +144,7 @@ build_chrome() {
   export PATH="$PATH:$HOME/depot_tools"
   mkdir -p $HOME/chromium
   cd $HOME/chromium
-  fetch --nohooks android --target_os_only=true || true
+  fetch --no-history --nohooks android --target_os_only=true || true
   cd src
   git checkout "$CHROMIUM_REVISION" -f || true
   git clean -dff || true
@@ -180,7 +180,7 @@ EOF
 
 fetch_build() {
   pushd "${BUILD_DIR}"
-  repo init --manifest-url "$MANIFEST_URL" --manifest-branch "$AOSP_BRANCH" || true
+  repo init --manifest-url "$MANIFEST_URL" --manifest-branch "$AOSP_BRANCH" --depth 1 || true
 
   # make modifications to default AOSP
   if ! grep -q "RattlesnakeOS" .repo/manifest.xml; then
@@ -215,7 +215,7 @@ fetch_build() {
 
   # sync with retries
   for i in {1..10}; do
-    repo sync --jobs 32 && break
+    repo sync -c --no-tags --no-clone-bundle --jobs 32 && break
   done
 
   # remove webview
