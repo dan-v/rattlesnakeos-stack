@@ -10,6 +10,8 @@ Options:
 	-A do a full run
 ENDHELP
 
+SECONDS=0
+
 DEVICE=$1
 
 # check if supported device
@@ -80,7 +82,7 @@ while getopts ":hA" opt; do
 done
 
 full_run() {
-  aws_notify "Starting RattlesnakeOS build for ${DEVICE} (date=${BUILD_DATE} aosp_build=${AOSP_BUILD} aosp_branch=${AOSP_BRANCH} kernel_branch=${KERNEL_BRANCH})"
+  aws_notify "Starting RattlesnakeOS build"
   setup_env
   check_chrome
   fetch_build
@@ -170,6 +172,7 @@ EOF
   gn gen out/Default
   ninja -C out/Default/ monochrome_public_apk
 
+  mkdir -p ${BUILD_DIR}/external/chromium/prebuilt/arm64
   cp out/Default/apks/MonochromePublic.apk ${BUILD_DIR}/external/chromium/prebuilt/arm64/
   aws s3 cp "${BUILD_DIR}/external/chromium/prebuilt/arm64/MonochromePublic.apk" "s3://${AWS_RELEASE_BUCKET}/chromium/MonochromePublic.apk" --acl public-read
   echo "${CHROMIUM_REVISION}" | aws s3 cp - "s3://${AWS_RELEASE_BUCKET}/chromium/revision" --acl public-read
@@ -401,7 +404,8 @@ aws_gen_deltas() {
 }
 
 aws_notify() {
-  aws sns publish --region <% .Region %> --topic-arn "$AWS_SNS_ARN" --message "$1" || true
+  ELAPSED="$(($SECONDS / 3600))hrs $((($SECONDS / 60) % 60))min $(($SECONDS % 60))sec"
+  aws sns publish --region <% .Region %> --topic-arn "$AWS_SNS_ARN" --message "$1 for ${DEVICE} (date=${BUILD_DATE} aosp_build=${AOSP_BUILD} aosp_branch=${AOSP_BRANCH} kernel_branch=${KERNEL_BRANCH} build_time:${ELAPSED})" || true
 }
 
 aws_logging() {
@@ -454,9 +458,9 @@ cleanup() {
   rv=$?
   aws_logging
   if [ $rv -ne 0 ]; then
-    aws_notify "RattlesnakeOS build FAILED for ${DEVICE} (date=${BUILD_DATE} aosp_build=${AOSP_BUILD} aosp_branch=${AOSP_BRANCH} kernel_branch=${KERNEL_BRANCH})"
+    aws_notify "RattlesnakeOS build FAILED"
   else
-    aws_notify "RattlesnakeOS build SUCCESS for ${DEVICE} (date=${BUILD_DATE} aosp_build=${AOSP_BUILD} aosp_branch=${AOSP_BRANCH} kernel_branch=${KERNEL_BRANCH})"
+    aws_notify "RattlesnakeOS build SUCCESS"
   fi
   if ${PREVENT_SHUTDOWN}; then
     echo "Skipping shutdown"

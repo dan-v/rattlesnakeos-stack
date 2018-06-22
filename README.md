@@ -90,6 +90,7 @@ Pick a name for your stack and replace 'rattlesnakeos-\<yourstackname>' with you
    * You should be able to SSH into the instance: `ssh -i yourkeypairname.pem ubuntu@yourinstancepublicip`
    * Tail the cloud init logfile to view progress: `tail -f /var/log/cloud-init-output.log`
 5. <b>How can I prevent the EC2 instance from immediately terminating on error so I can debug?</b> There is a flag you can pass `rattlesnakeos-stack` called `--prevent-shutdown`. Note that this will keep the instance online for 12 hours or until you manually terminate it.
+6. <b>Why did my EC2 instance randomly terminate?</b> If there wasn't an error notification, this is likely because the [Spot Instance](https://aws.amazon.com/ec2/spot/) bid was not high enough at this specific time. You can see historical spot instance pricing in the [EC2 console](https://console.aws.amazon.com/ec2sp/v1/spot/home). Click `Pricing History`, select c4.4xlarge for `Instance Type` and pick a date range. If you want to avoid having your instance terminated, you can pass an additional flag to `rattlesnakeos-stack` with a higher than default bid: `--spot-price 1.50`
 
 ## Powered by
 * Huimin Zhang - he is the original author of the underlying build script that was written for CopperheadOS.
