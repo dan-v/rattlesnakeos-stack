@@ -259,8 +259,8 @@ resource "aws_lambda_function" "rattlesnake_lambda_build" {
 ###################
 resource "aws_cloudwatch_event_rule" "every_day" {
     name = "${var.name}-daily-check"
-    description = "RattlesnakeOS weekly build"
-    schedule_expression = "rate(7 days)"
+    description = "RattlesnakeOS build"
+    schedule_expression = "<% .Schedule %>"
 }
 
 resource "aws_cloudwatch_event_target" "check_build_every_day" {

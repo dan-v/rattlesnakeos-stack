@@ -21,6 +21,7 @@ type TerraformConfig struct {
 	LambdaSpotZipFile       string
 	LambdaSpotFunctionBytes []byte
 	PreventShutdown         bool
+	Schedule                string
 }
 
 func generateTerraformConfig(config StackConfig) (*TerraformConfig, error) {
@@ -49,6 +50,7 @@ func generateTerraformConfig(config StackConfig) (*TerraformConfig, error) {
 		LambdaSpotZipFile:       tempDir.Path(LambdaSpotZipFilename),
 		LambdaSpotFunctionBytes: renderedLambdaSpotFunction,
 		PreventShutdown:         config.PreventShutdown,
+		Schedule:                config.Schedule,
 	}
 
 	return &conf, nil

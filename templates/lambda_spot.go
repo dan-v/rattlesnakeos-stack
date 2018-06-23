@@ -39,7 +39,7 @@ packages:
 
 runcmd:
 - [ bash, -c, "sudo -u ubuntu aws s3 cp {0} /home/ubuntu/build.sh" ]
-- [ bash, -c, "sudo -u ubuntu bash /home/ubuntu/build.sh {1} -A" ]
+- [ bash, -c, "sudo -u ubuntu bash /home/ubuntu/build.sh {1}" ]
     """.format(SRC_PATH, DEVICE).encode('ascii')).decode('ascii')
 
     now_utc = datetime.utcnow().replace(microsecond=0)

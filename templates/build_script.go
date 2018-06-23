@@ -3,18 +3,22 @@ package templates
 const ShellScriptTemplate = `
 #!/bin/bash
 
-read -rd '' HELP << ENDHELP
-Usage: $(basename $0) DEVICE_NAME
+if [ $# -ne 1 ]; then
+  echo "Need to specify device name as argument"
+  exit 1
+fi
 
-Options:
-	-A do a full run
-ENDHELP
+# version of stack running
+STACK_VERSION=<% .Version %>
 
-SECONDS=0
+# prevent default action of shutting down on exit
+PREVENT_SHUTDOWN=<% .PreventShutdown %>
 
-DEVICE=$1
+# force build even if no new versions exist of components
+FORCE_BUILD=<% .Force %>
 
 # check if supported device
+DEVICE=$1
 if [ "$DEVICE" == 'sailfish' ] || [ "$DEVICE" == 'marlin' ] || [ "$DEVICE" == 'walleye' ] || [ "$DEVICE" == 'taimen' ]; then
   echo "Supported device $DEVICE - continuing build"
 else 
@@ -22,36 +26,26 @@ else
   exit 1
 fi
 
-PREVENT_SHUTDOWN=<% .PreventShutdown %>
+# aws settings
 AWS_KEYS_BUCKET='<% .Name %>-keys'
 AWS_RELEASE_BUCKET='<% .Name %>-release'
 AWS_LOGS_BUCKET='<% .Name %>-logs'
 AWS_SNS_ARN=$(aws --region <% .Region %> sns list-topics --query 'Topics[0].TopicArn' --output text | cut -d":" -f1,2,3,4,5)':<% .Name %>'
 
+# build settings
 BUILD_TARGET="release aosp_${DEVICE} user"
+RELEASE_URL="https://${AWS_RELEASE_BUCKET}.s3.amazonaws.com"
 RELEASE_CHANNEL="${DEVICE}-stable"
 BUILD_DATE=$(date +%Y.%m.%d.%H)
 BUILD_TIMESTAMP=$(date +%s)
 BUILD_DIR="$HOME/rattlesnake-os"
 CERTIFICATE_SUBJECT='/CN=RattlesnakeOS'
+SECONDS=0
 
-RELEASE_URL="https://${AWS_RELEASE_BUCKET}.s3.amazonaws.com"
+# urls
 ANDROID_SDK_URL="https://dl.google.com/android/repository/sdk-tools-linux-4333796.zip"
+MANIFEST_URL="https://android.googlesource.com/platform/manifest"
 CHROME_URL_LATEST="https://omahaproxy.appspot.com/all.json"
-MANIFEST_URL='https://android.googlesource.com/platform/manifest'
-
-FDROID_CLIENT_VERSION="1.2.2"
-FDROID_PRIV_EXT_VERSION="0.2.8"
-OFFICIAL_FDROID_KEY="43238d512c1e5eb2d6569f4a3afbf5523418b82e0a3ed1552770abb9a9c9ccab"
-
-# attempt to automatically pick latest build version and branch. note this is likely to break with any page redesign.
-if [ "$DEVICE" == 'sailfish' ] || [ "$DEVICE" == 'marlin' ]; then
-  AOSP_BUILD=$(curl -s https://source.android.com/setup/start/build-numbers | grep -m1 -B3 'Pixel XL' | head -1 | cut -f2 -d">"|cut -f1 -d"<")
-  AOSP_BRANCH=$(curl -s https://source.android.com/setup/start/build-numbers | grep -m1 -B3 'Pixel XL' | head -2 | tail -1 | cut -f2 -d">"|cut -f1 -d"<")
-elif [ "$DEVICE" == 'walleye' ] || [ "$DEVICE" == 'taimen' ]; then
-  AOSP_BUILD=$(curl -s https://source.android.com/setup/start/build-numbers | grep -m1 -B3 'Pixel 2 XL' | head -1 | cut -f2 -d">"|cut -f1 -d"<")
-  AOSP_BRANCH=$(curl -s https://source.android.com/setup/start/build-numbers | grep -m1 -B3 'Pixel 2 XL' | head -2 | tail -1 | cut -f2 -d">"|cut -f1 -d"<")
-fi
 
 # pick kernel
 if [ "$DEVICE" == 'sailfish' ] || [ "$DEVICE" == 'marlin' ]; then
@@ -64,25 +58,119 @@ elif [ "$DEVICE" == 'walleye' ] || [ "$DEVICE" == 'taimen' ]; then
   KERNEL_NAME="wahoo"
 fi
 
-# make getopts ignore $1 since it is $DEVICE
-OPTIND=2
-FULL_RUN=false
-while getopts ":hA" opt; do
-  case $opt in
-    h)
-      echo "${HELP}"
-      ;;
-    A)
-      FULL_RUN=true
-      ;;
-    \?)
-      echo "${HELP}"
-      ;;
-  esac
-done
+STACK_UPDATE_MESSAGE=
+LATEST_STACK_VERSION=
+LATEST_CHROMIUM=
+FDROID_CLIENT_VERSION=
+FDROID_PRIV_EXT_VERSION=
+AOSP_BUILD=
+AOSP_BRANCH=
+get_latest_versions() {
+  sudo apt-get -y install jq
+  
+  # check if running latest stack
+  LATEST_STACK_VERSION=$(curl -s https://api.github.com/repos/dan-v/rattlesnakeos-stack/releases | jq -r '[.[] | .name][0]')
+  if [ "$LATEST_STACK_VERSION" == "$STACK_VERSION" ]; then
+    echo "Running the latest rattlesnakeos-stack version $LATEST_STACK_VERSION"
+  else
+    STACK_UPDATE_MESSAGE="WARNING: you should upgrade to the latest version: ${LATEST_STACK_VERSION}"
+  fi
+  
+  # check for latest stable chromium version
+  LATEST_CHROMIUM=$(curl -s "$CHROME_URL_LATEST" | jq -r '.[] | select(.os == "android") | .versions[] | select(.channel == "stable") | .current_version' || true)
+  if [ -z "$LATEST_CHROMIUM" ]; then
+    aws_notify_simple "ERROR: Unable to get latest Chromium version details. Stopping build."
+    exit 1
+  fi
+  
+  # fdroid - get latest non alpha tags from gitlab
+  OFFICIAL_FDROID_KEY="43238d512c1e5eb2d6569f4a3afbf5523418b82e0a3ed1552770abb9a9c9ccab"
+  FDROID_CLIENT_VERSION=$(curl -s "https://gitlab.com/api/v4/projects/36189/repository/tags" | jq -r '[.[] | select(.name | test("^[0-9]+\\.[0-9]+")) | select(.name | contains("alpha") | not) | select(.name | contains("ota") | not)][0] | .name')
+  if [ -z "$FDROID_CLIENT_VERSION" ]; then
+    aws_notify_simple "ERROR: Unable to get latest F-Droid version details. Stopping build."
+    exit 1
+  fi
+  FDROID_PRIV_EXT_VERSION=$(curl -s "https://gitlab.com/api/v4/projects/1481578/repository/tags" | jq -r '[.[] | select(.name | test("^[0-9]+\\.[0-9]+")) | select(.name | contains("alpha") | not) | select(.name | contains("ota") | not)][0] | .name')
+  if [ -z "$FDROID_PRIV_EXT_VERSION" ]; then
+    aws_notify_simple "ERROR: Unable to get latest F-Droid privilege extension version details. Stopping build."
+    exit 1
+  fi
+  
+  # attempt to automatically pick latest build version and branch. note this is likely to break with any page redesign.
+  if [ "$DEVICE" == 'sailfish' ] || [ "$DEVICE" == 'marlin' ]; then
+    AOSP_BUILD=$(curl -s https://source.android.com/setup/start/build-numbers | grep -m1 -B3 'Pixel XL' | head -1 | cut -f2 -d">"|cut -f1 -d"<")
+    AOSP_BRANCH=$(curl -s https://source.android.com/setup/start/build-numbers | grep -m1 -B3 'Pixel XL' | head -2 | tail -1 | cut -f2 -d">"|cut -f1 -d"<")
+  elif [ "$DEVICE" == 'walleye' ] || [ "$DEVICE" == 'taimen' ]; then
+    AOSP_BUILD=$(curl -s https://source.android.com/setup/start/build-numbers | grep -m1 -B3 'Pixel 2 XL' | head -1 | cut -f2 -d">"|cut -f1 -d"<")
+    AOSP_BRANCH=$(curl -s https://source.android.com/setup/start/build-numbers | grep -m1 -B3 'Pixel 2 XL' | head -2 | tail -1 | cut -f2 -d">"|cut -f1 -d"<")
+  fi
+
+  if [ -z "$AOSP_BUILD" ]; then
+    aws_notify_simple "ERROR: Unable to get latest AOSP build information. Stopping build."
+    exit 1
+  fi
+
+  if [ -z "$AOSP_BRANCH" ]; then
+    aws_notify_simple "ERROR: Unable to get latest AOSP branch information. Stopping build."
+    exit 1
+  fi
+}
+
+check_for_new_versions() {
+  echo "Checking if any new versions of software exist"
+  needs_update=false
+
+  # check aosp
+  existing_aosp_build=$(aws s3 cp "s3://${AWS_RELEASE_BUCKET}/${DEVICE}-vendor" - || true)
+  if [ "$existing_aosp_build" == "$AOSP_BUILD" ]; then
+    echo "AOSP build ($existing_aosp_build) is up to date"
+  else
+    echo "AOSP needs to be updated to ${AOSP_BUILD}"
+    needs_update=true
+  fi
+
+  # check chromium
+  existing_chromium=$(aws s3 cp "s3://${AWS_RELEASE_BUCKET}/chromium/revision" - || true)
+  if [ "$existing_chromium" == "$LATEST_CHROMIUM" ]; then
+    echo "Chromium build ($existing_chromium) is up to date"
+  else
+    echo "Chromium needs to be updated to ${LATEST_CHROMIUM}"
+    needs_update=true
+  fi
+
+  # check fdroid
+  existing_fdroid_client=$(aws s3 cp "s3://${AWS_RELEASE_BUCKET}/fdroid/revision" - || true)
+  if [ "$existing_fdroid_client" == "$FDROID_CLIENT_VERSION" ]; then
+    echo "F-Droid build ($existing_fdroid_client) is up to date"
+  else
+    echo "F-Droid needs to be updated to ${FDROID_CLIENT_VERSION}"
+    needs_update=true
+  fi
+
+  # check fdroid priv extension
+  existing_fdroid_priv_version=$(aws s3 cp "s3://${AWS_RELEASE_BUCKET}/fdroid-priv/revision" - || true)
+  if [ "$existing_fdroid_priv_version" == "$FDROID_PRIV_EXT_VERSION" ]; then
+    echo "F-Droid privilege extension build ($existing_fdroid_priv_version) is up to date"
+  else
+    echo "F-Droid privilege extensions needs to be updated to ${FDROID_PRIV_EXT_VERSION}"
+    needs_update=true
+  fi
+
+  if [ "$needs_update" = true ]; then
+    echo "New build is required"
+  else 
+    if [ "$FORCE_BUILD" = true ]; then
+      echo "No build is required, but FORCE_BUILD=true"
+    fi
+    aws_notify "RattlesnakeOS build not required as all components are already up to date."
+    exit 0
+  fi
+}
 
 full_run() {
-  aws_notify "Starting RattlesnakeOS build"
+  get_latest_versions
+  check_for_new_versions
+  aws_notify "RattlesnakeOS Build STARTED"
   setup_env
   check_chrome
   fetch_build
@@ -92,6 +180,7 @@ full_run() {
   build_kernel
   build_aosp
   aws_release
+  aws_notify "RattlesnakeOS Build SUCCESS"
 }
 
 setup_env() {
@@ -123,15 +212,14 @@ check_chrome() {
 
   mkdir -p $HOME/chromium
   cd $HOME/chromium
-  latest=$(curl -s "$CHROME_URL_LATEST" | jq -r '.[] | select(.os == "android") | .versions[] | select(.channel == "stable") | .current_version' || true)
-  echo "Chromium latest: $latest"
+  echo "Chromium latest: $LATEST_CHROMIUM"
 
-  if [ "$latest" == "$current" ]; then
+  if [ "$LATEST_CHROMIUM" == "$current" ]; then
     echo "Chromium latest ($latest) matches current ($current) - just copying s3 chromium artifact"
     aws s3 cp "s3://${AWS_RELEASE_BUCKET}/chromium/MonochromePublic.apk" ${BUILD_DIR}/external/chromium/prebuilt/arm64/
   else
-    echo "Building chromium $latest"
-    build_chrome $latest
+    echo "Building chromium $LATEST_CHROMIUM"
+    build_chrome $LATEST_CHROMIUM
   fi
   rm -rf $HOME/chromium
 }
@@ -290,6 +378,7 @@ patch_fdroid() {
   pushd ${BUILD_DIR}/packages/apps/F-Droid
   # for some reason first build fails - so do it now
   ./gradlew assembleRelease || true
+  echo "${FDROID_CLIENT_VERSION}" | aws s3 cp - "s3://${AWS_RELEASE_BUCKET}/fdroid/revision" --acl public-read
 }
 
 patch_apps() {
@@ -301,8 +390,7 @@ patch_apps() {
 
 patch_updater() {
   pushd "$BUILD_DIR"/packages/apps/Updater/res/values
-  sed --in-place \
-    --expression "s@s3bucket@${RELEASE_URL}/@g" config.xml
+  sed --in-place --expression "s@s3bucket@${RELEASE_URL}/@g" config.xml
 }
 
 fdpe_hash() {
@@ -333,6 +421,8 @@ patch_priv_ext() {
     sed -i 's/'${OFFICIAL_FDROID_KEY}'")/'${unofficial_taimen_releasekey_hash}'")/' \
       "${BUILD_DIR}/packages/apps/F-DroidPrivilegedExtension/app/src/main/java/org/fdroid/fdroid/privileged/ClientWhitelist.java"
   fi
+
+  echo "${FDROID_PRIV_EXT_VERSION}" | aws s3 cp - "s3://${AWS_RELEASE_BUCKET}/fdroid-priv/revision" --acl public-read
 }
 
 build_kernel() {
@@ -403,14 +493,20 @@ aws_gen_deltas() {
   done
 }
 
+aws_notify_simple() {
+  aws sns publish --region <% .Region %> --topic-arn "$AWS_SNS_ARN" --message "$1"
+}
+
 aws_notify() {
   ELAPSED="$(($SECONDS / 3600))hrs $((($SECONDS / 60) % 60))min $(($SECONDS % 60))sec"
-  aws sns publish --region <% .Region %> --topic-arn "$AWS_SNS_ARN" --message "$1 for ${DEVICE} (date=${BUILD_DATE} aosp_build=${AOSP_BUILD} aosp_branch=${AOSP_BRANCH} kernel_branch=${KERNEL_BRANCH} build_time:${ELAPSED})" || true
+  aws sns publish --region <% .Region %> --topic-arn "$AWS_SNS_ARN" \
+    --message="$(printf "$1\n  Device: %s\n  Stack Version: %s %s\n  Build Date: %s\n  Elapsed Time: %s\n  AOSP Build: %s\n  AOSP Branch: %s\n  Kernel Branch: %s\n  Chromium Version: %s\n  F-Droid Version: %s\n  F-Droid Priv Extension Version: %s" \
+      "${DEVICE}" "${STACK_VERSION}" "${STACK_UPDATE_MESSAGE}" "${BUILD_DATE}" "${ELAPSED}" "${AOSP_BUILD}" "${AOSP_BRANCH}" ${KERNEL_BRANCH} "${LATEST_CHROMIUM}" "${FDROID_CLIENT_VERSION}" "${FDROID_PRIV_EXT_VERSION}")" || true
 }
 
 aws_logging() {
   df -h
-  du -chs "${BUILD_DIR}"
+  du -chs "${BUILD_DIR}" || true
   uptime
   aws s3 cp /var/log/cloud-init-output.log "s3://${AWS_LOGS_BUCKET}/${DEVICE}/$(date +%s)"
 }
@@ -458,9 +554,7 @@ cleanup() {
   rv=$?
   aws_logging
   if [ $rv -ne 0 ]; then
-    aws_notify "RattlesnakeOS build FAILED"
-  else
-    aws_notify "RattlesnakeOS build SUCCESS"
+    aws_notify "RattlesnakeOS Build FAILED"
   fi
   if ${PREVENT_SHUTDOWN}; then
     echo "Skipping shutdown"
@@ -473,7 +567,5 @@ trap cleanup 0
 
 set -e
 
-if [ "$FULL_RUN" = true ]; then
-  full_run
-fi
+full_run
 `

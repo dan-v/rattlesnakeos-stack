@@ -43,6 +43,9 @@ type StackConfig struct {
 	SpotPrice       string
 	SSHKey          string
 	PreventShutdown bool
+	Version         string
+	Schedule        string
+	Force           bool
 }
 
 func AWSApply(config StackConfig) error {
