@@ -161,9 +161,10 @@ check_for_new_versions() {
   else 
     if [ "$FORCE_BUILD" = true ]; then
       echo "No build is required, but FORCE_BUILD=true"
+    else
+      aws_notify "RattlesnakeOS build not required as all components are already up to date."
+      exit 0
     fi
-    aws_notify "RattlesnakeOS build not required as all components are already up to date."
-    exit 0
   fi
 }
 
