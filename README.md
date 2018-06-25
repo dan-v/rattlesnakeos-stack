@@ -6,23 +6,26 @@ Rather than providing random binaries of RattlesnakeOS to install on your phone,
 
 ## Features
 * Support for Google Pixel and Pixel XL
-* Untested support for Pixel 2, and Pixel 2 XL
-* Monthly security updates through scheduled builds kicked off through AWS Lambda at regular interval
-* OTA updates through built in updater app - no need to manually flash your device on each new release
-* End to end setup of build environment for RattlesnakeOS in AWS
-* No google apps installed (this may be a pro/con for you)
+* Untested support for Google Pixel 2, and Pixel 2 XL
+* Updates and monthly security fixes delivered through OTA updates - no need to manually flash your device
+* Maintain [verified boot](https://source.android.com/security/verifiedboot/) with a locked bootloader just like official Android but with your own personal signing keys
+* Latest Chromium [browser](https://www.chromium.org) and [webview](https://www.chromium.org/developers/how-tos/build-instructions-android-webview) with patches from [Bromite](https://github.com/bromite/bromite) for ad blocking and enhanced privacy
+* Latest [F-Droid](https://f-droid.org/) client and [priviledge extension](https://gitlab.com/fdroid/privileged-extension)
+* No Google apps pre-installed
+* Full end to end setup of build environment for RattlesnakeOS in AWS
 * Costs a few dollars a month to run (EC2 spot instance and S3 storage costs)
 
 ## Installation
 The easiest way is to download a pre-built binary from the [Github Releases](https://github.com/dan-v/rattlesnakeos-stack/releases) page.
 
 ## Prerequisites
-* An AWS account - you can [create an AWS account](https://portal.aws.amazon.com/billing/signup) if you don't have one.
-* <b>If this is a new AWS account, make sure you launch at least once paid instance before running through these steps.</b>
-* [AWS CLI credentials configured with 'AdministratorAccess'](https://docs.aws.amazon.com/cli/latest/userguide/cli-chap-getting-started.html)
+* An AWS account - you can [create an AWS account](https://portal.aws.amazon.com/billing/signup) if you don't have one. 
+  * <b>If this is a new AWS account, make sure you launch at least once paid instance before running through these steps.</b>  To do this you can navigate to the [EC2 console](https://us-west-2.console.aws.amazon.com/ec2/), click `Launch instance`, select any OS, pick a `c4.4xlarge`, and click `Review and launch`. After it launches you can terminate the instance through the console.
+* You'll need AWS credentials with `AdministratorAccess` access. If you're not sure how to do that, you can follow [this step by step guide](https://serverless-stack.com/chapters/create-an-iam-user.html).
+* Install the [AWS CLI](https://docs.aws.amazon.com/cli/latest/userguide/installing.html) for your platform and [configure](https://docs.aws.amazon.com/cli/latest/userguide/cli-chap-getting-started.html) it to use these credentials.
 
 ## Deployment
-Pick a name for your stack and replace 'rattlesnakeos-\<yourstackname>' with your own name. <b>Note this name has to be unique or it will fail to provision.</b>
+Pick a name for your stack and replace 'rattlesnakeos-\<yourstackname>' with your own name. <b>Note: this name has to be unique or it will fail to provision.</b>
 * Deploy environment for Pixel XL (marlin)
 
     ```sh
@@ -68,7 +71,7 @@ Pick a name for your stack and replace 'rattlesnakeos-\<yourstackname>' with you
   * Go to the [S3 console](https://s3.console.aws.amazon.com/s3/buckets/)
   * Click on `rattlesnakeos-<yourstackname>-release` bucket.
   * From this bucket, download the file `<device>-factory-latest.tar.xz`
-* Use this factory image and [follow the instructions on flashing your device](https://copperhead.co/android/docs/install)
+* Use this factory image and [follow the instructions on flashing your device](https://copperhead.co/android/docs/install).
 * After successfully flashing your device, you will now be running RattlesnakeOS and all future updates will happen through the built in OTA mechanism.
 
 ## How to update rattlesnakeos-stack

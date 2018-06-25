@@ -45,7 +45,8 @@ SECONDS=0
 # urls
 ANDROID_SDK_URL="https://dl.google.com/android/repository/sdk-tools-linux-4333796.zip"
 MANIFEST_URL="https://android.googlesource.com/platform/manifest"
-CHROME_URL_LATEST="https://omahaproxy.appspot.com/all.json"
+CHROME_URL_LATEST="https://api.github.com/repos/bromite/bromite/releases"
+BROMITE_URL="https://github.com/bromite/bromite.git"
 
 # pick kernel
 if [ "$DEVICE" == 'sailfish' ] || [ "$DEVICE" == 'marlin' ]; then
@@ -77,7 +78,7 @@ get_latest_versions() {
   fi
   
   # check for latest stable chromium version
-  LATEST_CHROMIUM=$(curl -s "$CHROME_URL_LATEST" | jq -r '.[] | select(.os == "android") | .versions[] | select(.channel == "stable") | .current_version' || true)
+  LATEST_CHROMIUM=$(curl -s "$CHROME_URL_LATEST" | jq -r '[.[] | .tag_name][0]' || true)
   if [ -z "$LATEST_CHROMIUM" ]; then
     aws_notify_simple "ERROR: Unable to get latest Chromium version details. Stopping build."
     exit 1
@@ -228,16 +229,31 @@ check_chrome() {
 build_chrome() {
   CHROMIUM_REVISION=$1
   DEFAULT_VERSION=$(echo $CHROMIUM_REVISION | awk -F"." '{ printf "%s%03d52\n",$3,$4}')
-  pushd "$BUILD_DIR" 
+
+  # depot tools setup
   git clone https://chromium.googlesource.com/chromium/tools/depot_tools.git $HOME/depot_tools || true
   export PATH="$PATH:$HOME/depot_tools"
+
+  # fetch chromium 
   mkdir -p $HOME/chromium
   cd $HOME/chromium
-  fetch --no-history --nohooks android --target_os_only=true || true
+  fetch --nohooks android --target_os_only=true || true
   cd src
   git checkout "$CHROMIUM_REVISION" -f || true
   git clean -dff || true
   yes | gclient sync --with_branch_heads --jobs 32 -RDf
+
+  # install dependencies
+  echo ttf-mscorefonts-installer msttcorefonts/accepted-mscorefonts-eula select true | sudo debconf-set-selections
+  sudo ./build/install-build-deps-android.sh
+
+  # apply bromite patches
+  git clone --branch ${CHROMIUM_REVISION} $BROMITE_URL $HOME/bromite
+  for patch in $HOME/bromite/patches/*.patch; do
+    git am $patch || git am --skip
+  done
+  cp -f $HOME/bromite/filters/adblock_entries.h net/url_request/adblock_entries.h
+
   mkdir -p out/Default
   cat <<EOF > out/Default/args.gn
 target_os = "android"
@@ -432,7 +448,7 @@ build_kernel() {
     cd ${BUILD_DIR};
     . build/envsetup.sh;
     make -j$(nproc --all) dtc mkdtimg;
-    export PATH=${AOSP_FOLDER}/out/host/linux-x86/bin:${PATH};
+    export PATH=${BUILD_DIR}/out/host/linux-x86/bin:${PATH};
     cd ${BUILD_DIR}/kernel/google/${KERNEL_NAME};
     make -j$(nproc --all) ARCH=arm64 ${KERNEL_NAME}_defconfig;
     make -j$(nproc --all) ARCH=arm64 CROSS_COMPILE=${BUILD_DIR}/prebuilts/gcc/linux-x86/aarch64/aarch64-linux-android-4.9/bin/aarch64-linux-android-;
