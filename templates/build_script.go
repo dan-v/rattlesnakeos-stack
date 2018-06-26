@@ -372,7 +372,10 @@ aws_import_keys() {
   else
     mkdir -p "${BUILD_DIR}/keys"
     aws s3 sync "s3://${AWS_KEYS_BUCKET}" "${BUILD_DIR}/keys"
-    ln --verbose --symbolic "${BUILD_DIR}/keys/${DEVICE}/verity_user.der.x509" "${BUILD_DIR}/kernel/google/marlin/verity_user.der.x509"
+    if [ "${DEVICE}" == "marlin" ] || [ "${DEVICE}" == "sailfish" ]; then
+      mkdir -p "${BUILD_DIR}/kernel/google/marlin
+      ln --verbose --symbolic "${BUILD_DIR}/keys/${DEVICE}/verity_user.der.x509" "${BUILD_DIR}/kernel/google/marlin/verity_user.der.x509"
+    fi
   fi
 }
 
