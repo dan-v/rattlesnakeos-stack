@@ -217,7 +217,7 @@ check_chrome() {
   echo "Chromium latest: $LATEST_CHROMIUM"
 
   if [ "$LATEST_CHROMIUM" == "$current" ]; then
-    echo "Chromium latest ($latest) matches current ($current) - just copying s3 chromium artifact"
+    echo "Chromium latest ($LATEST_CHROMIUM) matches current ($current) - just copying s3 chromium artifact"
     aws s3 cp "s3://${AWS_RELEASE_BUCKET}/chromium/MonochromePublic.apk" ${BUILD_DIR}/external/chromium/prebuilt/arm64/
   else
     echo "Building chromium $LATEST_CHROMIUM"
@@ -372,7 +372,7 @@ aws_import_keys() {
   else
     mkdir -p "${BUILD_DIR}/keys"
     aws s3 sync "s3://${AWS_KEYS_BUCKET}" "${BUILD_DIR}/keys"
-    ln --verbose --symbolic "${BUILD_DIR}/keys/${DEVICE}/verity_user.der.x509" "${BUILD_DIR}/kernel/google/marlin/verity_user.der.x509"
+    ln --verbose --symbolic "${BUILD_DIR}/keys/${DEVICE}/verity_user.der.x509" "${BUILD_DIR}/kernel/google/marlin/verity_user.der.x509" || true
   fi
 }
 
@@ -449,6 +449,9 @@ build_kernel() {
     . build/envsetup.sh;
     make -j$(nproc --all) dtc mkdtimg;
     export PATH=${BUILD_DIR}/out/host/linux-x86/bin:${PATH};
+    git clone https://git.zx2c4.com/android_kernel_wireguard;
+    cd android_kernel_wireguard;
+    ./patch-kernel.sh ${BUILD_DIR}/kernel/google/${KERNEL_NAME};
     cd ${BUILD_DIR}/kernel/google/${KERNEL_NAME};
     make -j$(nproc --all) ARCH=arm64 ${KERNEL_NAME}_defconfig;
     make -j$(nproc --all) ARCH=arm64 CROSS_COMPILE=${BUILD_DIR}/prebuilts/gcc/linux-x86/aarch64/aarch64-linux-android-4.9/bin/aarch64-linux-android-;
