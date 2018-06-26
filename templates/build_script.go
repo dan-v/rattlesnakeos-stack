@@ -329,15 +329,15 @@ fetch_build() {
 
   # remove Browser2
   sed -i '/Browser2/d' build/make/target/product/core.mk
-  rm -rf platform/packages/apps/Browser2
 
   # remove Calendar
   sed -i '/Calendar/d' build/make/target/product/core.mk
-  rm -rf platform/packages/apps/Calendar
 
   # remove QuickSearchBox
   sed -i '/QuickSearchBox/d' build/make/target/product/core.mk
-  rm -rf platform/packages/apps/QuickSearchBox
+
+  # fix alarm clock target sdk definition (upstream issue)
+  sed -i 's@<uses-sdk android:minSdkVersion="19" targetSdkVersion="25" />@<uses-sdk android:minSdkVersion="19" android:targetSdkVersion="25" />@' packages/apps/DeskClock/AndroidManifest.xml
 }
 
 setup_vendor() {
