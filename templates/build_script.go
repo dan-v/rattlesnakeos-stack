@@ -40,6 +40,7 @@ BUILD_DATE=$(date +%Y.%m.%d.%H)
 BUILD_TIMESTAMP=$(date +%s)
 BUILD_DIR="$HOME/rattlesnake-os"
 CERTIFICATE_SUBJECT='/CN=RattlesnakeOS'
+OFFICIAL_FDROID_KEY="43238d512c1e5eb2d6569f4a3afbf5523418b82e0a3ed1552770abb9a9c9ccab"
 SECONDS=0
 
 # urls
@@ -85,7 +86,6 @@ get_latest_versions() {
   fi
   
   # fdroid - get latest non alpha tags from gitlab
-  OFFICIAL_FDROID_KEY="43238d512c1e5eb2d6569f4a3afbf5523418b82e0a3ed1552770abb9a9c9ccab"
   FDROID_CLIENT_VERSION=$(curl -s "https://gitlab.com/api/v4/projects/36189/repository/tags" | jq -r '[.[] | select(.name | test("^[0-9]+\\.[0-9]+")) | select(.name | contains("alpha") | not) | select(.name | contains("ota") | not)][0] | .name')
   if [ -z "$FDROID_CLIENT_VERSION" ]; then
     aws_notify_simple "ERROR: Unable to get latest F-Droid version details. Stopping build."
@@ -373,7 +373,7 @@ aws_import_keys() {
     mkdir -p "${BUILD_DIR}/keys"
     aws s3 sync "s3://${AWS_KEYS_BUCKET}" "${BUILD_DIR}/keys"
     if [ "${DEVICE}" == "marlin" ] || [ "${DEVICE}" == "sailfish" ]; then
-      mkdir -p "${BUILD_DIR}/kernel/google/marlin
+      mkdir -p "${BUILD_DIR}/kernel/google/marlin"
       ln --verbose --symbolic "${BUILD_DIR}/keys/${DEVICE}/verity_user.der.x509" "${BUILD_DIR}/kernel/google/marlin/verity_user.der.x509"
     fi
   fi
