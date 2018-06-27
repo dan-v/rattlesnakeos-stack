@@ -49,6 +49,8 @@ MANIFEST_URL="https://android.googlesource.com/platform/manifest"
 CHROME_URL_LATEST="https://api.github.com/repos/bromite/bromite/releases"
 BROMITE_URL="https://github.com/bromite/bromite.git"
 
+ANDROID_VERSION="8.1.0"
+
 # pick kernel
 if [ "$DEVICE" == 'sailfish' ] || [ "$DEVICE" == 'marlin' ]; then
   KERNEL_REPO="kernel/msm"
@@ -56,7 +58,7 @@ if [ "$DEVICE" == 'sailfish' ] || [ "$DEVICE" == 'marlin' ]; then
   KERNEL_NAME="marlin"
 elif [ "$DEVICE" == 'walleye' ] || [ "$DEVICE" == 'taimen' ]; then
   KERNEL_REPO="kernel/msm"
-  KERNEL_BRANCH="android-msm-wahoo-4.4-oreo-m4"
+  KERNEL_BRANCH="android-msm-wahoo-4.4-oreo-m2"
   KERNEL_NAME="wahoo"
 fi
 
@@ -97,20 +99,13 @@ get_latest_versions() {
     exit 1
   fi
   
-  # attempt to automatically pick latest build version and branch. note this is likely to break with any page redesign.
-  if [ "$DEVICE" == 'sailfish' ] || [ "$DEVICE" == 'marlin' ]; then
-    AOSP_BUILD=$(curl -s https://source.android.com/setup/start/build-numbers | grep -m1 -B3 'Pixel XL' | head -1 | cut -f2 -d">"|cut -f1 -d"<")
-    AOSP_BRANCH=$(curl -s https://source.android.com/setup/start/build-numbers | grep -m1 -B3 'Pixel XL' | head -2 | tail -1 | cut -f2 -d">"|cut -f1 -d"<")
-  elif [ "$DEVICE" == 'walleye' ] || [ "$DEVICE" == 'taimen' ]; then
-    AOSP_BUILD=$(curl -s https://source.android.com/setup/start/build-numbers | grep -m1 -B3 'Pixel 2 XL' | head -1 | cut -f2 -d">"|cut -f1 -d"<")
-    AOSP_BRANCH=$(curl -s https://source.android.com/setup/start/build-numbers | grep -m1 -B3 'Pixel 2 XL' | head -2 | tail -1 | cut -f2 -d">"|cut -f1 -d"<")
-  fi
-
+  # attempt to automatically pick latest build version and branch. note this is likely to break with any page redesign. should also add some validation here.
+  AOSP_BUILD=$(curl -s https://developers.google.com/android/images | grep -A1 "${DEVICE}" | egrep '[a-zA-Z]+ [0-9]{4}\)' | grep "${ANDROID_VERSION}" | tail -1 | cut -d"(" -f2 | cut -d"," -f1)
   if [ -z "$AOSP_BUILD" ]; then
     aws_notify_simple "ERROR: Unable to get latest AOSP build information. Stopping build."
     exit 1
   fi
-
+  AOSP_BRANCH=$(curl -s https://source.android.com/setup/start/build-numbers | grep -A1 "${AOSP_BUILD}" | tail -1 | cut -f2 -d">"|cut -f1 -d"<")
   if [ -z "$AOSP_BRANCH" ]; then
     aws_notify_simple "ERROR: Unable to get latest AOSP branch information. Stopping build."
     exit 1
