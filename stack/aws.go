@@ -68,6 +68,9 @@ func AWSApply(config StackConfig) error {
 	}
 
 	terraformClient, err := generateConfigAndGetClient(config)
+	if err != nil {
+		return err
+	}
 	defer terraformClient.Cleanup()
 
 	log.Info("Creating AWS resources")
