@@ -41,6 +41,7 @@ BUILD_TIMESTAMP=$(date +%s)
 BUILD_DIR="$HOME/rattlesnake-os"
 CERTIFICATE_SUBJECT='/CN=RattlesnakeOS'
 OFFICIAL_FDROID_KEY="43238d512c1e5eb2d6569f4a3afbf5523418b82e0a3ed1552770abb9a9c9ccab"
+MARLIN_KERNEL_SOURCE_DIR="${BUILD_DIR}/kernel/google/marlin"
 SECONDS=0
 
 # urls
@@ -48,19 +49,9 @@ ANDROID_SDK_URL="https://dl.google.com/android/repository/sdk-tools-linux-433379
 MANIFEST_URL="https://android.googlesource.com/platform/manifest"
 CHROME_URL_LATEST="https://api.github.com/repos/bromite/bromite/releases"
 BROMITE_URL="https://github.com/bromite/bromite.git"
+MARLIN_KERNEL_SOURCE_URL="https://android.googlesource.com/kernel/msm"
 
 ANDROID_VERSION="8.1.0"
-
-# pick kernel
-if [ "$DEVICE" == 'sailfish' ] || [ "$DEVICE" == 'marlin' ]; then
-  KERNEL_REPO="kernel/msm"
-  KERNEL_BRANCH="android-msm-marlin-3.18-oreo-m4"
-  KERNEL_NAME="marlin"
-elif [ "$DEVICE" == 'walleye' ] || [ "$DEVICE" == 'taimen' ]; then
-  KERNEL_REPO="kernel/msm"
-  KERNEL_BRANCH="android-msm-wahoo-4.4-oreo-m2"
-  KERNEL_NAME="wahoo"
-fi
 
 STACK_UPDATE_MESSAGE=
 LATEST_STACK_VERSION=
@@ -169,18 +160,24 @@ full_run() {
   check_for_new_versions
   aws_notify "RattlesnakeOS Build STARTED"
   setup_env
-  check_chrome
-  fetch_build
+  check_chromium
+  fetch_aosp_source
   setup_vendor
   aws_import_keys
-  patch
-  build_kernel
+  apply_patches
+  # only marlin and sailfish need kernel rebuilt so that verity_key is included
+  if [ "${DEVICE}" == "marlin" ] || [ "${DEVICE}" == "sailfish" ]; then
+    rebuild_marlin_kernel
+  fi
   build_aosp
   aws_release
   aws_notify "RattlesnakeOS Build SUCCESS"
 }
 
 setup_env() {
+  echo "=================================="
+  echo "Running setup_env"
+  echo "=================================="
   # install packages
   sudo apt-get update
   sudo apt-get --assume-yes install openjdk-8-jdk git-core gnupg flex bison build-essential zip curl zlib1g-dev gcc-multilib g++-multilib libc6-dev-i386 lib32ncurses5-dev x11proto-core-dev libx11-dev lib32z-dev ccache libgl1-mesa-dev libxml2-utils xsltproc unzip python-networkx liblz4-tool
@@ -203,7 +200,10 @@ setup_env() {
   mkdir -p "$BUILD_DIR"
 }
 
-check_chrome() {
+check_chromium() {
+  echo "=================================="
+  echo "Running check_chromium"
+  echo "=================================="
   current=$(aws s3 cp "s3://${AWS_RELEASE_BUCKET}/chromium/revision" - || true)
   echo "Chromium current: $current"
 
@@ -216,12 +216,15 @@ check_chrome() {
     aws s3 cp "s3://${AWS_RELEASE_BUCKET}/chromium/MonochromePublic.apk" ${BUILD_DIR}/external/chromium/prebuilt/arm64/
   else
     echo "Building chromium $LATEST_CHROMIUM"
-    build_chrome $LATEST_CHROMIUM
+    build_chromium $LATEST_CHROMIUM
   fi
   rm -rf $HOME/chromium
 }
 
-build_chrome() {
+build_chromium() {
+  echo "=================================="
+  echo "Running build_chromium"
+  echo "=================================="
   CHROMIUM_REVISION=$1
   DEFAULT_VERSION=$(echo $CHROMIUM_REVISION | awk -F"." '{ printf "%s%03d52\n",$3,$4}')
 
@@ -278,16 +281,16 @@ EOF
   echo "${CHROMIUM_REVISION}" | aws s3 cp - "s3://${AWS_RELEASE_BUCKET}/chromium/revision" --acl public-read
 }
 
-fetch_build() {
+fetch_aosp_source() {
+  echo "=================================="
+  echo "Running fetch_aosp_source"
+  echo "=================================="
   pushd "${BUILD_DIR}"
   repo init --manifest-url "$MANIFEST_URL" --manifest-branch "$AOSP_BRANCH" --depth 1 || true
 
   # make modifications to default AOSP
   if ! grep -q "RattlesnakeOS" .repo/manifest.xml; then
     awk -i inplace \
-      -v KERNEL_REPO="$KERNEL_REPO" \
-      -v KERNEL_BRANCH="$KERNEL_BRANCH" \
-      -v KERNEL_NAME="$KERNEL_NAME" \
       -v FDROID_CLIENT_VERSION="$FDROID_CLIENT_VERSION" \
       -v FDROID_PRIV_EXT_VERSION="$FDROID_PRIV_EXT_VERSION" \
       '1;/<repo-hooks in-project=/{
@@ -301,7 +304,6 @@ fetch_build() {
       print "  <project path=\"packages/apps/Updater\" name=\"platform_packages_apps_Updater\" remote=\"github\" />";
       print "  <project path=\"packages/apps/F-Droid\" name=\"fdroidclient\" remote=\"fdroid\" revision=\"refs/tags/" FDROID_CLIENT_VERSION "\" />";
       print "  <project path=\"packages/apps/F-DroidPrivilegedExtension\" name=\"privileged-extension\" remote=\"fdroid\" revision=\"refs/tags/" FDROID_PRIV_EXT_VERSION "\" />";
-      print "  <project path=\"kernel/google/" KERNEL_NAME "\" name=\"" KERNEL_REPO "\" remote=\"aosp\" revision=\"" KERNEL_BRANCH "\" />";
       print "  <project path=\"vendor/android-prepare-vendor\" name=\"android-prepare-vendor\" remote=\"prepare-vendor\" />"}' .repo/manifest.xml
   else
     echo "Skipping modification of .repo/manifest.xml as they have already been made"
@@ -331,11 +333,14 @@ fetch_build() {
   # remove QuickSearchBox
   sed -i '/QuickSearchBox/d' build/make/target/product/core.mk
 
-  # fix alarm clock target sdk definition (upstream issue)
+  # fix alarm clock target sdk definition (upstream issue that will be fixed in android p)
   sed -i 's@<uses-sdk android:minSdkVersion="19" targetSdkVersion="25" />@<uses-sdk android:minSdkVersion="19" android:targetSdkVersion="25" />@' packages/apps/DeskClock/AndroidManifest.xml
 }
 
 setup_vendor() {
+  echo "=================================="
+  echo "Running setup_vendor"
+  echo "=================================="
   pushd "${BUILD_DIR}/vendor/android-prepare-vendor"
   sed -i.bkp 's/  USE_DEBUGFS=true/  USE_DEBUGFS=false/; s/  # SYS_TOOLS/  SYS_TOOLS/; s/  # _UMOUNT=/  _UMOUNT=/' execute-all.sh
 
@@ -362,19 +367,22 @@ setup_vendor() {
 }
 
 aws_import_keys() {
+  echo "=================================="
+  echo "Running aws_import_keys"
+  echo "=================================="
   if [ "$(aws s3 ls "s3://${AWS_KEYS_BUCKET}/${DEVICE}" | wc -l)" == '0' ]; then
     aws_gen_keys
   else
+    echo "Keys already exist for ${DEVICE} - grabbing them from S3"
     mkdir -p "${BUILD_DIR}/keys"
     aws s3 sync "s3://${AWS_KEYS_BUCKET}" "${BUILD_DIR}/keys"
-    if [ "${DEVICE}" == "marlin" ] || [ "${DEVICE}" == "sailfish" ]; then
-      mkdir -p "${BUILD_DIR}/kernel/google/marlin"
-      ln --verbose --symbolic "${BUILD_DIR}/keys/${DEVICE}/verity_user.der.x509" "${BUILD_DIR}/kernel/google/marlin/verity_user.der.x509"
-    fi
   fi
 }
 
-patch() {
+apply_patches() {
+  echo "=================================="
+  echo "Running apply_patches"
+  echo "=================================="
   patch_apps
   patch_chromium_webview
   patch_updater
@@ -440,22 +448,37 @@ patch_priv_ext() {
   echo "${FDROID_PRIV_EXT_VERSION}" | aws s3 cp - "s3://${AWS_RELEASE_BUCKET}/fdroid-priv/revision" --acl public-read
 }
 
-build_kernel() {
+rebuild_marlin_kernel() {
+  echo "=================================="
+  echo "Running rebuild_marlin_kernel"
+  echo "=================================="
+  # checkout kernel source on proper commit
+  mkdir -p "${MARLIN_KERNEL_SOURCE_DIR}"
+  git clone "${MARLIN_KERNEL_SOURCE_URL}" "${MARLIN_KERNEL_SOURCE_DIR}"
+  kernel_commit_id=$(lz4cat "${BUILD_DIR}/device/google/marlin-kernel/Image.lz4-dtb" | grep -a 'Linux version' | cut -d ' ' -f3 | cut -d'-' -f2 | sed 's/^g//g')
+  cd "${MARLIN_KERNEL_SOURCE_DIR}"
+  echo "Checking out kernel commit ${kernel_commit_id}"
+  git checkout ${kernel_commit_id}
+
   # run in another shell to avoid it mucking with environment variables for normal AOSP build
   bash -c "\
     cd ${BUILD_DIR};
     . build/envsetup.sh;
     make -j$(nproc --all) dtc mkdtimg;
     export PATH=${BUILD_DIR}/out/host/linux-x86/bin:${PATH};
-    cd ${BUILD_DIR}/kernel/google/${KERNEL_NAME};
-    make -j$(nproc --all) ARCH=arm64 ${KERNEL_NAME}_defconfig;
+    ln --verbose --symbolic ${BUILD_DIR}/keys/${DEVICE}/verity_user.der.x509 ${MARLIN_KERNEL_SOURCE_DIR}/verity_user.der.x509;
+    cd ${MARLIN_KERNEL_SOURCE_DIR};
+    make -j$(nproc --all) ARCH=arm64 marlin_defconfig;
     make -j$(nproc --all) ARCH=arm64 CROSS_COMPILE=${BUILD_DIR}/prebuilts/gcc/linux-x86/aarch64/aarch64-linux-android-4.9/bin/aarch64-linux-android-;
-    cp -f arch/arm64/boot/Image.lz4-dtb ${BUILD_DIR}/device/google/${KERNEL_NAME}-kernel/;
+    cp -f arch/arm64/boot/Image.lz4-dtb ${BUILD_DIR}/device/google/marlin-kernel/;
     rm -f ${BUILD_DIR}/out/build_*;
   "
 }
 
 build_aosp() {
+  echo "=================================="
+  echo "Running build_aosp"
+  echo "=================================="
   pushd "$BUILD_DIR"
   source "${BUILD_DIR}/script/setup.sh"
 
@@ -467,10 +490,14 @@ build_aosp() {
 }
 
 aws_release() {
+  echo "=================================="
+  echo "Running aws_release"
+  echo "=================================="
   pushd "${BUILD_DIR}/out"
   build_date="$(< build_number.txt)"
   build_timestamp="$(unzip -p "release-${DEVICE}-${build_date}/${DEVICE}-ota_update-${build_date}.zip" META-INF/com/android/metadata | grep 'post-timestamp' | cut --delimiter "=" --fields 2)"
 
+  # copy ota file to s3, update file metadata used by updater app, and remove old ota files
   read -r old_metadata <<< "$(wget -O - "${RELEASE_URL}/${DEVICE}-stable")"
   old_date="$(cut -d ' ' -f 1 <<< "${old_metadata}")"
   (
@@ -479,32 +506,31 @@ aws_release() {
   echo "${BUILD_TIMESTAMP}" | aws s3 cp - "s3://${AWS_RELEASE_BUCKET}/${RELEASE_CHANNEL}-true-timestamp" --acl public-read
   ) && ( aws s3 rm "s3://${AWS_RELEASE_BUCKET}/${DEVICE}-ota_update-${old_date}.zip" || true )
 
+  # copy factory image to s3 if one doesn't already exist
   if [ "$(aws s3 ls "s3://${AWS_RELEASE_BUCKET}/${DEVICE}-factory-latest.tar.xz" | wc -l)" == '0' ]; then
     aws s3 cp "${BUILD_DIR}/out/release-${DEVICE}-${build_date}/${DEVICE}-factory-${build_date}.tar.xz" "s3://${AWS_RELEASE_BUCKET}/${DEVICE}-factory-latest.tar.xz"
   fi
 
+  # cleanup old target files if some exist
   if [ "$(aws s3 ls "s3://${AWS_RELEASE_BUCKET}/${DEVICE}-target" | wc -l)" != '0' ]; then
-    aws_gen_deltas
+    cleanup_target_files
   fi
+
+  # copy new target file to s3
   aws s3 cp "${BUILD_DIR}/out/release-${DEVICE}-${build_date}/${DEVICE}-target_files-${build_date}.zip" "s3://${AWS_RELEASE_BUCKET}/${DEVICE}-target/${DEVICE}-target-files-${build_date}.zip" --acl public-read
 }
 
-aws_gen_deltas() {
+cleanup_target_files() {
+  echo "=================================="
+  echo "Running cleanup_target_files"
+  echo "=================================="
   aws s3 sync "s3://${AWS_RELEASE_BUCKET}/${DEVICE}-target" "${BUILD_DIR}/${DEVICE}-target"
   pushd "${BUILD_DIR}/out"
   current_date="$(< build_number.txt)"
   pushd "${BUILD_DIR}/${DEVICE}-target"
   for target_file in ${DEVICE}-target-files-*.zip ; do
     old_date=$(echo "$target_file" | cut --delimiter "-" --fields 4 | cut --delimiter "." --fields 5 --complement)
-    pushd "${BUILD_DIR}"
-    "${BUILD_DIR}/build/tools/releasetools/ota_from_target_files" --block --package_key "${BUILD_DIR}/keys/${DEVICE}/releasekey" \
-    --incremental_from "${BUILD_DIR}/${DEVICE}-target/${DEVICE}-target-files-${old_date}.zip" \
-    "${BUILD_DIR}/out/release-${DEVICE}-${current_date}/${DEVICE}-target_files-${current_date}.zip" \
-    "${BUILD_DIR}/out/release-${DEVICE}-${current_date}/${DEVICE}-incremental-${old_date}-${current_date}.zip"
-    popd
-  done
-  for incremental in ${BUILD_DIR}/out/release-${DEVICE}-${current_date}/${DEVICE}-incremental-*-*.zip ; do
-    ( aws s3 cp "$incremental" "s3://${AWS_RELEASE_BUCKET}/" --acl public-read && aws s3 rm "s3://${AWS_RELEASE_BUCKET}/${DEVICE}-target/${DEVICE}-target-files-${old_date}.zip") || true
+    aws s3 rm "s3://${AWS_RELEASE_BUCKET}/${DEVICE}-target/${DEVICE}-target-files-${old_date}.zip" || true
   done
 }
 
@@ -515,8 +541,8 @@ aws_notify_simple() {
 aws_notify() {
   ELAPSED="$(($SECONDS / 3600))hrs $((($SECONDS / 60) % 60))min $(($SECONDS % 60))sec"
   aws sns publish --region <% .Region %> --topic-arn "$AWS_SNS_ARN" \
-    --message="$(printf "$1\n  Device: %s\n  Stack Version: %s %s\n  Build Date: %s\n  Elapsed Time: %s\n  AOSP Build: %s\n  AOSP Branch: %s\n  Kernel Branch: %s\n  Chromium Version: %s\n  F-Droid Version: %s\n  F-Droid Priv Extension Version: %s" \
-      "${DEVICE}" "${STACK_VERSION}" "${STACK_UPDATE_MESSAGE}" "${BUILD_DATE}" "${ELAPSED}" "${AOSP_BUILD}" "${AOSP_BRANCH}" ${KERNEL_BRANCH} "${LATEST_CHROMIUM}" "${FDROID_CLIENT_VERSION}" "${FDROID_PRIV_EXT_VERSION}")" || true
+    --message="$(printf "$1\n  Device: %s\n  Stack Version: %s %s\n  Build Date: %s\n  Elapsed Time: %s\n  AOSP Build: %s\n  AOSP Branch: %s\n  Chromium Version: %s\n  F-Droid Version: %s\n  F-Droid Priv Extension Version: %s" \
+      "${DEVICE}" "${STACK_VERSION}" "${STACK_UPDATE_MESSAGE}" "${BUILD_DATE}" "${ELAPSED}" "${AOSP_BUILD}" "${AOSP_BRANCH}" "${LATEST_CHROMIUM}" "${FDROID_CLIENT_VERSION}" "${FDROID_PRIV_EXT_VERSION}")" || true
 }
 
 aws_logging() {
@@ -532,6 +558,9 @@ aws_gen_keys() {
 }
 
 gen_keys() {
+  echo "=================================="
+  echo "Running gen_keys"
+  echo "=================================="
   mkdir --parents "${BUILD_DIR}/keys/${DEVICE}"
   pushd "${BUILD_DIR}/keys/${DEVICE}"
   for key in {releasekey,platform,shared,media,verity} ; do
@@ -549,20 +578,24 @@ gen_keys() {
 }
 
 gen_avb_key() {
+  echo "=================================="
+  echo "Running gen_avb_key"
+  echo "=================================="
   pushd "$BUILD_DIR"
   openssl genrsa -out "${BUILD_DIR}/keys/$1/avb.pem" 2048
   ${BUILD_DIR}/external/avb/avbtool extract_public_key --key "${BUILD_DIR}/keys/$1/avb.pem" --output "${BUILD_DIR}/keys/$1/avb_pkmd.bin"
 }
 
 gen_verity_key() {
+  echo "=================================="
+  echo "Running gen_verity_key"
+  echo "=================================="
   pushd "$BUILD_DIR"
 
   make -j 20 generate_verity_key
   "${BUILD_DIR}/out/host/linux-x86/bin/generate_verity_key" -convert "${BUILD_DIR}/keys/$1/verity.x509.pem" "${BUILD_DIR}/keys/$1/verity_key"
   make clobber
-
   openssl x509 -outform der -in "${BUILD_DIR}/keys/$1/verity.x509.pem" -out "${BUILD_DIR}/keys/$1/verity_user.der.x509"
-  ln --verbose --symbolic "${BUILD_DIR}/keys/$1/verity_user.der.x509" "${BUILD_DIR}/kernel/google/${KERNEL_NAME}/verity_user.der.x509"
 }
 
 cleanup() {
