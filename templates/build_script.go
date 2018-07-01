@@ -239,6 +239,8 @@ build_chromium() {
   cd src
   git checkout "$CHROMIUM_REVISION" -f || true
   git clean -dff || true
+  # temporary workaround for this issue (https://bugs.chromium.org/p/chromium/issues/detail?id=856344)
+  sed -i "/vars = {/a 'chrome_git': 'https://chrome-internal.googlesource.com'," DEPS
   yes | gclient sync --with_branch_heads --jobs 32 -RDf
 
   # install dependencies
@@ -539,10 +541,14 @@ aws_notify_simple() {
 }
 
 aws_notify() {
+  LOGOUTPUT=
+  if [ ! -z "$2" ]; then
+    LOGOUTPUT=$(tail -c 20000 /var/log/cloud-init-output.log)
+  fi
   ELAPSED="$(($SECONDS / 3600))hrs $((($SECONDS / 60) % 60))min $(($SECONDS % 60))sec"
   aws sns publish --region <% .Region %> --topic-arn "$AWS_SNS_ARN" \
-    --message="$(printf "$1\n  Device: %s\n  Stack Version: %s %s\n  Build Date: %s\n  Elapsed Time: %s\n  AOSP Build: %s\n  AOSP Branch: %s\n  Chromium Version: %s\n  F-Droid Version: %s\n  F-Droid Priv Extension Version: %s" \
-      "${DEVICE}" "${STACK_VERSION}" "${STACK_UPDATE_MESSAGE}" "${BUILD_DATE}" "${ELAPSED}" "${AOSP_BUILD}" "${AOSP_BRANCH}" "${LATEST_CHROMIUM}" "${FDROID_CLIENT_VERSION}" "${FDROID_PRIV_EXT_VERSION}")" || true
+    --message="$(printf "$1\n  Device: %s\n  Stack Version: %s %s\n  Build Date: %s\n  Elapsed Time: %s\n  AOSP Build: %s\n  AOSP Branch: %s\n  Chromium Version: %s\n  F-Droid Version: %s\n  F-Droid Priv Extension Version: %s\n%s" \
+      "${DEVICE}" "${STACK_VERSION}" "${STACK_UPDATE_MESSAGE}" "${BUILD_DATE}" "${ELAPSED}" "${AOSP_BUILD}" "${AOSP_BRANCH}" "${LATEST_CHROMIUM}" "${FDROID_CLIENT_VERSION}" "${FDROID_PRIV_EXT_VERSION}" "${LOGOUTPUT}")" || true
 }
 
 aws_logging() {
@@ -602,7 +608,7 @@ cleanup() {
   rv=$?
   aws_logging
   if [ $rv -ne 0 ]; then
-    aws_notify "RattlesnakeOS Build FAILED"
+    aws_notify "RattlesnakeOS Build FAILED" 1
   fi
   if ${PREVENT_SHUTDOWN}; then
     echo "Skipping shutdown"
