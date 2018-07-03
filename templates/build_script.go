@@ -428,7 +428,9 @@ patch_priv_ext() {
   unofficial_marlin_releasekey_hash=$(fdpe_hash "${BUILD_DIR}/keys/marlin/releasekey.x509.pem")
   unofficial_marlin_platform_hash=$(fdpe_hash "${BUILD_DIR}/keys/marlin/platform.x509.pem")
   unofficial_taimen_releasekey_hash=$(fdpe_hash "${BUILD_DIR}/keys/taimen/releasekey.x509.pem")
+  unofficial_taimen_platform_hash=$(fdpe_hash "${BUILD_DIR}/keys/taimen/platform.x509.pem")
   unofficial_walleye_releasekey_hash=$(fdpe_hash "${BUILD_DIR}/keys/walleye/releasekey.x509.pem")
+  unofficial_walleye_platform_hash=$(fdpe_hash "${BUILD_DIR}/keys/walleye/platform.x509.pem")
 
   if [ "$DEVICE" == 'marlin' ]; then
     sed -i 's/'${OFFICIAL_FDROID_KEY}'")/'${unofficial_marlin_releasekey_hash}'"),\n            new Pair<>("org.fdroid.fdroid", "'${unofficial_marlin_platform_hash}'")/' \
@@ -438,12 +440,12 @@ patch_priv_ext() {
     sed -i 's/'${OFFICIAL_FDROID_KEY}'")/'${unofficial_sailfish_releasekey_hash}'"),\n            new Pair<>("org.fdroid.fdroid", "'${unofficial_sailfish_platform_hash}'")/' \
       "${BUILD_DIR}/packages/apps/F-DroidPrivilegedExtension/app/src/main/java/org/fdroid/fdroid/privileged/ClientWhitelist.java"
   fi
-  if [ "$DEVICE" == 'walleye' ]; then
-    sed -i 's/'${OFFICIAL_FDROID_KEY}'")/'${unofficial_walleye_releasekey_hash}'")/' \
+  if [ "$DEVICE" == 'taimen' ]; then
+    sed -i 's/'${OFFICIAL_FDROID_KEY}'")/'${unofficial_taimen_releasekey_hash}'"),\n            new Pair<>("org.fdroid.fdroid", "'${unofficial_taimen_platform_hash}'")/' \
       "${BUILD_DIR}/packages/apps/F-DroidPrivilegedExtension/app/src/main/java/org/fdroid/fdroid/privileged/ClientWhitelist.java"
   fi
-  if [ "$DEVICE" == 'taimen' ]; then
-    sed -i 's/'${OFFICIAL_FDROID_KEY}'")/'${unofficial_taimen_releasekey_hash}'")/' \
+  if [ "$DEVICE" == 'walleye' ]; then
+    sed -i 's/'${OFFICIAL_FDROID_KEY}'")/'${unofficial_walleye_releasekey_hash}'"),\n            new Pair<>("org.fdroid.fdroid", "'${unofficial_walleye_platform_hash}'")/' \
       "${BUILD_DIR}/packages/apps/F-DroidPrivilegedExtension/app/src/main/java/org/fdroid/fdroid/privileged/ClientWhitelist.java"
   fi
 
