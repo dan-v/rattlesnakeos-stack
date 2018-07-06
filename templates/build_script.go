@@ -50,7 +50,7 @@ SECONDS=0
 # urls
 ANDROID_SDK_URL="https://dl.google.com/android/repository/sdk-tools-linux-4333796.zip"
 MANIFEST_URL="https://android.googlesource.com/platform/manifest"
-CHROME_URL_LATEST="https://api.github.com/repos/bromite/bromite/releases"
+CHROME_URL_LATEST="https://api.github.com/repos/bromite/bromite/releases/latest"
 BROMITE_URL="https://github.com/bromite/bromite.git"
 MARLIN_KERNEL_SOURCE_URL="https://android.googlesource.com/kernel/msm"
 
@@ -75,9 +75,7 @@ get_latest_versions() {
   fi
   
   # check for latest stable chromium version
-  #LATEST_CHROMIUM=$(curl -s "$CHROME_URL_LATEST" | jq -r '[.[] | .tag_name][0]' || true)
-  # temporary pin to release to stabilize build
-  LATEST_CHROMIUM="67.0.3396.107"
+  LATEST_CHROMIUM=$(curl -s "$CHROME_URL_LATEST" | jq -r '.tag_name' || true)
   if [ -z "$LATEST_CHROMIUM" ]; then
     aws_notify_simple "ERROR: Unable to get latest Chromium version details. Stopping build."
     exit 1
