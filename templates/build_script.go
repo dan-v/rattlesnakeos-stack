@@ -8,6 +8,9 @@ if [ $# -ne 1 ]; then
   exit 1
 fi
 
+# set region
+export AWS_DEFAULT_REGION=<% .Region %>
+
 # version of stack running
 STACK_VERSION=<% .Version %>
 
@@ -72,7 +75,9 @@ get_latest_versions() {
   fi
   
   # check for latest stable chromium version
-  LATEST_CHROMIUM=$(curl -s "$CHROME_URL_LATEST" | jq -r '[.[] | .tag_name][0]' || true)
+  #LATEST_CHROMIUM=$(curl -s "$CHROME_URL_LATEST" | jq -r '[.[] | .tag_name][0]' || true)
+  # temporary pin to release to stabilize build
+  LATEST_CHROMIUM="67.0.3396.107"
   if [ -z "$LATEST_CHROMIUM" ]; then
     aws_notify_simple "ERROR: Unable to get latest Chromium version details. Stopping build."
     exit 1

@@ -66,7 +66,7 @@ Pick a name for your stack and replace 'rattlesnakeos-\<yourstackname>' with you
   * Click `Create subscription` button
   * You should get an email link that you need to click in order to subscribe to messages in this topic
 * After initial setup with `rattlesnakeos-stack` tool, a build should have automatically kicked off. You can check this by going to the [EC2 console](https://us-west-2.console.aws.amazon.com/ec2/v2/home) and verifying there is an EC2 instance running. If a build hasn't kicked off, check out the FAQ for how to manually start a build.
-* The <b>initial build will likely take 4+ hours to complete</b>. 
+* The <b>initial build will likely take 5+ hours to complete</b>. 
 * After the build finishes, a factory image should be uploaded to the S3 bucket that you can download:
   * Go to the [S3 console](https://s3.console.aws.amazon.com/s3/buckets/)
   * Click on `rattlesnakeos-<yourstackname>-release` bucket.
@@ -78,23 +78,28 @@ Pick a name for your stack and replace 'rattlesnakeos-\<yourstackname>' with you
 * Just download the new version of rattlesnakeos-stack and run the same command used previously (e.g. `rattlesnakeos-stack --region us-west-2 --name rattlesnakeos-<yourstackname> --device marlin`) to apply the updates
 
 ## FAQ
-1. <b>Should I use rattlesnakeos-stack?</b> Probably not. Use at your own risk.
-2. <b>How do I manually start a build?</b>
+1. <b>Should I use rattlesnakeos-stack?</b> Use at your own risk.
+2. <b>How much does this cost?</b> The costs are going to be variable by AWS region and by day and time you are running your builds as spot instances have a variable price depending on market demand. Below is an example scenario that should give you a rough estimate of costs:
+   * The majority of the cost will come from builds on EC2. It currently launches spot instances of type c4.4xlarge which average maybe $.30 an hour in us-west-2 (will vary by region) but can get up over $1 an hour depending on the day and time. The `rattlesnakeos-stack` tool allows you define a maximum bid price (`--spot-price`) you are willing to pay and if market price exceeds that then your instance will be terminated. Builds can take anywhere from 2-6 hours depending on if Chromium needs to be built. So let's say you're doing a weekly build at $0.50 an hour and it is taking on average 4 hours - you'd pay ~$8 in EC2 costs per month. You could reduce this to a monthly build (see section how to change build frequency) and then you'd be looking at ~$2 in EC2 costs per month.
+   * The other very minimal cost would be S3. Storage costs are almost non existent as a stack will only store about 3GB worth of files (factory image, ota file, target file) and at $0.023 per GB you're looking at $0.07 per month in S3 storage costs. The other S3 cost would be for data transfer out for OTA updates - let's say you are just downloading an update per week (~500MB file) at $0.09 per GB you're looking at $0.20 per month in S3 network costs.
+3. <b>How do I change build frequency?</b> The current default is to do builds on a weekly basis. With `rattlesnakeos-stack` tool there is an option to specify how frequently builds are kicked off with option `--schedule`. For example you could set `--schedule "rate(30 days)"` to only build every 30 days. Also note, the default behavior is to only run a build if there have been version updates in AOSP build, Chromium version, or F-Droid versions.
+4. <b>How do I manually start a build?</b>
    * Go to the [AWS Lambda](https://us-west-2.console.aws.amazon.com/lambda/) console
    * Click on the function named 'rattlesnakeos-\<yourstackname>-build'
    * Click on the 'Test' button
    * In 'Configure test event dialog', set event name to 'rattlesnakeos', keep the defaults, and click 'Create' button.
    * Click the 'Test' button again to kick off the build
-3. <b>Where do I find logs for a build?</b> On build failure/success, the instance should terminate and upload its logs to S3 bucket called `<stackname>-logs` and it's in a file called `<device>/<timestamp>`.
-4. <b>How can I connect to the EC2 instance and see the build status?</b> There are a few steps required to be able to do this:
+5. <b>Where do I find logs for a build?</b> On build failure/success, the instance should terminate and upload its logs to S3 bucket called `<stackname>-logs` and it's in a file called `<device>/<timestamp>`.
+6. <b>How can I connect to the EC2 instance and see the build status?</b> There are a few steps required to be able to do this:
    * Create an SSH keypair in the [EC2 console](https://us-west-2.console.aws.amazon.com/ec2/v2/home?region=us-west-2#KeyPairs:sort=keyName) and download it
    * Pass an additional flag to `rattlesnakeos-stack` command: `--ssh-key yourkeypairname`
    * Kick off a manual build through AWS Lambda console (see FAQ above)
+   * In the default security group, you'll need to open up SSH access
    * You should be able to SSH into the instance: `ssh -i yourkeypairname.pem ubuntu@yourinstancepublicip`
    * Tail the cloud init logfile to view progress: `tail -f /var/log/cloud-init-output.log`
-5. <b>How can I prevent the EC2 instance from immediately terminating on error so I can debug?</b> There is a flag you can pass `rattlesnakeos-stack` called `--prevent-shutdown`. Note that this will keep the instance online for 12 hours or until you manually terminate it.
-6. <b>Why did my EC2 instance randomly terminate?</b> If there wasn't an error notification, this is likely because the [Spot Instance](https://aws.amazon.com/ec2/spot/) bid was not high enough at this specific time. You can see historical spot instance pricing in the [EC2 console](https://console.aws.amazon.com/ec2sp/v1/spot/home). Click `Pricing History`, select c4.4xlarge for `Instance Type` and pick a date range. If you want to avoid having your instance terminated, you can pass an additional flag to `rattlesnakeos-stack` with a higher than default bid: `--spot-price 1.50`
-7. <b>How do OTA updates work?</b> If you go to `Settings->System update settings` you'll see the updater app settings. The updater app will ping S3 to see if there are updates and if it finds one will download and apply it your device. There is no progress indicator unfortunately - you'll just got a notification when it's done and it will ask you to reboot. If you want to force a check for OTA updates, you can toggle the `Require battery above warning level` setting and it will check for a new build on your S3 bucket.
+7. <b>How can I prevent the EC2 instance from immediately terminating on error so I can debug?</b> There is a flag you can pass `rattlesnakeos-stack` called `--prevent-shutdown`. Note that this will keep the instance online for 12 hours or until you manually terminate it.
+8. <b>Why did my EC2 instance randomly terminate?</b> If there wasn't an error notification, this is likely because the [Spot Instance](https://aws.amazon.com/ec2/spot/) bid was not high enough at this specific time. You can see historical spot instance pricing in the [EC2 console](https://console.aws.amazon.com/ec2sp/v1/spot/home). Click `Pricing History`, select c4.4xlarge for `Instance Type` and pick a date range. If you want to avoid having your instance terminated, you can pass an additional flag to `rattlesnakeos-stack` with a higher than default bid: `--spot-price 1.50`
+9. <b>How do OTA updates work?</b> If you go to `Settings->System update settings` you'll see the updater app settings. The updater app will ping S3 to see if there are updates and if it finds one will download and apply it your device. There is no progress indicator unfortunately - you'll just got a notification when it's done and it will ask you to reboot. If you want to force a check for OTA updates, you can toggle the `Require battery above warning level` setting and it will check for a new build on your S3 bucket.
 
 ## Powered by
 * Huimin Zhang - he is the original author of the underlying build script that was written for CopperheadOS.
