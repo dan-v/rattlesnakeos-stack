@@ -71,8 +71,8 @@ Pick a name for your stack and replace 'rattlesnakeos-\<yourstackname>' with you
   * Go to the [S3 console](https://s3.console.aws.amazon.com/s3/buckets/)
   * Click on `rattlesnakeos-<yourstackname>-release` bucket.
   * From this bucket, download the file `<device>-factory-latest.tar.xz`
-* Use this factory image and [follow the instructions on flashing your device](https://copperhead.co/android/docs/install).
-* After successfully flashing your device, you will now be running RattlesnakeOS and all future updates will happen through the built in OTA mechanism.
+* Use this factory image and [follow the instructions on flashing your device](FLASHING.md).
+* After successfully flashing your device, you will now be running RattlesnakeOS and all future updates will happen through the built in OTA updater.
 
 ## How to update rattlesnakeos-stack
 * Just download the new version of rattlesnakeos-stack and run the same command used previously (e.g. `rattlesnakeos-stack --region us-west-2 --name rattlesnakeos-<yourstackname> --device marlin`) to apply the updates
@@ -99,7 +99,7 @@ Pick a name for your stack and replace 'rattlesnakeos-\<yourstackname>' with you
    * Tail the cloud init logfile to view progress: `tail -f /var/log/cloud-init-output.log`
 7. <b>How can I prevent the EC2 instance from immediately terminating on error so I can debug?</b> There is a flag you can pass `rattlesnakeos-stack` called `--prevent-shutdown`. Note that this will keep the instance online for 12 hours or until you manually terminate it.
 8. <b>Why did my EC2 instance randomly terminate?</b> If there wasn't an error notification, this is likely because the [Spot Instance](https://aws.amazon.com/ec2/spot/) bid was not high enough at this specific time. You can see historical spot instance pricing in the [EC2 console](https://console.aws.amazon.com/ec2sp/v1/spot/home). Click `Pricing History`, select c4.4xlarge for `Instance Type` and pick a date range. If you want to avoid having your instance terminated, you can pass an additional flag to `rattlesnakeos-stack` with a higher than default bid: `--spot-price 1.50`
-9. <b>How do OTA updates work?</b> If you go to `Settings->System update settings` you'll see the updater app settings. The updater app will ping S3 to see if there are updates and if it finds one will download and apply it your device. There is no progress indicator unfortunately - you'll just got a notification when it's done and it will ask you to reboot. If you want to force a check for OTA updates, you can toggle the `Require battery above warning level` setting and it will check for a new build on your S3 bucket.
+9. <b>How do OTA updates work?</b> If you go to `Settings->System update settings` you'll see the updater app settings. The updater app will ping S3 to see if there are updates and if it finds one will download and apply it your device. There is no progress indicator unfortunately - you'll just got a notification when it's done and it will ask you to reboot. If you want to force a check for OTA updates, you can toggle the `Require battery above warning level` setting and it will check for a new build in your S3 bucket.
 
 ## Powered by
 * Huimin Zhang - he is the original author of the underlying build script that was written for CopperheadOS.
