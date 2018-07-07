@@ -1,8 +1,8 @@
 ## Initial Flashing Guide
-Below are instructions on how to initially flash your device to run RattlesnakeOS. This is a one time process and future updates will happen through built in OTA updater. Please note most of this guide is directly copied directly from [CopperheadOS documentation](https://copperhead.co/android/docs/install). 
+Below are instructions on how to initially flash your device to run RattlesnakeOS. This is a one time process and future updates will happen through the built in OTA updater. Please note most of this guide is directly copied from [CopperheadOS documentation](https://copperhead.co/android/docs/install). 
 
 ## Prerequisites
-You should have at least 4GB of memory to avoid problems.
+You should have at least 4GB of memory on your OS to avoid problems.
 
 You can obtain the adb and fastboot tools from the Android SDK. Either install Android Studio or use the standalone SDK. Do not use distribution packages for adb and fastboot. Distribution packages are out-of-date and not compatible with the latest version of Android. <b>An obsolete fastboot will result in corrupted installations and potentially bricked devices</b>. Do not make the common mistake of assuming that everything will be fine and ignoring these instructions. Double check that the first fastboot in your PATH is indeed from an up-to-date SDK installation:
 
@@ -54,7 +54,7 @@ The bootloader now needs to be unlocked to allow flashing new images:
 fastboot flashing unlock
 ```
 
-On the Pixel 2 XL (not the Pixel 2 or other devices), it’s currently necessary to unlock the critical partitions, but a future update will make the bootloader consistent with other devices:
+On the <b>Pixel 2 XL (not the Pixel 2 or other devices)</b>, it’s currently necessary to unlock the critical partitions, but a future update will make the bootloader consistent with other devices:
 
 ```
 fastboot flashing unlock_critical
@@ -62,17 +62,16 @@ fastboot flashing unlock_critical
 
 The command needs to be confirmed on the device.
 
-Next, extract the factory images and run the script to flash them. Note that the fastboot command run by the flashing script requires a fair bit of free space in a temporary directory, which defaults to /tmp:
-
+Next, extract the factory images and run the script to flash them. 
 ```
-tar xvf taimen-factory-2018.03.01.14.tar.xz
+tar xvf taimen-factory-latest.tar.xz
 cd taimen-opm1.171019.018
 mkdir tmp
 TMPDIR=$PWD/tmp ./flash-all.sh
 ```
 
 ## Setting custom AVB key
-On the Pixel 2 and Pixel 2 XL, the public key needs to be set for Android Verified Boot 2.0 before locking the bootloader again:
+On the <b>Pixel 2 and Pixel 2 XL</b>, the public key needs to be set for Android Verified Boot 2.0 before locking the bootloader again:
 ```
 fastboot flash avb_custom_key taimen-avb_pkmd.bin
 ```
@@ -85,7 +84,7 @@ fastboot getvar avb_user_settable_key_set
 ## Locking the bootloader
 Locking the bootloader is important as it enables full verified boot. It also prevents using fastboot to flash, format or erase partitions. Verified boot will detect modifications to any of the OS partitions (boot, recovery, system, vendor) and it will prevent reading any modified / corrupted data. If changes are detected, error correction data is used to attempt to obtain the original data at which point it’s verified again which makes verified boot robust to non-malicious corruption.
 
-On the Pixel 2 XL (not the Pixel 2 or other devices), lock the critical partitions again if this was unlocked:
+On the <b>Pixel 2 XL (not the Pixel 2 or other devices)</b>, lock the critical partitions again if this was unlocked:
 
 ```
 fastboot flashing lock_critical
@@ -100,4 +99,9 @@ The command needs to be confirmed on the device since it needs to perform a fact
 
 Unlocking the bootloader again will perform a factory reset.
 
-OEM unlocking should be disabled again in the developer settings menu within the operating system. This prevents unlocking the bootloader without access to the owner account.
+## Disable OEM unlocking
+OEM unlocking needs to be disabled now from within the operating system.
+
+Enable the developer settings menu by going to `Settings -> About device` and pressing on the build number menu entry until developer mode is enabled.
+
+Next, go to `Settings -> Developer` settings and toggle off the `Enable OEM unlocking` setting.

@@ -71,7 +71,8 @@ Pick a name for your stack and replace 'rattlesnakeos-\<yourstackname>' with you
   * Go to the [S3 console](https://s3.console.aws.amazon.com/s3/buckets/)
   * Click on `rattlesnakeos-<yourstackname>-release` bucket.
   * From this bucket, download the file `<device>-factory-latest.tar.xz`
-* Use this factory image and [follow the instructions on flashing your device](FLASHING.md).
+* Use this factory image and [follow the instructions on flashing your device carefully](FLASHING.md).
+* You followed the instructions until the end and you re-locked your bootloader and disabled OEM unlocking after flashing right? If not, go do that!
 * After successfully flashing your device, you will now be running RattlesnakeOS and all future updates will happen through the built in OTA updater.
 
 ## How to update rattlesnakeos-stack
