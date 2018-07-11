@@ -613,7 +613,10 @@ gen_verity_key() {
 add_carrier_fixes() {
   # apply apn fix for pixel 2
   # see: https://github.com/AndroidHardeningArchive/device_google_muskie/commit/06c1db7b8dee7134e898fdf0b726fbaaaf6f3fe7#diff-db95ef96c4775967b266a21faf164a08
-  sed -i "\$aPRODUCT_COPY_FILES := device/google/wahoo/apns-full-conf.xml:system/etc/apns-conf.xml" ${BUILD_DIR}/device/google/muskie/aosp_walleye.mk
+  if [ "$DEVICE" == 'walleye' ]; then
+    mkdir -p $BUILD_DIR/system/etc
+    cp -f $BUILD_DIR/device/google/wahoo/apns-full-conf.xml $BUILD_DIR/system/etc/apns-conf.xml
+  fi
 }
 
 cleanup() {
