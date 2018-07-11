@@ -166,6 +166,7 @@ full_run() {
   check_chromium
   fetch_aosp_source
   setup_vendor
+  add_carrier_fixes
   aws_import_keys
   apply_patches
   # only marlin and sailfish need kernel rebuilt so that verity_key is included
@@ -607,6 +608,12 @@ gen_verity_key() {
   "${BUILD_DIR}/out/host/linux-x86/bin/generate_verity_key" -convert "${BUILD_DIR}/keys/$1/verity.x509.pem" "${BUILD_DIR}/keys/$1/verity_key"
   make clobber
   openssl x509 -outform der -in "${BUILD_DIR}/keys/$1/verity.x509.pem" -out "${BUILD_DIR}/keys/$1/verity_user.der.x509"
+}
+
+add_carrier_fixes() {
+  # apply apn fix for pixel 2
+  # see: https://github.com/AndroidHardeningArchive/device_google_muskie/commit/06c1db7b8dee7134e898fdf0b726fbaaaf6f3fe7#diff-db95ef96c4775967b266a21faf164a08
+  sed -i "\$aPRODUCT_COPY_FILES := device/google/wahoo/apns-full-conf.xml:system/etc/apns-conf.xml" ${BUILD_DIR}/device/google/muskie/aosp_walleye.mk
 }
 
 cleanup() {
