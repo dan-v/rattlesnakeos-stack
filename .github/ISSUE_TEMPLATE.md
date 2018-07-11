@@ -22,6 +22,9 @@ e.g. OSX, Linux, Windows
 ### Full Command Used for Setup
 e.g. ./rattlesnakeos-stack --region us-west-2 --name rattlesnakeos-dan --device marlin
 
+### Carrier
+e.g. T-mobile, etc
+
 ### Email Notification output
 Should look something like this:
 ```

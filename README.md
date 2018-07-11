@@ -5,7 +5,7 @@ RattlesnakeOS is privacy focused Android OS based on [AOSP](https://source.andro
 Rather than providing random binaries of RattlesnakeOS to install on your phone, I've gone the route of creating a cross platform tool, `rattlesnakeos-stack`, that provisions all of the [AWS](https://aws.amazon.com/) infrastructure needed to automatically build your own RattlesnakeOS on a regular basis, with your own signing keys, and your own OTA updates. It uses [AWS Lambda](https://aws.amazon.com/lambda/features/) to provision [EC2 Spot Instances](https://aws.amazon.com/ec2/spot/) that build RattlesnakeOS and upload build artifacts to [S3](https://aws.amazon.com/s3/). Resulting OS builds are configured to receive over the air updates from this environment.
 
 ## Features
-* Support for Google Pixel, Pixel XL, Pixel 2 XL
+* Support for <b>Google Pixel, Pixel XL, Pixel 2 XL</b>
 * Untested support for Google Pixel 2 
 * Updates and monthly security fixes delivered through OTA updates - no need to manually flash your device
 * Maintain [verified boot](https://source.android.com/security/verifiedboot/) with a locked bootloader just like official Android but with your own personal signing keys
@@ -14,6 +14,13 @@ Rather than providing random binaries of RattlesnakeOS to install on your phone,
 * No Google apps pre-installed
 * Full end to end setup of build environment for RattlesnakeOS in AWS
 * Costs a few dollars a month to run (EC2 spot instance and S3 storage costs)
+
+## Carrier Support
+I only have access to a single device and carrier to test this on, so I can't make any promises about it working with your specific carrier. I'll try to keep this updated with any confirmed working carriers and devices that I've seen posted:
+### Working:
+* T-Mobile (USA): Pixel XL
+### Likely to not work:
+* Sprint (has requirements about specific carrier app being on phone to work)
 
 ## Installation
 The easiest way is to download a pre-built binary from the [Github Releases](https://github.com/dan-v/rattlesnakeos-stack/releases) page.
