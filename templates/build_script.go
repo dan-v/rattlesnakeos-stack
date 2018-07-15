@@ -52,7 +52,7 @@ ANDROID_SDK_URL="https://dl.google.com/android/repository/sdk-tools-linux-433379
 MANIFEST_URL="https://android.googlesource.com/platform/manifest"
 CHROME_URL_LATEST="https://api.github.com/repos/bromite/bromite/releases/latest"
 BROMITE_URL="https://github.com/bromite/bromite.git"
-MARLIN_KERNEL_SOURCE_URL="https://android.googlesource.com/kernel/msm"
+KERNEL_SOURCE_URL="https://android.googlesource.com/kernel/msm"
 
 ANDROID_VERSION="8.1.0"
 
@@ -166,7 +166,6 @@ full_run() {
   check_chromium
   fetch_aosp_source
   setup_vendor
-  add_carrier_fixes
   aws_import_keys
   apply_patches
   # only marlin and sailfish need kernel rebuilt so that verity_key is included
@@ -389,11 +388,21 @@ apply_patches() {
   echo "=================================="
   echo "Running apply_patches"
   echo "=================================="
+  patch_carrier_fixes
   patch_apps
   patch_chromium_webview
   patch_updater
   patch_fdroid
   patch_priv_ext
+}
+
+patch_carrier_fixes() {
+  # apply apn fix for pixel 2 only - hopefully fixed in next version of Android
+  # see: https://github.com/AndroidHardeningArchive/device_google_muskie/commit/06c1db7b8dee7134e898fdf0b726fbaaaf6f3fe7#diff-db95ef96c4775967b266a21faf164a08
+  if [ "$DEVICE" == 'walleye' ]; then
+    export TARGET_PREBUILT_KERNEL=${BUILD_DIR}/device/google/wahoo-kernel/Image.lz4-dtb
+    sed -i '1 i\PRODUCT_COPY_FILES := device/google/wahoo/apns-full-conf.xml:system/etc/apns-conf.xml' ${BUILD_DIR}/device/google/muskie/aosp_walleye.mk
+  fi
 }
 
 patch_chromium_webview() {
@@ -462,7 +471,8 @@ rebuild_marlin_kernel() {
   echo "=================================="
   # checkout kernel source on proper commit
   mkdir -p "${MARLIN_KERNEL_SOURCE_DIR}"
-  git clone "${MARLIN_KERNEL_SOURCE_URL}" "${MARLIN_KERNEL_SOURCE_DIR}"
+  git clone "${KERNEL_SOURCE_URL}" "${MARLIN_KERNEL_SOURCE_DIR}"
+  # TODO: make this a bit more robust
   kernel_commit_id=$(lz4cat "${BUILD_DIR}/device/google/marlin-kernel/Image.lz4-dtb" | grep -a 'Linux version' | cut -d ' ' -f3 | cut -d'-' -f2 | sed 's/^g//g')
   cd "${MARLIN_KERNEL_SOURCE_DIR}"
   echo "Checking out kernel commit ${kernel_commit_id}"
@@ -608,15 +618,6 @@ gen_verity_key() {
   "${BUILD_DIR}/out/host/linux-x86/bin/generate_verity_key" -convert "${BUILD_DIR}/keys/$1/verity.x509.pem" "${BUILD_DIR}/keys/$1/verity_key"
   make clobber
   openssl x509 -outform der -in "${BUILD_DIR}/keys/$1/verity.x509.pem" -out "${BUILD_DIR}/keys/$1/verity_user.der.x509"
-}
-
-add_carrier_fixes() {
-  # apply apn fix for pixel 2
-  # see: https://github.com/AndroidHardeningArchive/device_google_muskie/commit/06c1db7b8dee7134e898fdf0b726fbaaaf6f3fe7#diff-db95ef96c4775967b266a21faf164a08
-  if [ "$DEVICE" == 'walleye' ]; then
-    mkdir -p $BUILD_DIR/system/etc
-    cp -f $BUILD_DIR/device/google/wahoo/apns-full-conf.xml $BUILD_DIR/system/etc/apns-conf.xml
-  fi
 }
 
 cleanup() {
