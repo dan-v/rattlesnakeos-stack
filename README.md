@@ -1,29 +1,27 @@
 ## What is RattlesnakeOS
-RattlesnakeOS is privacy focused Android OS based on [AOSP](https://source.android.com/) for Google Pixel phones. It is my migration strategy away from a security hardened OS called [CopperheadOS](https://en.wikipedia.org/wiki/CopperheadOS) that is no longer maintained. RattlesnakeOS is just stock AOSP with a few things from CopperheadOS: [verified boot](https://source.android.com/security/verifiedboot/) with your own keys, latest Chromium ([webview](https://www.chromium.org/developers/how-tos/build-instructions-android-webview) + browser), [F-Droid](https://f-droid.org/) (with [priviledge extension](https://gitlab.com/fdroid/privileged-extension)), no Google apps, and OTA updates.
+RattlesnakeOS is privacy focused Android OS based on [AOSP](https://source.android.com/) for Google Pixel phones. It is my migration strategy away from [CopperheadOS](https://en.wikipedia.org/wiki/CopperheadOS) which is no longer maintained. RattlesnakeOS is stock AOSP with a few additional features: [verified boot](https://source.android.com/security/verifiedboot/) with your own keys, OTA updates, latest Chromium ([webview](https://www.chromium.org/developers/how-tos/build-instructions-android-webview) + browser) with patches from [Bromite](https://github.com/bromite/bromite) for ad blocking and enhanced privacy, [F-Droid](https://f-droid.org/) (with [privileged extension](https://gitlab.com/fdroid/privileged-extension)), and no Google apps.
 
 ## What is rattlesnakeos-stack
 Rather than providing random binaries of RattlesnakeOS to install on your phone, I've gone the route of creating a cross platform tool, `rattlesnakeos-stack`, that provisions all of the [AWS](https://aws.amazon.com/) infrastructure needed to automatically build your own RattlesnakeOS on a regular basis, with your own signing keys, and your own OTA updates. It uses [AWS Lambda](https://aws.amazon.com/lambda/features/) to provision [EC2 Spot Instances](https://aws.amazon.com/ec2/spot/) that build RattlesnakeOS and upload build artifacts to [S3](https://aws.amazon.com/s3/). Resulting OS builds are configured to receive over the air updates from this environment.
 
 ## Features
-* Support for <b>Google Pixel, Pixel XL, Pixel 2 XL</b>
-* Untested support for Google Pixel 2 
+* Support for <b>Google Pixel, Pixel XL, Pixel 2, Pixel 2 XL</b>
 * Updates and monthly security fixes delivered through OTA updates - no need to manually flash your device
 * Maintain [verified boot](https://source.android.com/security/verifiedboot/) with a locked bootloader just like official Android but with your own personal signing keys
 * Latest Chromium [browser](https://www.chromium.org) and [webview](https://www.chromium.org/developers/how-tos/build-instructions-android-webview) with patches from [Bromite](https://github.com/bromite/bromite) for ad blocking and enhanced privacy
-* Latest [F-Droid](https://f-droid.org/) client and [priviledge extension](https://gitlab.com/fdroid/privileged-extension)
+* Latest [F-Droid](https://f-droid.org/) client and [privileged extension](https://gitlab.com/fdroid/privileged-extension)
 * No Google apps pre-installed
 * Full end to end setup of build environment for RattlesnakeOS in AWS
-* Costs a few dollars a month to run (EC2 spot instance and S3 storage costs)
+* Costs a few dollars a month to run (see FAQ for additional cost breakdown)
 
 ## Carrier Support
 I only have access to a single device and carrier to test this on, so I can't make any promises about it working with your specific carrier. I'll try to keep this updated with any confirmed working carriers and devices that I've seen posted:
-### Working:
-* T-Mobile (USA): Pixel XL
+### Verified working:
+* T-Mobile
+* Rogers
 ### Likely to not work:
 * Sprint (has requirements about specific carrier app being on phone to work)
-
-## Installation
-The easiest way is to download a pre-built binary from the [Github Releases](https://github.com/dan-v/rattlesnakeos-stack/releases) page.
+* Project Fi 
 
 ## Prerequisites
 * An AWS account - you can [create an AWS account](https://portal.aws.amazon.com/billing/signup) if you don't have one. 
@@ -31,8 +29,11 @@ The easiest way is to download a pre-built binary from the [Github Releases](htt
 * You'll need AWS credentials with `AdministratorAccess` access. If you're not sure how to do that, you can follow [this step by step guide](https://serverless-stack.com/chapters/create-an-iam-user.html).
 * Install the [AWS CLI](https://docs.aws.amazon.com/cli/latest/userguide/installing.html) for your platform and [configure](https://docs.aws.amazon.com/cli/latest/userguide/cli-chap-getting-started.html) it to use these credentials.
 
-## Deployment
-Pick a name for your stack and replace 'rattlesnakeos-\<yourstackname>' with your own name. <b>Note: this name has to be unique or it will fail to provision.</b>
+## Installation of rattlesnakeos-stack tool
+The easiest way is to download a pre-built binary from the [Github Releases](https://github.com/dan-v/rattlesnakeos-stack/releases) page. The other option is to compile from source (see `Build from Source` section).
+
+## Deployment of stack using rattlesnakeos-stack tool
+The `rattlesnakeos-stack` tool will handle deploying all the required AWS infrastructure needed to run ongoing builds of RattlesnakeOS. After initial deployment, your first build will automatically start; by default it is configured to build on a weekly basis after this (see the FAQ for details on how to modify build schedule). When deploying your stack with `rattlesnakeos-stack`, you'll need to pick a unique name to replace 'rattlesnakeos-\<yourstackname>' in the commands below. <b>Note: this name has to be unique or it will fail to provision.</b>
 * Deploy environment for Pixel XL (marlin)
 
     ```sh
@@ -107,16 +108,19 @@ Pick a name for your stack and replace 'rattlesnakeos-\<yourstackname>' with you
    * Tail the cloud init logfile to view progress: `tail -f /var/log/cloud-init-output.log`
 7. <b>How can I prevent the EC2 instance from immediately terminating on error so I can debug?</b> There is a flag you can pass `rattlesnakeos-stack` called `--prevent-shutdown`. Note that this will keep the instance online for 12 hours or until you manually terminate it.
 8. <b>Why did my EC2 instance randomly terminate?</b> If there wasn't an error notification, this is likely because the [Spot Instance](https://aws.amazon.com/ec2/spot/) bid was not high enough at this specific time. You can see historical spot instance pricing in the [EC2 console](https://console.aws.amazon.com/ec2sp/v1/spot/home). Click `Pricing History`, select c4.4xlarge for `Instance Type` and pick a date range. If you want to avoid having your instance terminated, you can pass an additional flag to `rattlesnakeos-stack` with a higher than default bid: `--spot-price 1.50`
-9. <b>How do OTA updates work?</b> If you go to `Settings->System update settings` you'll see the updater app settings. The updater app will ping S3 to see if there are updates and if it finds one will download and apply it your device. There is no progress indicator unfortunately - you'll just got a notification when it's done and it will ask you to reboot. If you want to force a check for OTA updates, you can toggle the `Require battery above warning level` setting and it will check for a new build in your S3 bucket.
+9. <b>How do OTA updates work?</b> If you go to `Settings->System update settings` you'll see the updater app settings. The updater app will check S3 to see if there are updates and if it finds one will download and apply it your device. There is no progress indicator unfortunately - you'll just got a notification when it's done and it will ask you to reboot. If you want to force a check for OTA updates, you can toggle the `Require battery above warning level` setting and it will check for a new build in your S3 bucket.
 
 ## Powered by
 * Huimin Zhang - he is the original author of the underlying build script that was written for CopperheadOS.
 * [Terraform](https://www.terraform.io/) 
 
 ## Build from Source
-
+ * To compile from source you'll need to install Go (https://golang.org/) for your platform
   ```sh
-  make tools && make
+  go get github.com/dan-v/rattlesnakeos-stack
+  cd $GOPATH/src/github.com/dan-v/rattlesnakeos-stack/
+  make tools
+  make
   ```
 
 ## To Do
