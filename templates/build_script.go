@@ -333,7 +333,7 @@ fetch_aosp_source() {
   sed -i '/Browser2/d' build/make/target/product/core.mk
 
   # remove Calendar
-  sed -i '/Calendar/d' build/make/target/product/core.mk
+  sed -i '/Calendar \\/d' build/make/target/product/core.mk
 
   # remove QuickSearchBox
   sed -i '/QuickSearchBox/d' build/make/target/product/core.mk
