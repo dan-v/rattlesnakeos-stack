@@ -51,6 +51,9 @@ SECONDS=0
 ANDROID_SDK_URL="https://dl.google.com/android/repository/sdk-tools-linux-4333796.zip"
 MANIFEST_URL="https://android.googlesource.com/platform/manifest"
 CHROME_URL_LATEST="https://api.github.com/repos/bromite/bromite/releases/latest"
+STACK_URL_LATEST="https://api.github.com/repos/dan-v/rattlesnakeos-stack/releases/latest"
+FDROID_CLIENT_URL_LATEST="https://gitlab.com/api/v4/projects/36189/repository/tags"
+FDROID_PRIV_EXT_URL_LATEST="https://gitlab.com/api/v4/projects/1481578/repository/tags"
 BROMITE_URL="https://github.com/bromite/bromite.git"
 KERNEL_SOURCE_URL="https://android.googlesource.com/kernel/msm"
 
@@ -67,7 +70,7 @@ get_latest_versions() {
   sudo apt-get -y install jq
   
   # check if running latest stack
-  LATEST_STACK_VERSION=$(curl -s https://api.github.com/repos/dan-v/rattlesnakeos-stack/releases | jq -r '[.[] | .name][0]')
+  LATEST_STACK_VERSION=$(curl -s "$STACK_URL_LATEST" | jq -r '.name' || true)
   if [ "$LATEST_STACK_VERSION" == "$STACK_VERSION" ]; then
     echo "Running the latest rattlesnakeos-stack version $LATEST_STACK_VERSION"
   else
@@ -82,12 +85,12 @@ get_latest_versions() {
   fi
   
   # fdroid - get latest non alpha tags from gitlab
-  FDROID_CLIENT_VERSION=$(curl -s "https://gitlab.com/api/v4/projects/36189/repository/tags" | jq -r '[.[] | select(.name | test("^[0-9]+\\.[0-9]+")) | select(.name | contains("alpha") | not) | select(.name | contains("ota") | not)][0] | .name')
+  FDROID_CLIENT_VERSION=$(curl -s "$FDROID_CLIENT_URL_LATEST" | jq -r '[.[] | select(.name | test("^[0-9]+\\.[0-9]+")) | select(.name | contains("alpha") | not) | select(.name | contains("ota") | not)][0] | .name')
   if [ -z "$FDROID_CLIENT_VERSION" ]; then
     aws_notify_simple "ERROR: Unable to get latest F-Droid version details. Stopping build."
     exit 1
   fi
-  FDROID_PRIV_EXT_VERSION=$(curl -s "https://gitlab.com/api/v4/projects/1481578/repository/tags" | jq -r '[.[] | select(.name | test("^[0-9]+\\.[0-9]+")) | select(.name | contains("alpha") | not) | select(.name | contains("ota") | not)][0] | .name')
+  FDROID_PRIV_EXT_VERSION=$(curl -s "$FDROID_PRIV_EXT_URL_LATEST" | jq -r '[.[] | select(.name | test("^[0-9]+\\.[0-9]+")) | select(.name | contains("alpha") | not) | select(.name | contains("ota") | not)][0] | .name')
   if [ -z "$FDROID_PRIV_EXT_VERSION" ]; then
     aws_notify_simple "ERROR: Unable to get latest F-Droid privilege extension version details. Stopping build."
     exit 1
@@ -109,6 +112,15 @@ get_latest_versions() {
 check_for_new_versions() {
   echo "Checking if any new versions of software exist"
   needs_update=false
+
+  # check stack version
+  existing_stack_version=$(aws s3 cp "s3://${AWS_RELEASE_BUCKET}/rattlesnakeos-stack/revision" - || true)
+  if [ "$existing_stack_version" == "$STACK_VERSION" ]; then
+    echo "Stack version ($existing_stack_version) is up to date"
+  else
+    echo "Last successful build (if there was one) is not with latest stack version ${STACK_VERSION}"
+    needs_update=true
+  fi
 
   # check aosp
   existing_aosp_build=$(aws s3 cp "s3://${AWS_RELEASE_BUCKET}/${DEVICE}-vendor" - || true)
@@ -536,6 +548,9 @@ aws_release() {
 
   # copy new target file to s3
   aws s3 cp "${BUILD_DIR}/out/release-${DEVICE}-${build_date}/${DEVICE}-target_files-${build_date}.zip" "s3://${AWS_RELEASE_BUCKET}/${DEVICE}-target/${DEVICE}-target-files-${build_date}.zip" --acl public-read
+
+  # checkpoint stack version as successful
+  echo "${STACK_VERSION}" | aws s3 cp - "s3://${AWS_RELEASE_BUCKET}/rattlesnakeos-stack/revision"
 }
 
 cleanup_target_files() {
