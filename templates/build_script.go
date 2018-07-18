@@ -406,6 +406,7 @@ apply_patches() {
   patch_updater
   patch_fdroid
   patch_priv_ext
+  patch_launcher
 }
 
 patch_carrier_fixes() {
@@ -475,6 +476,13 @@ patch_priv_ext() {
   fi
 
   echo "${FDROID_PRIV_EXT_VERSION}" | aws s3 cp - "s3://${AWS_RELEASE_BUCKET}/fdroid-priv/revision" --acl public-read
+}
+
+patch_launcher() {
+  # disable QuickSearchBox widget on home screen
+  sed -i.original "s/QSB_ON_FIRST_SCREEN = true;/QSB_ON_FIRST_SCREEN = false;/" "${BUILD_DIR}/packages/apps/Launcher3/src/com/android/launcher3/config/BaseFlags.java"
+  # fix compile error with uninitialized variable
+  sed -i.original "s/boolean createEmptyRowOnFirstScreen;/boolean createEmptyRowOnFirstScreen = false;/" "${BUILD_DIR}/packages/apps/Launcher3/src/com/android/launcher3/provider/ImportDataTask.java"
 }
 
 rebuild_marlin_kernel() {
