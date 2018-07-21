@@ -16,36 +16,42 @@ const (
 	awsErrCodeNotFound     = "NotFound"
 )
 
-// ubuntu 16.04 AMI
+// ubuntu 16.04 AMI hvm:ebs-ssd
+// https://cloud-images.ubuntu.com/locator/ec2/
 var amiMap = map[string]string{
-	"ap-northeast-1": "ami-bec974d8",
-	"ap-northeast-2": "ami-3066c15e",
-	"ap-south-1":     "ami-f3e5aa9c",
-	"ap-southeast-1": "ami-10acfb73",
-	"ap-southeast-2": "ami-cab258a8",
-	"ca-central-1":   "ami-018b3065",
-	"eu-central-1":   "ami-df8406b0",
-	"eu-west-1":      "ami-8fd760f6",
-	"eu-west-2":      "ami-fcc4db98",
-	"eu-west-3":      "ami-4262d53f",
-	"sa-east-1":      "ami-bf8ecbd3",
-	"us-east-1":      "ami-aa2ea6d0",
-	"us-east-2":      "ami-82f4dae7",
-	"us-west-1":      "ami-45ead225",
-	"us-west-2":      "ami-0def3275",
+	"ap-northeast-1": "ami-940cdceb",
+	"ap-northeast-2": "ami-467acf28",
+	"ap-northeast-3": "ami-85b3bdf8",
+	"ap-south-1":     "ami-188fba77",
+	"ap-southeast-1": "ami-51a7aa2d",
+	"ap-southeast-2": "ami-47c21a25",
+	"ca-central-1":   "ami-db9e1cbf",
+	"cn-north-1":     "ami-b117c9dc",
+	"cn-northwest-1": "ami-39b8ac5b",
+	"eu-central-1":   "ami-de8fb135",
+	"eu-west-1":      "ami-2a7d75c0",
+	"eu-west-2":      "ami-6b3fd60c",
+	"eu-west-3":      "ami-20ee5e5d",
+	"sa-east-1":      "ami-8eecc9e2",
+	"us-east-1":      "ami-759bc50a",
+	"us-east-2":      "ami-5e8bb23b",
+	"us-gov-west-1":  "ami-0661f767",
+	"us-west-1":      "ami-4aa04129",
+	"us-west-2":      "ami-ba602bc2",
 }
 
 type StackConfig struct {
-	Name            string
-	Region          string
-	Device          string
-	AMI             string
-	SpotPrice       string
-	SSHKey          string
-	PreventShutdown bool
-	Version         string
-	Schedule        string
-	Force           bool
+	Name              string
+	Region            string
+	Device            string
+	AMI               string
+	SpotPrice         string
+	SSHKey            string
+	PreventShutdown   bool
+	Version           string
+	Schedule          string
+	Force             bool
+	NoChromiumPatches bool
 }
 
 func AWSApply(config StackConfig) error {

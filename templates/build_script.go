@@ -20,6 +20,9 @@ PREVENT_SHUTDOWN=<% .PreventShutdown %>
 # force build even if no new versions exist of components
 FORCE_BUILD=<% .Force %>
 
+# skip chromium patches or not
+NO_CHROMIUM_PATCHES=<% .NoChromiumPatches %>
+
 # check if supported device
 DEVICE=$1
 if [ "$DEVICE" == 'sailfish' ] || [ "$DEVICE" == 'marlin' ] || [ "$DEVICE" == 'walleye' ] || [ "$DEVICE" == 'taimen' ]; then
@@ -263,11 +266,16 @@ build_chromium() {
   sudo ./build/install-build-deps-android.sh
 
   # apply bromite patches
-  git clone --branch ${CHROMIUM_REVISION} $BROMITE_URL $HOME/bromite
-  for patch in $HOME/bromite/patches/*.patch; do
-    git am $patch || git am --skip
-  done
-  cp -f $HOME/bromite/filters/adblock_entries.h net/url_request/adblock_entries.h
+  if [ "$NO_CHROMIUM_PATCHES" = true ]; then
+    echo "Not applying any patches to Chromium as requested"
+  else
+    echo "Applying patches to Chromium"
+    git clone --branch ${CHROMIUM_REVISION} $BROMITE_URL $HOME/bromite
+    for patch in $HOME/bromite/patches/*.patch; do
+      git am $patch || git am --skip
+    done
+    cp -f $HOME/bromite/filters/adblock_entries.h net/url_request/adblock_entries.h
+  fi
 
   mkdir -p out/Default
   cat <<EOF > out/Default/args.gn
@@ -433,10 +441,10 @@ patch_fdroid() {
 }
 
 patch_apps() {
-  sed -i.original "\$aPRODUCT_PACKAGES += Updater" build/make/target/product/core.mk
-  sed -i.original "\$aPRODUCT_PACKAGES += F-DroidPrivilegedExtension" build/make/target/product/core.mk
-  sed -i.original "\$aPRODUCT_PACKAGES += F-Droid" build/make/target/product/core.mk
-  sed -i.original "\$aPRODUCT_PACKAGES += chromium" build/make/target/product/core.mk
+  sed -i.original "\$aPRODUCT_PACKAGES += Updater" ${BUILD_DIR}/build/make/target/product/core.mk
+  sed -i.original "\$aPRODUCT_PACKAGES += F-DroidPrivilegedExtension" ${BUILD_DIR}/build/make/target/product/core.mk
+  sed -i.original "\$aPRODUCT_PACKAGES += F-Droid" ${BUILD_DIR}/build/make/target/product/core.mk
+  sed -i.original "\$aPRODUCT_PACKAGES += chromium" ${BUILD_DIR}/build/make/target/product/core.mk
 }
 
 patch_updater() {
