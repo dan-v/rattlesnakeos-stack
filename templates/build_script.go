@@ -81,7 +81,9 @@ get_latest_versions() {
   fi
   
   # check for latest stable chromium version
-  LATEST_CHROMIUM=$(curl -s "$CHROME_URL_LATEST" | jq -r '.tag_name' || true)
+  #LATEST_CHROMIUM=$(curl -s "$CHROME_URL_LATEST" | jq -r '.tag_name' || true)
+  # TODO: temporary workaround as latest chromium build is not working
+  LATEST_CHROMIUM=67.0.3396.107
   if [ -z "$LATEST_CHROMIUM" ]; then
     aws_notify_simple "ERROR: Unable to get latest Chromium version details. Stopping build."
     exit 1
