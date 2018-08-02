@@ -81,8 +81,8 @@ get_latest_versions() {
   fi
   
   # check for latest stable chromium version
-  #LATEST_CHROMIUM=$(curl -s "$CHROME_URL_LATEST" | jq -r '.tag_name' || true)
   # TODO: temporary workaround as latest chromium build is not working
+  #LATEST_CHROMIUM=$(curl -s "$CHROME_URL_LATEST" | jq -r '.tag_name' || true)
   LATEST_CHROMIUM=67.0.3396.107
   if [ -z "$LATEST_CHROMIUM" ]; then
     aws_notify_simple "ERROR: Unable to get latest Chromium version details. Stopping build."
@@ -90,12 +90,16 @@ get_latest_versions() {
   fi
   
   # fdroid - get latest non alpha tags from gitlab
-  FDROID_CLIENT_VERSION=$(curl -s "$FDROID_CLIENT_URL_LATEST" | jq -r '[.[] | select(.name | test("^[0-9]+\\.[0-9]+")) | select(.name | contains("alpha") | not) | select(.name | contains("ota") | not)][0] | .name')
+  # TODO: temporary workaround as latest fdroid build is not working
+  #FDROID_CLIENT_VERSION=$(curl -s "$FDROID_CLIENT_URL_LATEST" | jq -r '[.[] | select(.name | test("^[0-9]+\\.[0-9]+")) | select(.name | contains("alpha") | not) | select(.name | contains("ota") | not)][0] | .name')
+  FDROID_CLIENT_VERSION=1.2.2
   if [ -z "$FDROID_CLIENT_VERSION" ]; then
     aws_notify_simple "ERROR: Unable to get latest F-Droid version details. Stopping build."
     exit 1
   fi
-  FDROID_PRIV_EXT_VERSION=$(curl -s "$FDROID_PRIV_EXT_URL_LATEST" | jq -r '[.[] | select(.name | test("^[0-9]+\\.[0-9]+")) | select(.name | contains("alpha") | not) | select(.name | contains("ota") | not)][0] | .name')
+  # TODO: temporary workaround as latest fdroid build is not working
+  #FDROID_PRIV_EXT_VERSION=$(curl -s "$FDROID_PRIV_EXT_URL_LATEST" | jq -r '[.[] | select(.name | test("^[0-9]+\\.[0-9]+")) | select(.name | contains("alpha") | not) | select(.name | contains("ota") | not)][0] | .name')
+  FDROID_PRIV_EXT_VERSION=0.2.8
   if [ -z "$FDROID_PRIV_EXT_VERSION" ]; then
     aws_notify_simple "ERROR: Unable to get latest F-Droid privilege extension version details. Stopping build."
     exit 1
