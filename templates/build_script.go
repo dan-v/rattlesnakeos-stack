@@ -20,8 +20,8 @@ PREVENT_SHUTDOWN=<% .PreventShutdown %>
 # force build even if no new versions exist of components
 FORCE_BUILD=<% .Force %>
 
-# skip chromium patches or not
-NO_CHROMIUM_PATCHES=<% .NoChromiumPatches %>
+# whether to patch chromium or not
+PATCH_CHROMIUM=<% .PatchChromium %>
 
 # check if supported device
 DEVICE=$1
@@ -81,25 +81,19 @@ get_latest_versions() {
   fi
   
   # check for latest stable chromium version
-  # TODO: temporary workaround as latest chromium build is not working
-  #LATEST_CHROMIUM=$(curl -s "$CHROME_URL_LATEST" | jq -r '.tag_name' || true)
-  LATEST_CHROMIUM=67.0.3396.107
+  LATEST_CHROMIUM=$(curl -s "$CHROME_URL_LATEST" | jq -r '.tag_name' || true)
   if [ -z "$LATEST_CHROMIUM" ]; then
     aws_notify_simple "ERROR: Unable to get latest Chromium version details. Stopping build."
     exit 1
   fi
   
   # fdroid - get latest non alpha tags from gitlab
-  # TODO: temporary workaround as latest fdroid build is not working
-  #FDROID_CLIENT_VERSION=$(curl -s "$FDROID_CLIENT_URL_LATEST" | jq -r '[.[] | select(.name | test("^[0-9]+\\.[0-9]+")) | select(.name | contains("alpha") | not) | select(.name | contains("ota") | not)][0] | .name')
-  FDROID_CLIENT_VERSION=1.2.2
+  FDROID_CLIENT_VERSION=$(curl -s "$FDROID_CLIENT_URL_LATEST" | jq -r '[.[] | select(.name | test("^[0-9]+\\.[0-9]+")) | select(.name | contains("alpha") | not) | select(.name | contains("ota") | not)][0] | .name')
   if [ -z "$FDROID_CLIENT_VERSION" ]; then
     aws_notify_simple "ERROR: Unable to get latest F-Droid version details. Stopping build."
     exit 1
   fi
-  # TODO: temporary workaround as latest fdroid build is not working
-  #FDROID_PRIV_EXT_VERSION=$(curl -s "$FDROID_PRIV_EXT_URL_LATEST" | jq -r '[.[] | select(.name | test("^[0-9]+\\.[0-9]+")) | select(.name | contains("alpha") | not) | select(.name | contains("ota") | not)][0] | .name')
-  FDROID_PRIV_EXT_VERSION=0.2.8
+  FDROID_PRIV_EXT_VERSION=$(curl -s "$FDROID_PRIV_EXT_URL_LATEST" | jq -r '[.[] | select(.name | test("^[0-9]+\\.[0-9]+")) | select(.name | contains("alpha") | not) | select(.name | contains("ota") | not)][0] | .name')
   if [ -z "$FDROID_PRIV_EXT_VERSION" ]; then
     aws_notify_simple "ERROR: Unable to get latest F-Droid privilege extension version details. Stopping build."
     exit 1
@@ -195,6 +189,7 @@ full_run() {
   fi
   build_aosp
   aws_release
+  checkpoint_versions
   aws_notify "RattlesnakeOS Build SUCCESS"
 }
 
@@ -259,7 +254,7 @@ build_chromium() {
   # fetch chromium 
   mkdir -p $HOME/chromium
   cd $HOME/chromium
-  fetch --nohooks android --target_os_only=true || true
+  fetch --nohooks android || true
   cd src
   git checkout "$CHROMIUM_REVISION" -f || true
   git clean -dff || true
@@ -272,15 +267,32 @@ build_chromium() {
   sudo ./build/install-build-deps-android.sh
 
   # apply bromite patches
-  if [ "$NO_CHROMIUM_PATCHES" = true ]; then
+  if [ "$PATCH_CHROMIUM" = false ]; then
     echo "Not applying any patches to Chromium as requested"
   else
     echo "Applying patches to Chromium"
     git clone --branch ${CHROMIUM_REVISION} $BROMITE_URL $HOME/bromite
+
+    # this patch fails to apply and needs manual fixing
+    rm -f $HOME/bromite/patches/*Removed-Sync-and-Translate-menu.patch
+
+    # TODO: patch is missing source files (as of v68.0.3440.87)
+    rm -f $HOME/bromite/patches/*Play-videos-in-background.patch
+    rm -f $HOME/bromite/patches/*Cure-AMP-and-tracking-from-search-results.patch
+
+    # TODO: adblock is not working with latest build for some reason (as of v68.0.3440.87)
+    rm -f $HOME/bromite/patches/*url_request-hooks-and-ad-url-data.patch
+    rm -f $HOME/bromite/patches/*Bromite-adblock-engine.patch
+
+    # TODO: remove some additional patches for now (as of v68.0.3440.87)
+    rm -f $HOME/bromite/patches/*Disable-WebRTC-by-default.patch
+    rm -f $HOME/bromite/patches/*Remove-help-menu-item.patch
+    rm -f $HOME/bromite/patches/*openH264-enable-ARM-ARM64-optimizations.patch
+    rm -f $HOME/bromite/patches/*Allow-playing-audio-in-background.patch
+
     for patch in $HOME/bromite/patches/*.patch; do
       git am $patch || git am --skip
     done
-    cp -f $HOME/bromite/filters/adblock_entries.h net/url_request/adblock_entries.h
   fi
 
   mkdir -p out/Default
@@ -440,10 +452,7 @@ patch_fdroid() {
   echo "sdk.dir=${HOME}/sdk" > ${BUILD_DIR}/packages/apps/F-Droid/local.properties
   echo "sdk.dir=${HOME}/sdk" > ${BUILD_DIR}/packages/apps/F-Droid/app/local.properties
   sed -i 's/gradle assembleRelease/..\/gradlew assembleRelease/' ${BUILD_DIR}/packages/apps/F-Droid/Android.mk
-  pushd ${BUILD_DIR}/packages/apps/F-Droid
-  # for some reason first build fails - so do it now
-  ./gradlew assembleRelease || true
-  echo "${FDROID_CLIENT_VERSION}" | aws s3 cp - "s3://${AWS_RELEASE_BUCKET}/fdroid/revision" --acl public-read
+  sed -i 's@fdroid_apk   := build/outputs/apk/$(fdroid_dir)-release-unsigned.apk@fdroid_apk   := build/outputs/apk/full/release/app-full-release-unsigned.apk@'  ${BUILD_DIR}/packages/apps/F-Droid/Android.mk
 }
 
 patch_apps() {
@@ -488,8 +497,6 @@ patch_priv_ext() {
     sed -i 's/'${OFFICIAL_FDROID_KEY}'")/'${unofficial_walleye_releasekey_hash}'"),\n            new Pair<>("org.fdroid.fdroid", "'${unofficial_walleye_platform_hash}'")/' \
       "${BUILD_DIR}/packages/apps/F-DroidPrivilegedExtension/app/src/main/java/org/fdroid/fdroid/privileged/ClientWhitelist.java"
   fi
-
-  echo "${FDROID_PRIV_EXT_VERSION}" | aws s3 cp - "s3://${AWS_RELEASE_BUCKET}/fdroid-priv/revision" --acl public-read
 }
 
 patch_launcher() {
@@ -570,9 +577,15 @@ aws_release() {
 
   # copy new target file to s3
   aws s3 cp "${BUILD_DIR}/out/release-${DEVICE}-${build_date}/${DEVICE}-target_files-${build_date}.zip" "s3://${AWS_RELEASE_BUCKET}/${DEVICE}-target/${DEVICE}-target-files-${build_date}.zip" --acl public-read
+}
 
-  # checkpoint stack version as successful
+checkpoint_versions() {
+  # checkpoint stack version
   echo "${STACK_VERSION}" | aws s3 cp - "s3://${AWS_RELEASE_BUCKET}/rattlesnakeos-stack/revision"
+
+  # checkpoint f-droid
+  echo "${FDROID_PRIV_EXT_VERSION}" | aws s3 cp - "s3://${AWS_RELEASE_BUCKET}/fdroid-priv/revision" --acl public-read
+  echo "${FDROID_CLIENT_VERSION}" | aws s3 cp - "s3://${AWS_RELEASE_BUCKET}/fdroid/revision" --acl public-read
 }
 
 cleanup_target_files() {

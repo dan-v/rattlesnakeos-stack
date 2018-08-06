@@ -41,17 +41,17 @@ var amiMap = map[string]string{
 }
 
 type StackConfig struct {
-	Name              string
-	Region            string
-	Device            string
-	AMI               string
-	SpotPrice         string
-	SSHKey            string
-	PreventShutdown   bool
-	Version           string
-	Schedule          string
-	Force             bool
-	NoChromiumPatches bool
+	Name            string
+	Region          string
+	Device          string
+	AMI             string
+	SpotPrice       string
+	SSHKey          string
+	PreventShutdown bool
+	Version         string
+	Schedule        string
+	Force           bool
+	PatchChromium   bool
 }
 
 func AWSApply(config StackConfig) error {

@@ -11,7 +11,7 @@ import (
 
 var version string
 var name, region, device, ami, sshKey, spotPrice, schedule string
-var remove, preventShutdown, force, noChromiumPatches bool
+var remove, preventShutdown, force, patchChromium bool
 
 var rootCmd = &cobra.Command{
 	Use:   "rattlesnakeos-stack",
@@ -27,17 +27,17 @@ var rootCmd = &cobra.Command{
 		if !remove {
 			if err := stack.AWSApply(
 				stack.StackConfig{
-					Name:              name,
-					Region:            region,
-					Device:            device,
-					AMI:               ami,
-					SSHKey:            sshKey,
-					SpotPrice:         spotPrice,
-					PreventShutdown:   preventShutdown,
-					Version:           version,
-					Schedule:          schedule,
-					Force:             force,
-					NoChromiumPatches: noChromiumPatches,
+					Name:            name,
+					Region:          region,
+					Device:          device,
+					AMI:             ami,
+					SSHKey:          sshKey,
+					SpotPrice:       spotPrice,
+					PreventShutdown: preventShutdown,
+					Version:         version,
+					Schedule:        schedule,
+					Force:           force,
+					PatchChromium:   patchChromium,
 				},
 			); err != nil {
 				log.Fatal(err)
@@ -64,7 +64,7 @@ func init() {
 	rootCmd.Flags().StringVar(&spotPrice, "spot-price", "1.00", "max ec2 spot instance bid. if this value is too low, you may not obtain an instance or it may terminate during a build.")
 	rootCmd.Flags().StringVar(&ami, "ami", "", "ami id to use for build environment. this is optional as correct ubuntu ami for region will be chosen by default.")
 	rootCmd.Flags().StringVar(&schedule, "schedule", "rate(7 days)", "cron expression that defines when to kick off builds. note: if you give invalid expression it will fail to deploy stack. see: https://docs.aws.amazon.com/AmazonCloudWatch/latest/events/ScheduledEvents.html#CronExpressions")
-	rootCmd.Flags().BoolVar(&noChromiumPatches, "no-chromium-patches", false, "don't apply any patches to Chromium (leave as default)")
+	rootCmd.Flags().BoolVar(&patchChromium, "patch-chromium", false, "apply Bromite patches to Chromium")
 	rootCmd.Flags().BoolVar(&force, "force", false, "build even if there are no changes in available version of AOSP, Chromium, or F-Droid.")
 	rootCmd.Flags().BoolVar(&remove, "remove", false, "cleanup/destroy all deployed aws resources.")
 	rootCmd.Flags().BoolVar(&preventShutdown, "prevent-shutdown", false, "for debugging purposes only - will prevent ec2 instance from shutting down after build.")

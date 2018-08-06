@@ -1,5 +1,5 @@
 ## What is RattlesnakeOS
-RattlesnakeOS is privacy focused Android OS based on [AOSP](https://source.android.com/) for Google Pixel phones. It is my migration strategy away from [CopperheadOS](https://en.wikipedia.org/wiki/CopperheadOS) which is no longer maintained. RattlesnakeOS is stock AOSP with a few additional features: [verified boot](https://source.android.com/security/verifiedboot/) with your own keys, OTA updates, latest Chromium ([webview](https://www.chromium.org/developers/how-tos/build-instructions-android-webview) + browser) with patches from [Bromite](https://github.com/bromite/bromite) for ad blocking and enhanced privacy, [F-Droid](https://f-droid.org/) (with [privileged extension](https://gitlab.com/fdroid/privileged-extension)), and no Google apps.
+RattlesnakeOS is privacy focused Android OS based on [AOSP](https://source.android.com/) for Google Pixel phones. It is my migration strategy away from [CopperheadOS](https://en.wikipedia.org/wiki/CopperheadOS) which is no longer maintained. RattlesnakeOS is stock AOSP with a few additional features: [verified boot](https://source.android.com/security/verifiedboot/) with your own keys, OTA updates, latest Chromium ([webview](https://www.chromium.org/developers/how-tos/build-instructions-android-webview) + browser) with optional patches from [Bromite](https://github.com/bromite/bromite) for ad blocking and enhanced privacy, [F-Droid](https://f-droid.org/) (with [privileged extension](https://gitlab.com/fdroid/privileged-extension)), and no Google apps.
 
 ## What is rattlesnakeos-stack
 Rather than providing random binaries of RattlesnakeOS to install on your phone, I've gone the route of creating a cross platform tool, `rattlesnakeos-stack`, that provisions all of the [AWS](https://aws.amazon.com/) infrastructure needed to automatically build your own RattlesnakeOS on a regular basis, with your own signing keys, and your own OTA updates. It uses [AWS Lambda](https://aws.amazon.com/lambda/features/) to provision [EC2 Spot Instances](https://aws.amazon.com/ec2/spot/) that build RattlesnakeOS and upload build artifacts to [S3](https://aws.amazon.com/s3/). Resulting OS builds are configured to receive over the air updates from this environment.
@@ -8,20 +8,11 @@ Rather than providing random binaries of RattlesnakeOS to install on your phone,
 * Support for <b>Google Pixel, Pixel XL, Pixel 2, Pixel 2 XL</b>
 * Updates and monthly security fixes delivered through OTA updates - no need to manually flash your device
 * Maintain [verified boot](https://source.android.com/security/verifiedboot/) with a locked bootloader just like official Android but with your own personal signing keys
-* Latest Chromium [browser](https://www.chromium.org) and [webview](https://www.chromium.org/developers/how-tos/build-instructions-android-webview) with patches from [Bromite](https://github.com/bromite/bromite) for ad blocking and enhanced privacy
+* Latest Chromium [browser](https://www.chromium.org) and [webview](https://www.chromium.org/developers/how-tos/build-instructions-android-webview) with optional patches from [Bromite](https://github.com/bromite/bromite) for ad blocking and enhanced privacy
 * Latest [F-Droid](https://f-droid.org/) client and [privileged extension](https://gitlab.com/fdroid/privileged-extension)
 * No Google apps pre-installed
 * Full end to end setup of build environment for RattlesnakeOS in AWS
 * Costs a few dollars a month to run (see FAQ for additional cost breakdown)
-
-## Carrier Support
-I only have access to a single device and carrier to test this on, so I can't make any promises about it working with your specific carrier. I'll try to keep this updated with any confirmed working carriers and devices that I've seen posted:
-### Verified working:
-* T-Mobile
-* Rogers
-### Likely to not work:
-* Sprint (has requirements about specific carrier app being on phone to work)
-* Project Fi 
 
 ## Prerequisites
 * An AWS account - you can [create an AWS account](https://portal.aws.amazon.com/billing/signup) if you don't have one. 
@@ -39,35 +30,50 @@ The `rattlesnakeos-stack` tool will handle deploying all the required AWS infras
 * Provide the SSH keypair name that you created in the prerequisite steps to replace `<yourkeyname>` in commands below.
 
 ### Example commands
-* Deploy environment for Pixel XL (marlin)
+#### Deploying
+Deploy stack with default options for your specific device
 
-    ```sh
-    ./rattlesnakeos-stack --region us-west-2 --name rattlesnakeos-<yourstackname> --device marlin --ssh-key <yourkeyname>
-    ```
+```sh 
+# Pixel XL (marlin)
+./rattlesnakeos-stack --region us-west-2 --name rattlesnakeos-<yourstackname> --device marlin --ssh-key <yourkeyname>
 
-* Deploy environment for Pixel (sailfish)
+# Pixel (sailfish)
+./rattlesnakeos-stack --region us-west-2 --name rattlesnakeos-<yourstackname> --device sailfish --ssh-key <yourkeyname>
 
-    ```sh
-    ./rattlesnakeos-stack --region us-west-2 --name rattlesnakeos-<yourstackname> --device sailfish --ssh-key <yourkeyname>
-    ```
+# Pixel 2 XL (taimen)
+./rattlesnakeos-stack --region us-west-2 --name rattlesnakeos-<yourstackname> --device taimen --ssh-key <yourkeyname>
 
-* Deploy environment for Pixel 2 XL (taimen)
+# Pixel 2 (walleye)
+./rattlesnakeos-stack --region us-west-2 --name rattlesnakeos-<yourstackname> --device walleye --ssh-key <yourkeyname>
+```
 
-    ```sh
-    ./rattlesnakeos-stack --region us-west-2 --name rattlesnakeos-<yourstackname> --device taimen --ssh-key <yourkeyname>
-    ```
+To see full list of options you can pass rattlensakeos-stack you can use the help flag (-h)
 
-* Deploy environment for Pixel 2 (walleye)
+```sh
+...
 
-    ```sh
-    ./rattlesnakeos-stack --region us-west-2 --name rattlesnakeos-<yourstackname> --device walleye --ssh-key <yourkeyname>
-    ```
+Flags:
+    --ami string          ami id to use for build environment. this is optional as correct ubuntu ami for region will be chosen by default.
+-d, --device string       device you want to build for: 'marlin' (Pixel XL), 'sailfish' (Pixel), 'taimen' (Pixel 2 XL), 'walleye' (Pixel 2)
+    --force               build even if there are no changes in available version of AOSP, Chromium, or F-Droid.
+-h, --help                help for rattlesnakeos-stack
+-n, --name string         name for stack. note: this must be a valid/unique S3 bucket name.
+    --patch-chromium      apply Bromite patches to Chromium
+    --prevent-shutdown    for debugging purposes only - will prevent ec2 instance from shutting down after build.
+-r, --region string       aws region for deployment (e.g. us-west-2)
+    --remove              cleanup/destroy all deployed aws resources.
+    --schedule string     cron expression that defines when to kick off builds. note: if you give invalid expression it will fail to deploy stack. see: https://docs.aws.amazon.com/AmazonCloudWatch/latest/events/ScheduledEvents.html#CronExpressions (default "rate(7 days)")
+    --spot-price string   max ec2 spot instance bid. if this value is too low, you may not obtain an instance or it may terminate during a build. (default "1.00")
+    --ssh-key string      aws ssh key to add to ec2 spot instances. this is optional but is useful for debugging build issues on the instance.
+    --version             version for rattlesnakeos-stack
+```
 
-* If you decide this isn't for you and you want to remove all the provisioned AWS resources, there's a command for that. Note: if you've already done a build, you'll need to manually remove all of the files from S3 buckets.
+#### Cleanup
+If you decide this isn't for you and you want to remove all the provisioned AWS resources, there's a command for that. Note: if you've already done a build, you'll need to manually remove all of the files from S3 buckets before running this cleanup command.
 
-    ```sh
-    ./rattlesnakeos-stack --remove --region us-west-2 --name rattlesnakeos-<yourstackname> --ssh-key <yourkeyname>
-    ```
+```sh
+./rattlesnakeos-stack --remove --region us-west-2 --name rattlesnakeos-<yourstackname> --ssh-key <yourkeyname>
+```
 
 ## First Time Setup After Deployment
 * Setup email notifications for builds:
@@ -111,6 +117,7 @@ The `rattlesnakeos-stack` tool will handle deploying all the required AWS infras
 7. <b>How can I prevent the EC2 instance from immediately terminating on error so I can debug?</b> There is a flag you can pass `rattlesnakeos-stack` called `--prevent-shutdown`. Note that this will keep the instance online for 12 hours or until you manually terminate it.
 8. <b>Why did my EC2 instance randomly terminate?</b> If there wasn't an error notification, this is likely because the [Spot Instance](https://aws.amazon.com/ec2/spot/) bid was not high enough at this specific time. You can see historical spot instance pricing in the [EC2 console](https://console.aws.amazon.com/ec2sp/v1/spot/home). Click `Pricing History`, select c4.4xlarge for `Instance Type` and pick a date range. If you want to avoid having your instance terminated, you can pass an additional flag to `rattlesnakeos-stack` with a higher than default bid: `--spot-price 1.50`
 9. <b>How do OTA updates work?</b> If you go to `Settings->System update settings` you'll see the updater app settings. The updater app will check S3 to see if there are updates and if it finds one will download and apply it your device. There is no progress indicator unfortunately - you'll just got a notification when it's done and it will ask you to reboot. If you want to force a check for OTA updates, you can toggle the `Require battery above warning level` setting and it will check for a new build in your S3 bucket.
+10. <b>What network carriers are supported?</b> I only have access to a single device and carrier to test this on, so I can't make any promises about it working with your specific carrier. Confirmed working: T-Mobile, Rogers. Likely not to work: Sprint (has requirements about specific carrier app being on phone to work), Project Fi.
 
 ## Powered by
 * Huimin Zhang - he is the original author of the underlying build script that was written for CopperheadOS.
