@@ -20,9 +20,6 @@ PREVENT_SHUTDOWN=<% .PreventShutdown %>
 # force build even if no new versions exist of components
 FORCE_BUILD=<% .Force %>
 
-# whether to patch chromium or not
-PATCH_CHROMIUM=<% .PatchChromium %>
-
 # check if supported device
 DEVICE=$1
 if [ "$DEVICE" == 'sailfish' ] || [ "$DEVICE" == 'marlin' ] || [ "$DEVICE" == 'walleye' ] || [ "$DEVICE" == 'taimen' ]; then
@@ -39,9 +36,10 @@ AWS_LOGS_BUCKET='<% .Name %>-logs'
 AWS_SNS_ARN=$(aws --region <% .Region %> sns list-topics --query 'Topics[0].TopicArn' --output text | cut -d":" -f1,2,3,4,5)':<% .Name %>'
 
 # build settings
-BUILD_TARGET="release aosp_${DEVICE} user"
+BUILD_TARGET="release aosp_${DEVICE} userdebug"
 RELEASE_URL="https://${AWS_RELEASE_BUCKET}.s3.amazonaws.com"
-RELEASE_CHANNEL="${DEVICE}-stable"
+# TODO: switch to stable
+RELEASE_CHANNEL="${DEVICE}-beta"
 BUILD_DATE=$(date +%Y.%m.%d.%H)
 BUILD_TIMESTAMP=$(date +%s)
 BUILD_DIR="$HOME/rattlesnake-os"
@@ -53,14 +51,14 @@ SECONDS=0
 # urls
 ANDROID_SDK_URL="https://dl.google.com/android/repository/sdk-tools-linux-4333796.zip"
 MANIFEST_URL="https://android.googlesource.com/platform/manifest"
-CHROME_URL_LATEST="https://api.github.com/repos/bromite/bromite/releases/latest"
+CHROME_URL_LATEST="https://omahaproxy.appspot.com/all.json"
 STACK_URL_LATEST="https://api.github.com/repos/dan-v/rattlesnakeos-stack/releases/latest"
 FDROID_CLIENT_URL_LATEST="https://gitlab.com/api/v4/projects/36189/repository/tags"
 FDROID_PRIV_EXT_URL_LATEST="https://gitlab.com/api/v4/projects/1481578/repository/tags"
 BROMITE_URL="https://github.com/bromite/bromite.git"
 KERNEL_SOURCE_URL="https://android.googlesource.com/kernel/msm"
 
-ANDROID_VERSION="8.1.0"
+ANDROID_VERSION="9.0"
 
 STACK_UPDATE_MESSAGE=
 LATEST_STACK_VERSION=
@@ -81,7 +79,7 @@ get_latest_versions() {
   fi
   
   # check for latest stable chromium version
-  LATEST_CHROMIUM=$(curl -s "$CHROME_URL_LATEST" | jq -r '.tag_name' || true)
+  LATEST_CHROMIUM=$(curl -s "$CHROME_URL_LATEST" | jq -r '.[] | select(.os == "android") | .versions[] | select(.channel == "stable") | .current_version' || true)
   if [ -z "$LATEST_CHROMIUM" ]; then
     aws_notify_simple "ERROR: Unable to get latest Chromium version details. Stopping build."
     exit 1
@@ -197,6 +195,10 @@ setup_env() {
   echo "=================================="
   echo "Running setup_env"
   echo "=================================="
+
+  # setup build dir
+  mkdir -p "$BUILD_DIR"
+
   # install packages
   sudo apt-get update
   sudo apt-get --assume-yes install openjdk-8-jdk git-core gnupg flex bison build-essential zip curl zlib1g-dev gcc-multilib g++-multilib libc6-dev-i386 lib32ncurses5-dev x11proto-core-dev libx11-dev lib32z-dev ccache libgl1-mesa-dev libxml2-utils xsltproc unzip python-networkx liblz4-tool
@@ -215,8 +217,6 @@ setup_env() {
   git config --get --global user.name || git config --global user.name 'unknown'
   git config --get --global user.email || git config --global user.email 'unknown@localhost'
   git config --global color.ui true
-
-  mkdir -p "$BUILD_DIR"
 }
 
 check_chromium() {
@@ -231,7 +231,7 @@ check_chromium() {
   echo "Chromium latest: $LATEST_CHROMIUM"
 
   if [ "$LATEST_CHROMIUM" == "$current" ]; then
-    echo "Chromium latest ($latest) matches current ($current) - just copying s3 chromium artifact"
+    echo "Chromium latest ($LATEST_CHROMIUM) matches current ($current) - just copying s3 chromium artifact"
     aws s3 cp "s3://${AWS_RELEASE_BUCKET}/chromium/MonochromePublic.apk" ${BUILD_DIR}/external/chromium/prebuilt/arm64/
   else
     echo "Building chromium $LATEST_CHROMIUM"
@@ -265,35 +265,6 @@ build_chromium() {
   # install dependencies
   echo ttf-mscorefonts-installer msttcorefonts/accepted-mscorefonts-eula select true | sudo debconf-set-selections
   sudo ./build/install-build-deps-android.sh
-
-  # apply bromite patches
-  if [ "$PATCH_CHROMIUM" = false ]; then
-    echo "Not applying any patches to Chromium as requested"
-  else
-    echo "Applying patches to Chromium"
-    git clone --branch ${CHROMIUM_REVISION} $BROMITE_URL $HOME/bromite
-
-    # this patch fails to apply and needs manual fixing
-    rm -f $HOME/bromite/patches/*Removed-Sync-and-Translate-menu.patch
-
-    # TODO: patch is missing source files (as of v68.0.3440.87)
-    rm -f $HOME/bromite/patches/*Play-videos-in-background.patch
-    rm -f $HOME/bromite/patches/*Cure-AMP-and-tracking-from-search-results.patch
-
-    # TODO: adblock is not working with latest build for some reason (as of v68.0.3440.87)
-    rm -f $HOME/bromite/patches/*url_request-hooks-and-ad-url-data.patch
-    rm -f $HOME/bromite/patches/*Bromite-adblock-engine.patch
-
-    # TODO: remove some additional patches for now (as of v68.0.3440.87)
-    rm -f $HOME/bromite/patches/*Disable-WebRTC-by-default.patch
-    rm -f $HOME/bromite/patches/*Remove-help-menu-item.patch
-    rm -f $HOME/bromite/patches/*openH264-enable-ARM-ARM64-optimizations.patch
-    rm -f $HOME/bromite/patches/*Allow-playing-audio-in-background.patch
-
-    for patch in $HOME/bromite/patches/*.patch; do
-      git am $patch || git am --skip
-    done
-  fi
 
   mkdir -p out/Default
   cat <<EOF > out/Default/args.gn
@@ -338,22 +309,22 @@ fetch_aosp_source() {
       -v FDROID_PRIV_EXT_VERSION="$FDROID_PRIV_EXT_VERSION" \
       '1;/<repo-hooks in-project=/{
       print "  ";
-      print "  <remote name=\"github\" fetch=\"https://github.com/RattlesnakeOS/\" revision=\"master\" />";
+      print "  <remote name=\"github\" fetch=\"https://github.com/RattlesnakeOS/\" revision=\"" ANDROID_VERSION "\" />";
       print "  <remote name=\"fdroid\" fetch=\"https://gitlab.com/fdroid/\" />";
-      print "  <remote name=\"prepare-vendor\" fetch=\"https://github.com/anestisb/\" revision=\"master\" />";
       print "  ";
       print "  <project path=\"script\" name=\"script\" remote=\"github\" />";
       print "  <project path=\"external/chromium\" name=\"platform_external_chromium\" remote=\"github\" />";
       print "  <project path=\"packages/apps/Updater\" name=\"platform_packages_apps_Updater\" remote=\"github\" />";
       print "  <project path=\"packages/apps/F-Droid\" name=\"fdroidclient\" remote=\"fdroid\" revision=\"refs/tags/" FDROID_CLIENT_VERSION "\" />";
       print "  <project path=\"packages/apps/F-DroidPrivilegedExtension\" name=\"privileged-extension\" remote=\"fdroid\" revision=\"refs/tags/" FDROID_PRIV_EXT_VERSION "\" />";
-      print "  <project path=\"vendor/android-prepare-vendor\" name=\"android-prepare-vendor\" remote=\"prepare-vendor\" />"}' .repo/manifest.xml
+      print "  <project path=\"vendor/android-prepare-vendor\" name=\"android-prepare-vendor\" remote=\"github\" />"}' .repo/manifest.xml
   else
     echo "Skipping modification of .repo/manifest.xml as they have already been made"
   fi
   
   # remove things from manifest
-  sed -i '/chromium-webview/d' .repo/manifest.xml
+  # TODO: fix chromium webview
+  #sed -i '/chromium-webview/d' .repo/manifest.xml
   sed -i '/packages\/apps\/Browser2/d' .repo/manifest.xml
   sed -i '/packages\/apps\/Calendar/d' .repo/manifest.xml
   sed -i '/packages\/apps\/QuickSearchBox/d' .repo/manifest.xml
@@ -364,8 +335,9 @@ fetch_aosp_source() {
   done
 
   # remove webview
-  rm -rf platform/external/chromium-webview
-  sed -i '/webview \\/d' build/make/target/product/core_minimal.mk
+  # TODO: fix chromium webview
+  #rm -rf platform/external/chromium-webview
+  #sed -i '/webview \\/d' build/make/target/product/core_minimal.mk
 
   # remove Browser2
   sed -i '/Browser2/d' build/make/target/product/core.mk
@@ -375,9 +347,6 @@ fetch_aosp_source() {
 
   # remove QuickSearchBox
   sed -i '/QuickSearchBox/d' build/make/target/product/core.mk
-
-  # fix alarm clock target sdk definition (upstream issue that will be fixed in android p)
-  sed -i 's@<uses-sdk android:minSdkVersion="19" targetSdkVersion="25" />@<uses-sdk android:minSdkVersion="19" android:targetSdkVersion="25" />@' packages/apps/DeskClock/AndroidManifest.xml
 }
 
 setup_vendor() {
@@ -388,7 +357,7 @@ setup_vendor() {
   sed -i.bkp 's/  USE_DEBUGFS=true/  USE_DEBUGFS=false/; s/  # SYS_TOOLS/  SYS_TOOLS/; s/  # _UMOUNT=/  _UMOUNT=/' execute-all.sh
 
   # get vendor files
-  yes | "${BUILD_DIR}/vendor/android-prepare-vendor/execute-all.sh" --device "${DEVICE}" --buildID "${AOSP_BUILD}" --output "${BUILD_DIR}/vendor/android-prepare-vendor"
+  yes | "${BUILD_DIR}/vendor/android-prepare-vendor/execute-all.sh" --keep --device "${DEVICE}" --buildID "${AOSP_BUILD}" --output "${BUILD_DIR}/vendor/android-prepare-vendor"
   aws s3 cp - "s3://${AWS_RELEASE_BUCKET}/${DEVICE}-vendor" --acl public-read <<< "${AOSP_BUILD}" || true
 
   # copy vendor files to build tree
@@ -405,6 +374,9 @@ setup_vendor() {
     rm --recursive --force "${BUILD_DIR}/vendor/google_devices/muskie" || true
     mv "${BUILD_DIR}/vendor/android-prepare-vendor/walleye/$(tr '[:upper:]' '[:lower:]' <<< "${AOSP_BUILD}")/vendor/google_devices/muskie" "${BUILD_DIR}/vendor/google_devices"
   fi
+
+  # hack updated privapp permissions into place
+  cp -f ${BUILD_DIR}/vendor/google_devices/marlin/proprietary/etc/permissions/privapp-permissions-marlin.xml ${BUILD_DIR}/device/google/marlin/permissions/privapp-permissions-marlin.xml
 
   popd
 }
@@ -428,7 +400,8 @@ apply_patches() {
   echo "=================================="
   patch_carrier_fixes
   patch_apps
-  patch_chromium_webview
+  # TODO: fix chromium webview
+  #patch_chromium_webview
   patch_updater
   patch_fdroid
   patch_priv_ext
@@ -528,9 +501,9 @@ rebuild_marlin_kernel() {
     ln --verbose --symbolic ${BUILD_DIR}/keys/${DEVICE}/verity_user.der.x509 ${MARLIN_KERNEL_SOURCE_DIR}/verity_user.der.x509;
     cd ${MARLIN_KERNEL_SOURCE_DIR};
     make -j$(nproc --all) ARCH=arm64 marlin_defconfig;
-    make -j$(nproc --all) ARCH=arm64 CROSS_COMPILE=${BUILD_DIR}/prebuilts/gcc/linux-x86/aarch64/aarch64-linux-android-4.9/bin/aarch64-linux-android-;
+    make -j$(nproc --all) ARCH=arm64 CONFIG_COMPAT_VDSO=n CROSS_COMPILE=${BUILD_DIR}/prebuilts/gcc/linux-x86/aarch64/aarch64-linux-android-4.9/bin/aarch64-linux-android-;
     cp -f arch/arm64/boot/Image.lz4-dtb ${BUILD_DIR}/device/google/marlin-kernel/;
-    rm -f ${BUILD_DIR}/out/build_*;
+    rm -rf ${BUILD_DIR}/out/build_*;
   "
 }
 
@@ -557,25 +530,19 @@ aws_release() {
   build_timestamp="$(unzip -p "release-${DEVICE}-${build_date}/${DEVICE}-ota_update-${build_date}.zip" META-INF/com/android/metadata | grep 'post-timestamp' | cut --delimiter "=" --fields 2)"
 
   # copy ota file to s3, update file metadata used by updater app, and remove old ota files
-  read -r old_metadata <<< "$(wget -O - "${RELEASE_URL}/${DEVICE}-stable")"
+  # TODO: add back cleanup code
+  read -r old_metadata <<< "$(wget -O - "${RELEASE_URL}/${RELEASE_CHANNEL}")"
   old_date="$(cut -d ' ' -f 1 <<< "${old_metadata}")"
-  (
-  aws s3 cp "${BUILD_DIR}/out/release-${DEVICE}-${build_date}/${DEVICE}-ota_update-${build_date}.zip" "s3://${AWS_RELEASE_BUCKET}" --acl public-read &&
-  echo "${build_date} ${build_timestamp} ${AOSP_BUILD}" | aws s3 cp - "s3://${AWS_RELEASE_BUCKET}/${RELEASE_CHANNEL}" --acl public-read &&
+  aws s3 cp "${BUILD_DIR}/out/release-${DEVICE}-${build_date}/${DEVICE}-ota_update-${build_date}.zip" "s3://${AWS_RELEASE_BUCKET}" --acl public-read
+  echo "${build_date} ${build_timestamp} ${AOSP_BUILD}" | aws s3 cp - "s3://${AWS_RELEASE_BUCKET}/${RELEASE_CHANNEL}" --acl public-read
   echo "${BUILD_TIMESTAMP}" | aws s3 cp - "s3://${AWS_RELEASE_BUCKET}/${RELEASE_CHANNEL}-true-timestamp" --acl public-read
-  ) && ( aws s3 rm "s3://${AWS_RELEASE_BUCKET}/${DEVICE}-ota_update-${old_date}.zip" || true )
 
   # copy factory image to s3 if one doesn't already exist
-  if [ "$(aws s3 ls "s3://${AWS_RELEASE_BUCKET}/${DEVICE}-factory-latest.tar.xz" | wc -l)" == '0' ]; then
-    aws s3 cp "${BUILD_DIR}/out/release-${DEVICE}-${build_date}/${DEVICE}-factory-${build_date}.tar.xz" "s3://${AWS_RELEASE_BUCKET}/${DEVICE}-factory-latest.tar.xz"
-  fi
-
-  # cleanup old target files if some exist
-  if [ "$(aws s3 ls "s3://${AWS_RELEASE_BUCKET}/${DEVICE}-target" | wc -l)" != '0' ]; then
-    cleanup_target_files
-  fi
+  # TODO: add back cleanup code
+  aws s3 cp "${BUILD_DIR}/out/release-${DEVICE}-${build_date}/${DEVICE}-factory-${build_date}.tar.xz" "s3://${AWS_RELEASE_BUCKET}/${DEVICE}-factory-${build_date}.tar.xz"
 
   # copy new target file to s3
+  # TODO: add back cleanup code
   aws s3 cp "${BUILD_DIR}/out/release-${DEVICE}-${build_date}/${DEVICE}-target_files-${build_date}.zip" "s3://${AWS_RELEASE_BUCKET}/${DEVICE}-target/${DEVICE}-target-files-${build_date}.zip" --acl public-read
 }
 
@@ -613,8 +580,8 @@ aws_notify() {
   fi
   ELAPSED="$(($SECONDS / 3600))hrs $((($SECONDS / 60) % 60))min $(($SECONDS % 60))sec"
   aws sns publish --region <% .Region %> --topic-arn "$AWS_SNS_ARN" \
-    --message="$(printf "$1\n  Device: %s\n  Stack Version: %s %s\n  Build Date: %s\n  Elapsed Time: %s\n  AOSP Build: %s\n  AOSP Branch: %s\n  Chromium Version: %s\n  F-Droid Version: %s\n  F-Droid Priv Extension Version: %s\n%s" \
-      "${DEVICE}" "${STACK_VERSION}" "${STACK_UPDATE_MESSAGE}" "${BUILD_DATE}" "${ELAPSED}" "${AOSP_BUILD}" "${AOSP_BRANCH}" "${LATEST_CHROMIUM}" "${FDROID_CLIENT_VERSION}" "${FDROID_PRIV_EXT_VERSION}" "${LOGOUTPUT}")" || true
+    --message="$(printf "$1\n  Device: %s\n  Stack Version: %s %s\n Release Channel: %s\n Build Date: %s\n  Elapsed Time: %s\n  AOSP Build: %s\n  AOSP Branch: %s\n  Chromium Version: %s\n  F-Droid Version: %s\n  F-Droid Priv Extension Version: %s\n%s" \
+      "${DEVICE}" "${STACK_VERSION}" "${STACK_UPDATE_MESSAGE}" "${RELEASE_CHANNEL}" "${BUILD_DATE}" "${ELAPSED}" "${AOSP_BUILD}" "${AOSP_BRANCH}" "${LATEST_CHROMIUM}" "${FDROID_CLIENT_VERSION}" "${FDROID_PRIV_EXT_VERSION}" "${LOGOUTPUT}")" || true
 }
 
 aws_logging() {
@@ -676,7 +643,7 @@ cleanup() {
   if [ $rv -ne 0 ]; then
     aws_notify "RattlesnakeOS Build FAILED" 1
   fi
-  if ${PREVENT_SHUTDOWN}; then
+  if [ "${PREVENT_SHUTDOWN}" = true ]; then
     echo "Skipping shutdown"
   else
     sudo shutdown -h now

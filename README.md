@@ -1,5 +1,5 @@
 ## What is RattlesnakeOS
-RattlesnakeOS is privacy focused Android OS based on [AOSP](https://source.android.com/) for Google Pixel phones. It is my migration strategy away from [CopperheadOS](https://en.wikipedia.org/wiki/CopperheadOS) which is no longer maintained. RattlesnakeOS is stock AOSP with a few additional features: [verified boot](https://source.android.com/security/verifiedboot/) with your own keys, OTA updates, latest Chromium ([webview](https://www.chromium.org/developers/how-tos/build-instructions-android-webview) + browser) with optional patches from [Bromite](https://github.com/bromite/bromite) for ad blocking and enhanced privacy, [F-Droid](https://f-droid.org/) (with [privileged extension](https://gitlab.com/fdroid/privileged-extension)), and no Google apps.
+RattlesnakeOS is privacy focused Android OS based on [AOSP](https://source.android.com/) for Google Pixel phones. It is my migration strategy away from [CopperheadOS](https://en.wikipedia.org/wiki/CopperheadOS) which is no longer maintained. RattlesnakeOS is stock AOSP with a few additional features: [verified boot](https://source.android.com/security/verifiedboot/) with your own keys, OTA updates, latest Chromium ([webview](https://www.chromium.org/developers/how-tos/build-instructions-android-webview) + browser), [F-Droid](https://f-droid.org/) (with [privileged extension](https://gitlab.com/fdroid/privileged-extension)), and no Google apps.
 
 ## What is rattlesnakeos-stack
 Rather than providing random binaries of RattlesnakeOS to install on your phone, I've gone the route of creating a cross platform tool, `rattlesnakeos-stack`, that provisions all of the [AWS](https://aws.amazon.com/) infrastructure needed to automatically build your own RattlesnakeOS on a regular basis, with your own signing keys, and your own OTA updates. It uses [AWS Lambda](https://aws.amazon.com/lambda/features/) to provision [EC2 Spot Instances](https://aws.amazon.com/ec2/spot/) that build RattlesnakeOS and upload build artifacts to [S3](https://aws.amazon.com/s3/). Resulting OS builds are configured to receive over the air updates from this environment.
@@ -8,7 +8,7 @@ Rather than providing random binaries of RattlesnakeOS to install on your phone,
 * Support for <b>Google Pixel, Pixel XL, Pixel 2, Pixel 2 XL</b>
 * Updates and monthly security fixes delivered through OTA updates - no need to manually flash your device
 * Maintain [verified boot](https://source.android.com/security/verifiedboot/) with a locked bootloader just like official Android but with your own personal signing keys
-* Latest Chromium [browser](https://www.chromium.org) and [webview](https://www.chromium.org/developers/how-tos/build-instructions-android-webview) with optional patches from [Bromite](https://github.com/bromite/bromite) for ad blocking and enhanced privacy
+* Latest Chromium [browser](https://www.chromium.org) and [webview](https://www.chromium.org/developers/how-tos/build-instructions-android-webview)
 * Latest [F-Droid](https://f-droid.org/) client and [privileged extension](https://gitlab.com/fdroid/privileged-extension)
 * No Google apps pre-installed
 * Full end to end setup of build environment for RattlesnakeOS in AWS
@@ -58,7 +58,6 @@ Flags:
     --force               build even if there are no changes in available version of AOSP, Chromium, or F-Droid.
 -h, --help                help for rattlesnakeos-stack
 -n, --name string         name for stack. note: this must be a valid/unique S3 bucket name.
-    --patch-chromium      apply Bromite patches to Chromium
     --prevent-shutdown    for debugging purposes only - will prevent ec2 instance from shutting down after build.
 -r, --region string       aws region for deployment (e.g. us-west-2)
     --remove              cleanup/destroy all deployed aws resources.

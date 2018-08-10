@@ -51,7 +51,6 @@ type StackConfig struct {
 	Version         string
 	Schedule        string
 	Force           bool
-	PatchChromium   bool
 }
 
 func AWSApply(config StackConfig) error {
