@@ -305,6 +305,7 @@ fetch_aosp_source() {
   # make modifications to default AOSP
   if ! grep -q "RattlesnakeOS" .repo/manifest.xml; then
     awk -i inplace \
+      -v ANDROID_VERSION="$ANDROID_VERSION" \
       -v FDROID_CLIENT_VERSION="$FDROID_CLIENT_VERSION" \
       -v FDROID_PRIV_EXT_VERSION="$FDROID_PRIV_EXT_VERSION" \
       '1;/<repo-hooks in-project=/{
