@@ -38,8 +38,7 @@ AWS_SNS_ARN=$(aws --region <% .Region %> sns list-topics --query 'Topics[0].Topi
 # build settings
 BUILD_TARGET="release aosp_${DEVICE} userdebug"
 RELEASE_URL="https://${AWS_RELEASE_BUCKET}.s3.amazonaws.com"
-# TODO: switch to stable
-RELEASE_CHANNEL="${DEVICE}-beta"
+RELEASE_CHANNEL="${DEVICE}-stable"
 BUILD_DATE=$(date +%Y.%m.%d.%H)
 BUILD_TIMESTAMP=$(date +%s)
 BUILD_DIR="$HOME/rattlesnake-os"
@@ -55,7 +54,6 @@ CHROME_URL_LATEST="https://omahaproxy.appspot.com/all.json"
 STACK_URL_LATEST="https://api.github.com/repos/dan-v/rattlesnakeos-stack/releases/latest"
 FDROID_CLIENT_URL_LATEST="https://gitlab.com/api/v4/projects/36189/repository/tags"
 FDROID_PRIV_EXT_URL_LATEST="https://gitlab.com/api/v4/projects/1481578/repository/tags"
-BROMITE_URL="https://github.com/bromite/bromite.git"
 KERNEL_SOURCE_URL="https://android.googlesource.com/kernel/msm"
 
 ANDROID_VERSION="9.0"
@@ -305,6 +303,7 @@ fetch_aosp_source() {
   # make modifications to default AOSP
   if ! grep -q "RattlesnakeOS" .repo/manifest.xml; then
     awk -i inplace \
+      -v ANDROID_VERSION="$ANDROID_VERSION" \
       -v FDROID_CLIENT_VERSION="$FDROID_CLIENT_VERSION" \
       -v FDROID_PRIV_EXT_VERSION="$FDROID_PRIV_EXT_VERSION" \
       '1;/<repo-hooks in-project=/{
@@ -323,7 +322,6 @@ fetch_aosp_source() {
   fi
   
   # remove things from manifest
-  # TODO: fix chromium webview
   #sed -i '/chromium-webview/d' .repo/manifest.xml
   sed -i '/packages\/apps\/Browser2/d' .repo/manifest.xml
   sed -i '/packages\/apps\/Calendar/d' .repo/manifest.xml
@@ -335,7 +333,6 @@ fetch_aosp_source() {
   done
 
   # remove webview
-  # TODO: fix chromium webview
   #rm -rf platform/external/chromium-webview
   #sed -i '/webview \\/d' build/make/target/product/core_minimal.mk
 
@@ -400,8 +397,8 @@ apply_patches() {
   echo "=================================="
   patch_carrier_fixes
   patch_apps
-  # TODO: fix chromium webview
-  #patch_chromium_webview
+  patch_base_config
+  patch_chromium_webview
   patch_updater
   patch_fdroid
   patch_priv_ext
@@ -417,8 +414,22 @@ patch_carrier_fixes() {
   fi
 }
 
+patch_base_config() {
+  # review permissions for legacy apps
+  sed -i 's@<bool name="config_permissionReviewRequired">false</bool>@<bool name="config_permissionReviewRequired">true</bool>@' ${BUILD_DIR}/frameworks/base/core/res/res/values/config.xml
+}
+
 patch_chromium_webview() {
-  sed -i -e 's/Android WebView/Chromium/; s/com.android.webview/org.chromium.chrome/;' ${BUILD_DIR}/frameworks/base/core/res/res/xml/config_webview_packages.xml
+  cat <<EOF > ${BUILD_DIR}/frameworks/base/core/res/res/xml/config_webview_packages.xml
+<?xml version="1.0" encoding="utf-8"?>
+<webviewproviders>
+    <webviewprovider description="Chromium" packageName="org.chromium.chrome" availableByDefault="true">
+    </webviewprovider>
+    <!-- The default WebView implementation -->
+    <webviewprovider description="Android WebView" packageName="com.android.webview" availableByDefault="true" isFallback="true">
+    </webviewprovider>
+</webviewproviders>
+EOF
 }
 
 patch_fdroid() {
