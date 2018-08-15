@@ -36,9 +36,13 @@ AWS_LOGS_BUCKET='<% .Name %>-logs'
 AWS_SNS_ARN=$(aws --region <% .Region %> sns list-topics --query 'Topics[0].TopicArn' --output text | cut -d":" -f1,2,3,4,5)':<% .Name %>'
 
 # build settings
+# TODO: switch back to user build
 BUILD_TARGET="release aosp_${DEVICE} userdebug"
 RELEASE_URL="https://${AWS_RELEASE_BUCKET}.s3.amazonaws.com"
-RELEASE_CHANNEL="${DEVICE}-stable"
+# TODO: switch back to stable
+RELEASE_CHANNEL="${DEVICE}-beta"
+# TODO: can switch back to stable once M69 is stable
+CHROME_CHANNEL="beta"
 BUILD_DATE=$(date +%Y.%m.%d.%H)
 BUILD_TIMESTAMP=$(date +%s)
 BUILD_DIR="$HOME/rattlesnake-os"
@@ -77,7 +81,7 @@ get_latest_versions() {
   fi
   
   # check for latest stable chromium version
-  LATEST_CHROMIUM=$(curl -s "$CHROME_URL_LATEST" | jq -r '.[] | select(.os == "android") | .versions[] | select(.channel == "stable") | .current_version' || true)
+  LATEST_CHROMIUM=$(curl -s "$CHROME_URL_LATEST" | jq -r '.[] | select(.os == "android") | .versions[] | select(.channel == "'$CHROME_CHANNEL'") | .current_version' || true)
   if [ -z "$LATEST_CHROMIUM" ]; then
     aws_notify_simple "ERROR: Unable to get latest Chromium version details. Stopping build."
     exit 1
@@ -322,7 +326,7 @@ fetch_aosp_source() {
   fi
   
   # remove things from manifest
-  #sed -i '/chromium-webview/d' .repo/manifest.xml
+  sed -i '/chromium-webview/d' .repo/manifest.xml
   sed -i '/packages\/apps\/Browser2/d' .repo/manifest.xml
   sed -i '/packages\/apps\/Calendar/d' .repo/manifest.xml
   sed -i '/packages\/apps\/QuickSearchBox/d' .repo/manifest.xml
@@ -333,8 +337,8 @@ fetch_aosp_source() {
   done
 
   # remove webview
-  #rm -rf platform/external/chromium-webview
-  #sed -i '/webview \\/d' build/make/target/product/core_minimal.mk
+  rm -rf platform/external/chromium-webview
+  sed -i '/webview \\/d' build/make/target/product/core_minimal.mk
 
   # remove Browser2
   sed -i '/Browser2/d' build/make/target/product/core.mk
@@ -398,6 +402,7 @@ apply_patches() {
   patch_carrier_fixes
   patch_apps
   patch_base_config
+  patch_device_config
   patch_chromium_webview
   patch_updater
   patch_fdroid
@@ -415,8 +420,18 @@ patch_carrier_fixes() {
 }
 
 patch_base_config() {
-  # review permissions for legacy apps
-  sed -i 's@<bool name="config_permissionReviewRequired">false</bool>@<bool name="config_permissionReviewRequired">true</bool>@' ${BUILD_DIR}/frameworks/base/core/res/res/values/config.xml
+  # enable swipe up gesture functionality as option
+  sed -i 's@<bool name="config_swipe_up_gesture_setting_available">false</bool>@<bool name="config_swipe_up_gesture_setting_available">true</bool>@' ${BUILD_DIR}/frameworks/base/core/res/res/values/config.xml
+}
+
+patch_device_config() {
+  # set proper model names
+  sed -i 's@PRODUCT_MODEL := AOSP on msm8996@PRODUCT_MODEL := Pixel XL@' ${BUILD_DIR}/device/google/marlin/aosp_marlin.mk
+  sed -i 's@PRODUCT_MANUFACTURER := google@PRODUCT_MANUFACTURER := Google@' ${BUILD_DIR}/device/google/marlin/aosp_marlin.mk
+  sed -i 's@PRODUCT_MODEL := AOSP on msm8996@PRODUCT_MODEL := Pixel@' ${BUILD_DIR}/device/google/marlin/aosp_sailfish.mk
+  sed -i 's@PRODUCT_MANUFACTURER := google@PRODUCT_MANUFACTURER := Google@' ${BUILD_DIR}/device/google/marlin/aosp_sailfish.mk
+  sed -i 's@PRODUCT_MODEL := AOSP on taimen@PRODUCT_MODEL := Pixel 2 XL@' ${BUILD_DIR}/device/google/taimen/aosp_taimen.mk
+  sed -i 's@PRODUCT_MODEL := AOSP on walleye@PRODUCT_MODEL := Pixel 2@' ${BUILD_DIR}/device/google/muskie/aosp_walleye.mk
 }
 
 patch_chromium_webview() {
@@ -424,9 +439,6 @@ patch_chromium_webview() {
 <?xml version="1.0" encoding="utf-8"?>
 <webviewproviders>
     <webviewprovider description="Chromium" packageName="org.chromium.chrome" availableByDefault="true">
-    </webviewprovider>
-    <!-- The default WebView implementation -->
-    <webviewprovider description="Android WebView" packageName="com.android.webview" availableByDefault="true" isFallback="true">
     </webviewprovider>
 </webviewproviders>
 EOF
@@ -541,19 +553,24 @@ aws_release() {
   build_timestamp="$(unzip -p "release-${DEVICE}-${build_date}/${DEVICE}-ota_update-${build_date}.zip" META-INF/com/android/metadata | grep 'post-timestamp' | cut --delimiter "=" --fields 2)"
 
   # copy ota file to s3, update file metadata used by updater app, and remove old ota files
-  # TODO: add back cleanup code
   read -r old_metadata <<< "$(wget -O - "${RELEASE_URL}/${RELEASE_CHANNEL}")"
   old_date="$(cut -d ' ' -f 1 <<< "${old_metadata}")"
-  aws s3 cp "${BUILD_DIR}/out/release-${DEVICE}-${build_date}/${DEVICE}-ota_update-${build_date}.zip" "s3://${AWS_RELEASE_BUCKET}" --acl public-read
-  echo "${build_date} ${build_timestamp} ${AOSP_BUILD}" | aws s3 cp - "s3://${AWS_RELEASE_BUCKET}/${RELEASE_CHANNEL}" --acl public-read
+  (
+  aws s3 cp "${BUILD_DIR}/out/release-${DEVICE}-${build_date}/${DEVICE}-ota_update-${build_date}.zip" "s3://${AWS_RELEASE_BUCKET}" --acl public-read &&
+  echo "${build_date} ${build_timestamp} ${AOSP_BUILD}" | aws s3 cp - "s3://${AWS_RELEASE_BUCKET}/${RELEASE_CHANNEL}" --acl public-read &&
   echo "${BUILD_TIMESTAMP}" | aws s3 cp - "s3://${AWS_RELEASE_BUCKET}/${RELEASE_CHANNEL}-true-timestamp" --acl public-read
+  ) && ( aws s3 rm "s3://${AWS_RELEASE_BUCKET}/${DEVICE}-ota_update-${old_date}.zip" || true )
 
-  # copy factory image to s3 if one doesn't already exist
-  # TODO: add back cleanup code
-  aws s3 cp "${BUILD_DIR}/out/release-${DEVICE}-${build_date}/${DEVICE}-factory-${build_date}.tar.xz" "s3://${AWS_RELEASE_BUCKET}/${DEVICE}-factory-${build_date}.tar.xz"
+  if [ "$(aws s3 ls "s3://${AWS_RELEASE_BUCKET}/${DEVICE}-factory-latest.tar.xz" | wc -l)" == '0' ]; then
+    aws s3 cp "${BUILD_DIR}/out/release-${DEVICE}-${build_date}/${DEVICE}-factory-${build_date}.tar.xz" "s3://${AWS_RELEASE_BUCKET}/${DEVICE}-factory-latest.tar.xz"
+  fi
+
+  # cleanup old target files if some exist
+  if [ "$(aws s3 ls "s3://${AWS_RELEASE_BUCKET}/${DEVICE}-target" | wc -l)" != '0' ]; then
+    cleanup_target_files
+  fi
 
   # copy new target file to s3
-  # TODO: add back cleanup code
   aws s3 cp "${BUILD_DIR}/out/release-${DEVICE}-${build_date}/${DEVICE}-target_files-${build_date}.zip" "s3://${AWS_RELEASE_BUCKET}/${DEVICE}-target/${DEVICE}-target-files-${build_date}.zip" --acl public-read
 }
 
@@ -591,7 +608,7 @@ aws_notify() {
   fi
   ELAPSED="$(($SECONDS / 3600))hrs $((($SECONDS / 60) % 60))min $(($SECONDS % 60))sec"
   aws sns publish --region <% .Region %> --topic-arn "$AWS_SNS_ARN" \
-    --message="$(printf "$1\n  Device: %s\n  Stack Version: %s %s\n Release Channel: %s\n Build Date: %s\n  Elapsed Time: %s\n  AOSP Build: %s\n  AOSP Branch: %s\n  Chromium Version: %s\n  F-Droid Version: %s\n  F-Droid Priv Extension Version: %s\n%s" \
+    --message="$(printf "$1\n  Device: %s\n  Stack Version: %s %s\n  Release Channel: %s\n  Build Date: %s\n  Elapsed Time: %s\n  AOSP Build: %s\n  AOSP Branch: %s\n  Chromium Version: %s\n  F-Droid Version: %s\n  F-Droid Priv Extension Version: %s\n%s" \
       "${DEVICE}" "${STACK_VERSION}" "${STACK_UPDATE_MESSAGE}" "${RELEASE_CHANNEL}" "${BUILD_DATE}" "${ELAPSED}" "${AOSP_BUILD}" "${AOSP_BRANCH}" "${LATEST_CHROMIUM}" "${FDROID_CLIENT_VERSION}" "${FDROID_PRIV_EXT_VERSION}" "${LOGOUTPUT}")" || true
 }
 
