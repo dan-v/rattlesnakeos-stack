@@ -314,13 +314,14 @@ fetch_aosp_source() {
       print "  ";
       print "  <remote name=\"github\" fetch=\"https://github.com/RattlesnakeOS/\" revision=\"" ANDROID_VERSION "\" />";
       print "  <remote name=\"fdroid\" fetch=\"https://gitlab.com/fdroid/\" />";
+      print "  <remote name=\"prepare-vendor\" fetch=\"https://github.com/anestisb/\" revision=\"master\" />";
       print "  ";
       print "  <project path=\"script\" name=\"script\" remote=\"github\" />";
       print "  <project path=\"external/chromium\" name=\"platform_external_chromium\" remote=\"github\" />";
       print "  <project path=\"packages/apps/Updater\" name=\"platform_packages_apps_Updater\" remote=\"github\" />";
       print "  <project path=\"packages/apps/F-Droid\" name=\"fdroidclient\" remote=\"fdroid\" revision=\"refs/tags/" FDROID_CLIENT_VERSION "\" />";
       print "  <project path=\"packages/apps/F-DroidPrivilegedExtension\" name=\"privileged-extension\" remote=\"fdroid\" revision=\"refs/tags/" FDROID_PRIV_EXT_VERSION "\" />";
-      print "  <project path=\"vendor/android-prepare-vendor\" name=\"android-prepare-vendor\" remote=\"github\" />"}' .repo/manifest.xml
+      print "  <project path=\"vendor/android-prepare-vendor\" name=\"android-prepare-vendor\" remote=\"prepare-vendor\" />"}' .repo/manifest.xml
   else
     echo "Skipping modification of .repo/manifest.xml as they have already been made"
   fi
@@ -358,7 +359,7 @@ setup_vendor() {
   sed -i.bkp 's/  USE_DEBUGFS=true/  USE_DEBUGFS=false/; s/  # SYS_TOOLS/  SYS_TOOLS/; s/  # _UMOUNT=/  _UMOUNT=/' execute-all.sh
 
   # get vendor files
-  yes | "${BUILD_DIR}/vendor/android-prepare-vendor/execute-all.sh" --keep --device "${DEVICE}" --buildID "${AOSP_BUILD}" --output "${BUILD_DIR}/vendor/android-prepare-vendor"
+  yes | "${BUILD_DIR}/vendor/android-prepare-vendor/execute-all.sh" --fuse-ext2 --device "${DEVICE}" --buildID "${AOSP_BUILD}" --output "${BUILD_DIR}/vendor/android-prepare-vendor"
   aws s3 cp - "s3://${AWS_RELEASE_BUCKET}/${DEVICE}-vendor" --acl public-read <<< "${AOSP_BUILD}" || true
 
   # copy vendor files to build tree
@@ -375,9 +376,6 @@ setup_vendor() {
     rm --recursive --force "${BUILD_DIR}/vendor/google_devices/muskie" || true
     mv "${BUILD_DIR}/vendor/android-prepare-vendor/walleye/$(tr '[:upper:]' '[:lower:]' <<< "${AOSP_BUILD}")/vendor/google_devices/muskie" "${BUILD_DIR}/vendor/google_devices"
   fi
-
-  # hack updated privapp permissions into place
-  cp -f ${BUILD_DIR}/vendor/google_devices/marlin/proprietary/etc/permissions/privapp-permissions-marlin.xml ${BUILD_DIR}/device/google/marlin/permissions/privapp-permissions-marlin.xml
 
   popd
 }
