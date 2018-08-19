@@ -1,10 +1,11 @@
 ## What is RattlesnakeOS
-RattlesnakeOS is privacy focused Android OS based on [AOSP](https://source.android.com/) for Google Pixel phones. It is my migration strategy away from [CopperheadOS](https://en.wikipedia.org/wiki/CopperheadOS) which is no longer maintained. RattlesnakeOS is stock AOSP with a few additional features: [verified boot](https://source.android.com/security/verifiedboot/) with your own keys, OTA updates, latest Chromium ([webview](https://www.chromium.org/developers/how-tos/build-instructions-android-webview) + browser), [F-Droid](https://f-droid.org/) (with [privileged extension](https://gitlab.com/fdroid/privileged-extension)), and no Google apps.
+RattlesnakeOS is privacy focused Android OS based on [AOSP](https://source.android.com/) for Google Pixel phones. It is my migration strategy away from [CopperheadOS](https://en.wikipedia.org/wiki/CopperheadOS) (hence the name similarity) which is no longer maintained. RattlesnakeOS is stock AOSP with no Google apps and a few additional features: [verified boot](https://source.android.com/security/verifiedboot/) with your own signing keys, OTA updates, latest Chromium ([webview](https://www.chromium.org/developers/how-tos/build-instructions-android-webview) + browser), and latest [F-Droid](https://f-droid.org/) (with [privileged extension](https://gitlab.com/fdroid/privileged-extension)).
 
 ## What is rattlesnakeos-stack
-Rather than providing random binaries of RattlesnakeOS to install on your phone, I've gone the route of creating a cross platform tool, `rattlesnakeos-stack`, that provisions all of the [AWS](https://aws.amazon.com/) infrastructure needed to automatically build your own RattlesnakeOS on a regular basis, with your own signing keys, and your own OTA updates. It uses [AWS Lambda](https://aws.amazon.com/lambda/features/) to provision [EC2 Spot Instances](https://aws.amazon.com/ec2/spot/) that build RattlesnakeOS and upload build artifacts to [S3](https://aws.amazon.com/s3/). Resulting OS builds are configured to receive over the air updates from this environment.
+Rather than providing random binaries of RattlesnakeOS to install on your phone, I've gone the route of creating a cross platform tool, `rattlesnakeos-stack`, that provisions all of the [AWS](https://aws.amazon.com/) infrastructure needed to continuously build your own personal RattlesnakeOS, with your own signing keys, and your own OTA updates. It uses [AWS Lambda](https://aws.amazon.com/lambda/features/) to provision [EC2 Spot Instances](https://aws.amazon.com/ec2/spot/) that build RattlesnakeOS and upload artifacts to [S3](https://aws.amazon.com/s3/). Resulting OS builds are configured to receive over the air updates from this environment.
 
 ## Features
+* Based on latest AOSP 9.0 (Android P)
 * Support for <b>Google Pixel, Pixel XL, Pixel 2, Pixel 2 XL</b>
 * Updates and monthly security fixes delivered through OTA updates - no need to manually flash your device
 * Maintain [verified boot](https://source.android.com/security/verifiedboot/) with a locked bootloader just like official Android but with your own personal signing keys
@@ -25,12 +26,11 @@ Rather than providing random binaries of RattlesnakeOS to install on your phone,
 The easiest way is to download a pre-built binary from the [Github Releases](https://github.com/dan-v/rattlesnakeos-stack/releases) page. The other option is to compile from source (see `Build from Source` section).
 
 ## Deployment of stack using rattlesnakeos-stack tool
-The `rattlesnakeos-stack` tool will handle deploying all the required AWS infrastructure needed to run ongoing builds of RattlesnakeOS. After initial deployment, your first build will automatically start; by default it is configured to build on a weekly basis after this (see the FAQ for details on how to modify build schedule). When deploying your stack with `rattlesnakeos-stack`:
+The `rattlesnakeos-stack` tool will handle deploying your stack - which is just all the required AWS infrastructure needed to run ongoing builds of RattlesnakeOS. After initial deployment, your first build will automatically start; by default it is configured to build on a weekly basis after this (see the FAQ for details on how to modify build schedule). When deploying your stack with `rattlesnakeos-stack`:
 * Pick a unique name to replace `rattlesnakeos-<yourstackname>` in the commands below. <b>Note: this name has to be unique or it will fail to provision.</b>
 * Provide the SSH keypair name that you created in the prerequisite steps to replace `<yourkeyname>` in commands below.
 
 ### Example commands
-#### Deploying
 Deploy stack with default options for your specific device
 
 ```sh 
@@ -47,7 +47,7 @@ Deploy stack with default options for your specific device
 ./rattlesnakeos-stack --region us-west-2 --name rattlesnakeos-<yourstackname> --device walleye --ssh-key <yourkeyname>
 ```
 
-To see full list of options you can pass rattlensakeos-stack you can use the help flag (-h)
+To see full list of options you can pass rattlesnake-stack you can use the help flag (-h)
 
 ```sh
 ...
@@ -67,16 +67,9 @@ Flags:
     --version             version for rattlesnakeos-stack
 ```
 
-#### Cleanup
-If you decide this isn't for you and you want to remove all the provisioned AWS resources, there's a command for that. Note: if you've already done a build, you'll need to manually remove all of the files from S3 buckets before running this cleanup command.
-
-```sh
-./rattlesnakeos-stack --remove --region us-west-2 --name rattlesnakeos-<yourstackname> --ssh-key <yourkeyname>
-```
-
 ## First Time Setup After Deployment
 * Setup email notifications for builds:
-  * Go to the [AWS SNS](https://us-west-2.console.aws.amazon.com/sns/v2/home?region=us-west-2#/topics) console
+  * Go to the [SNS console](https://us-west-2.console.aws.amazon.com/sns/v2/home?region=us-west-2#/topics)
   * Click on the topic named `rattlesnakeos-<yourstackname>`
   * Click on `Create subscription` button
   * In `Create subscription` dialog, in `Protocol` dropdown select `Email`
@@ -92,9 +85,13 @@ If you decide this isn't for you and you want to remove all the provisioned AWS 
 * Use this factory image and [follow the instructions on flashing your device carefully](FLASHING.md).
 * You followed the instructions until the end and you re-locked your bootloader and disabled OEM unlocking after flashing right? If not, go do that!
 * After successfully flashing your device, you will now be running RattlesnakeOS and all future updates will happen through the built in OTA updater.
+* <b>I highly suggest backing up your generated signing keys</b>. To do this:
+  * Go to the [S3 Console](https://s3.console.aws.amazon.com/s3/buckets/)
+  * Click on `rattlesnakeos-<yourstackname>-keys` bucket.
+  * Download all these keys there and store them in a safe place
 
 ## How to update rattlesnakeos-stack
-* Just download the new version of rattlesnakeos-stack and run the same command used previously (e.g. `rattlesnakeos-stack --region us-west-2 --name rattlesnakeos-<yourstackname> --device marlin`) to apply the updates
+* Just download the new version of rattlesnakeos-stack and run the same command used previously (e.g. `rattlesnakeos-stack --region us-west-2 --name rattlesnakeos-<yourstackname> --device <yourdevicename>  --ssh-key <yourkeyname>`) to apply the updates
 
 ## FAQ
 1. <b>Should I use rattlesnakeos-stack?</b> Use at your own risk.
@@ -116,11 +113,29 @@ If you decide this isn't for you and you want to remove all the provisioned AWS 
 7. <b>How can I prevent the EC2 instance from immediately terminating on error so I can debug?</b> There is a flag you can pass `rattlesnakeos-stack` called `--prevent-shutdown`. Note that this will keep the instance online for 12 hours or until you manually terminate it.
 8. <b>Why did my EC2 instance randomly terminate?</b> If there wasn't an error notification, this is likely because the [Spot Instance](https://aws.amazon.com/ec2/spot/) bid was not high enough at this specific time. You can see historical spot instance pricing in the [EC2 console](https://console.aws.amazon.com/ec2sp/v1/spot/home). Click `Pricing History`, select c4.4xlarge for `Instance Type` and pick a date range. If you want to avoid having your instance terminated, you can pass an additional flag to `rattlesnakeos-stack` with a higher than default bid: `--spot-price 1.50`
 9. <b>How do OTA updates work?</b> If you go to `Settings->System update settings` you'll see the updater app settings. The updater app will check S3 to see if there are updates and if it finds one will download and apply it your device. There is no progress indicator unfortunately - you'll just got a notification when it's done and it will ask you to reboot. If you want to force a check for OTA updates, you can toggle the `Require battery above warning level` setting and it will check for a new build in your S3 bucket.
-10. <b>What network carriers are supported?</b> I only have access to a single device and carrier to test this on, so I can't make any promises about it working with your specific carrier. Confirmed working: T-Mobile, Rogers. Likely not to work: Sprint (has requirements about specific carrier app being on phone to work), Project Fi.
+10. <b>What network carriers are supported?</b> I only have access to a single device and carrier to test this on, so I can't make any promises about it working with your specific carrier. Confirmed working: T-Mobile, Rogers, Cricket. Likely not to work: Sprint (has requirements about specific carrier app being on phone to work), Project Fi.
+
+## Uninstalling
+### How to uninstall rattlesnakeos-stack
+If you decide this isn't for you and you want to remove all the provisioned AWS resources, there's a command for that. Note: if you've already done a full build, you'll need to manually remove all of the files from S3 buckets before running this cleanup command.
+
+```sh
+./rattlesnakeos-stack --remove --region us-west-2 --name rattlesnakeos-<yourstackname> --ssh-key <yourkeyname>
+```
+
+### How to revert back to stock Android
+For Pixel and Pixel XL, just unlock your bootloader and flash stock factory image.
+
+For Pixel 2 and Pixel 2 XL, you'll need to clear the configured AVB public key after unlocking the bootloader and before locking it again with the stock factory images.
+
+```sh
+fastboot erase avb_custom_key
+```
 
 ## Powered by
-* Huimin Zhang - he is the original author of the underlying build script that was written for CopperheadOS.
-* [Terraform](https://www.terraform.io/) 
+* Huimin Zhang - author of the original underlying build script that was written for CopperheadOS.
+* [anestisb/android-prepare-vendor](https://github.com/anestisb/android-prepare-vendor)
+* [terraform](https://www.terraform.io/)
 
 ## Build from Source
  * To compile from source you'll need to install Go (https://golang.org/) for your platform
@@ -130,6 +145,3 @@ If you decide this isn't for you and you want to remove all the provisioned AWS 
   make tools
   make
   ```
-
-## To Do
-* Restrict created IAM roles to minimum required privileges (currently all admin)

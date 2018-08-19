@@ -24,30 +24,30 @@ var rootCmd = &cobra.Command{
 	},
 	Version: version,
 	Run: func(cmd *cobra.Command, args []string) {
+		s, err := stack.NewAWSStack(&stack.AWSStackConfig{
+			Name:            name,
+			Region:          region,
+			Device:          device,
+			AMI:             ami,
+			SSHKey:          sshKey,
+			SpotPrice:       spotPrice,
+			PreventShutdown: preventShutdown,
+			Version:         version,
+			Schedule:        schedule,
+			Force:           force,
+		})
+		if err != nil {
+			log.Fatal(err)
+		}
+
 		if !remove {
-			if err := stack.AWSApply(
-				stack.StackConfig{
-					Name:            name,
-					Region:          region,
-					Device:          device,
-					AMI:             ami,
-					SSHKey:          sshKey,
-					SpotPrice:       spotPrice,
-					PreventShutdown: preventShutdown,
-					Version:         version,
-					Schedule:        schedule,
-					Force:           force,
-				},
-			); err != nil {
+			if err := s.Apply(); err != nil {
 				log.Fatal(err)
 			}
 		} else {
-			stack.AWSDestroy(
-				stack.StackConfig{
-					Name:   name,
-					Region: region,
-				},
-			)
+			if err := s.Destroy(); err != nil {
+				log.Fatal(err)
+			}
 		}
 	},
 }

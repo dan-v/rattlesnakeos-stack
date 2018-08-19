@@ -8,6 +8,7 @@
     "CreateProject": "<p>Creates a new project.</p>",
     "CreateRemoteAccessSession": "<p>Specifies and starts a remote access session.</p>",
     "CreateUpload": "<p>Uploads an app or test scripts.</p>",
+    "CreateVPCEConfiguration": "<p>Creates a configuration record in Device Farm for your Amazon Virtual Private Cloud (VPC) endpoint.</p>",
     "DeleteDevicePool": "<p>Deletes a device pool given the pool ARN. Does not allow deletion of curated pools owned by the system.</p>",
     "DeleteInstanceProfile": "<p>Deletes a profile that can be applied to one or more private device instances.</p>",
     "DeleteNetworkProfile": "<p>Deletes a network profile.</p>",
@@ -15,6 +16,7 @@
     "DeleteRemoteAccessSession": "<p>Deletes a completed remote access session and its results.</p>",
     "DeleteRun": "<p>Deletes the run, given the run ARN.</p> <p> <b>Note</b> Deleting this resource does not stop an in-progress run.</p>",
     "DeleteUpload": "<p>Deletes an upload given the upload ARN.</p>",
+    "DeleteVPCEConfiguration": "<p>Deletes a configuration for your Amazon Virtual Private Cloud (VPC) endpoint.</p>",
     "GetAccountSettings": "<p>Returns the number of unmetered iOS and/or unmetered Android devices that have been purchased by the account.</p>",
     "GetDevice": "<p>Gets information about a unique device type.</p>",
     "GetDeviceInstance": "<p>Returns information about a device instance belonging to a private device fleet.</p>",
@@ -30,6 +32,7 @@
     "GetSuite": "<p>Gets information about a suite.</p>",
     "GetTest": "<p>Gets information about a test.</p>",
     "GetUpload": "<p>Gets information about an upload.</p>",
+    "GetVPCEConfiguration": "<p>Returns information about the configuration settings for your Amazon Virtual Private Cloud (VPC) endpoint.</p>",
     "InstallToRemoteAccessSession": "<p>Installs an application to the device in a remote access session. For Android applications, the file must be in .apk format. For iOS applications, the file must be in .ipa format.</p>",
     "ListArtifacts": "<p>Gets information about artifacts.</p>",
     "ListDeviceInstances": "<p>Returns information about the private device instances associated with one or more AWS accounts.</p>",
@@ -49,16 +52,20 @@
     "ListTests": "<p>Gets information about tests in a given test suite.</p>",
     "ListUniqueProblems": "<p>Gets information about unique problems.</p>",
     "ListUploads": "<p>Gets information about uploads, given an AWS Device Farm project ARN.</p>",
+    "ListVPCEConfigurations": "<p>Returns information about all Amazon Virtual Private Cloud (VPC) endpoint configurations in the AWS account.</p>",
     "PurchaseOffering": "<p>Immediately purchases offerings for an AWS account. Offerings renew with the latest total purchased quantity for an offering, unless the renewal was overridden. The API returns a <code>NotEligible</code> error if the user is not permitted to invoke the operation. Please contact <a href=\"mailto:aws-devicefarm-support@amazon.com\">aws-devicefarm-support@amazon.com</a> if you believe that you should be able to invoke this operation.</p>",
     "RenewOffering": "<p>Explicitly sets the quantity of devices to renew for an offering, starting from the <code>effectiveDate</code> of the next period. The API returns a <code>NotEligible</code> error if the user is not permitted to invoke the operation. Please contact <a href=\"mailto:aws-devicefarm-support@amazon.com\">aws-devicefarm-support@amazon.com</a> if you believe that you should be able to invoke this operation.</p>",
     "ScheduleRun": "<p>Schedules a run.</p>",
+    "StopJob": "<p>Initiates a stop request for the current job. AWS Device Farm will immediately stop the job on the device where tests have not started executing, and you will not be billed for this device. On the device where tests have started executing, Setup Suite and Teardown Suite tests will run to completion before stopping execution on the device. You will be billed for Setup, Teardown, and any tests that were in progress or already completed.</p>",
     "StopRemoteAccessSession": "<p>Ends a specified remote access session.</p>",
     "StopRun": "<p>Initiates a stop request for the current test run. AWS Device Farm will immediately stop the run on devices where tests have not started executing, and you will not be billed for these devices. On devices where tests have started executing, Setup Suite and Teardown Suite tests will run to completion before stopping execution on those devices. You will be billed for Setup, Teardown, and any tests that were in progress or already completed.</p>",
     "UpdateDeviceInstance": "<p>Updates information about an existing private device instance.</p>",
     "UpdateDevicePool": "<p>Modifies the name, description, and rules in a device pool given the attributes and the pool ARN. Rule updates are all-or-nothing, meaning they can only be updated as a whole (or not at all).</p>",
     "UpdateInstanceProfile": "<p>Updates information about an existing private device instance profile.</p>",
     "UpdateNetworkProfile": "<p>Updates the network profile with specific settings.</p>",
-    "UpdateProject": "<p>Modifies the specified project name, given the project ARN and a new name.</p>"
+    "UpdateProject": "<p>Modifies the specified project name, given the project ARN and a new name.</p>",
+    "UpdateUpload": "<p>Update an uploaded test specification (test spec).</p>",
+    "UpdateVPCEConfiguration": "<p>Updates information about an existing Amazon Virtual Private Cloud (VPC) endpoint configuration.</p>"
   },
   "shapes": {
     "AWSAccountNumber": {
@@ -98,6 +105,7 @@
         "DeleteRemoteAccessSessionRequest$arn": "<p>The Amazon Resource Name (ARN) of the sesssion for which you want to delete remote access.</p>",
         "DeleteRunRequest$arn": "<p>The Amazon Resource Name (ARN) for the run you wish to delete.</p>",
         "DeleteUploadRequest$arn": "<p>Represents the Amazon Resource Name (ARN) of the Device Farm upload you wish to delete.</p>",
+        "DeleteVPCEConfigurationRequest$arn": "<p>The Amazon Resource Name (ARN) of the VPC endpoint configuration you want to delete.</p>",
         "Device$arn": "<p>The device's ARN.</p>",
         "DeviceInstance$arn": "<p>The Amazon Resource Name (ARN) of the device instance.</p>",
         "DeviceInstance$deviceArn": "<p>The Amazon Resource Name (ARN) of the device.</p>",
@@ -116,6 +124,7 @@
         "GetSuiteRequest$arn": "<p>The suite's ARN.</p>",
         "GetTestRequest$arn": "<p>The test's ARN.</p>",
         "GetUploadRequest$arn": "<p>The upload's ARN.</p>",
+        "GetVPCEConfigurationRequest$arn": "<p>The Amazon Resource Name (ARN) of the VPC endpoint configuration you want to describe.</p>",
         "InstallToRemoteAccessSessionRequest$remoteAccessSessionArn": "<p>The Amazon Resource Name (ARN) of the remote access session about which you are requesting information.</p>",
         "InstallToRemoteAccessSessionRequest$appArn": "<p>The Amazon Resource Name (ARN) of the app about which you are requesting information.</p>",
         "InstanceProfile$arn": "<p>The Amazon Resource Name (ARN) of the instance profile.</p>",
@@ -143,6 +152,7 @@
         "Run$arn": "<p>The run's ARN.</p>",
         "Run$appUpload": "<p>An app to upload or that has been uploaded.</p>",
         "Run$devicePoolArn": "<p>The ARN of the device pool for the run.</p>",
+        "Run$testSpecArn": "<p>The ARN of the YAML-formatted test specification for the run.</p>",
         "Sample$arn": "<p>The sample's ARN.</p>",
         "ScheduleRunConfiguration$extraDataPackageArn": "<p>The ARN of the extra data for the run. The extra data is a .zip file that AWS Device Farm will extract to external data for Android or the app's sandbox for iOS.</p>",
         "ScheduleRunConfiguration$networkProfileArn": "<p>Reserved for internal use.</p>",
@@ -150,6 +160,8 @@
         "ScheduleRunRequest$appArn": "<p>The ARN of the app to schedule a run.</p>",
         "ScheduleRunRequest$devicePoolArn": "<p>The ARN of the device pool for the run to be scheduled.</p>",
         "ScheduleRunTest$testPackageArn": "<p>The ARN of the uploaded test that will be run.</p>",
+        "ScheduleRunTest$testSpecArn": "<p>The ARN of the YAML-formatted test specification.</p>",
+        "StopJobRequest$arn": "<p>Represents the Amazon Resource Name (ARN) of the Device Farm job you wish to stop.</p>",
         "StopRemoteAccessSessionRequest$arn": "<p>The Amazon Resource Name (ARN) of the remote access session you wish to stop.</p>",
         "StopRunRequest$arn": "<p>Represents the Amazon Resource Name (ARN) of the Device Farm run you wish to stop.</p>",
         "Suite$arn": "<p>The suite's ARN.</p>",
@@ -160,12 +172,17 @@
         "UpdateInstanceProfileRequest$arn": "<p>The Amazon Resource Name (ARN) of the instance profile.</p>",
         "UpdateNetworkProfileRequest$arn": "<p>The Amazon Resource Name (ARN) of the project for which you want to update network profile settings.</p>",
         "UpdateProjectRequest$arn": "<p>The Amazon Resource Name (ARN) of the project whose name you wish to update.</p>",
-        "Upload$arn": "<p>The upload's ARN.</p>"
+        "UpdateUploadRequest$arn": "<p>The Amazon Resource Name (ARN) of the uploaded test spec.</p>",
+        "UpdateVPCEConfigurationRequest$arn": "<p>The Amazon Resource Name (ARN) of the VPC endpoint configuration you want to update.</p>",
+        "Upload$arn": "<p>The upload's ARN.</p>",
+        "VPCEConfiguration$arn": "<p>The Amazon Resource Name (ARN) of the VPC endpoint configuration.</p>"
       }
     },
     "AmazonResourceNames": {
       "base": null,
       "refs": {
+        "CreateRemoteAccessSessionConfiguration$vpceConfigurationArns": "<p>An array of Amazon Resource Names (ARNs) included in the VPC endpoint configuration.</p>",
+        "ScheduleRunConfiguration$vpceConfigurationArns": "<p>An array of Amazon Resource Names (ARNs) for your VPC endpoint configurations.</p>",
         "ScheduleRunConfiguration$auxiliaryApps": "<p>A list of auxiliary apps for the run.</p>"
       }
     },
@@ -239,7 +256,8 @@
         "RemoteAccessSession$remoteDebugEnabled": "<p>This flag is set to <code>true</code> if remote debugging is enabled for the remote access session.</p>",
         "RemoteAccessSession$remoteRecordEnabled": "<p>This flag is set to <code>true</code> if remote recording is enabled for the remote access session.</p>",
         "UpdateInstanceProfileRequest$packageCleanup": "<p>The updated choice for whether you want to specify package cleanup. The default value is <code>false</code> for private devices.</p>",
-        "UpdateInstanceProfileRequest$rebootAfterUse": "<p>The updated choice for whether you want to reboot the device after use. The default value is <code>true</code>.</p>"
+        "UpdateInstanceProfileRequest$rebootAfterUse": "<p>The updated choice for whether you want to reboot the device after use. The default value is <code>true</code>.</p>",
+        "UpdateUploadRequest$editContent": "<p>Set to true if the YAML file has changed and needs to be updated; otherwise, set to false.</p>"
       }
     },
     "CPU": {
@@ -259,6 +277,7 @@
       "base": null,
       "refs": {
         "CreateUploadRequest$contentType": "<p>The upload's content type (for example, \"application/octet-stream\").</p>",
+        "UpdateUploadRequest$contentType": "<p>The upload's content type (for example, \"application/x-yaml\").</p>",
         "Upload$contentType": "<p>The upload's content type (for example, \"application/octet-stream\").</p>"
       }
     },
@@ -334,6 +353,16 @@
     },
     "CreateUploadResult": {
       "base": "<p>Represents the result of a create upload request.</p>",
+      "refs": {
+      }
+    },
+    "CreateVPCEConfigurationRequest": {
+      "base": null,
+      "refs": {
+      }
+    },
+    "CreateVPCEConfigurationResult": {
+      "base": null,
       "refs": {
       }
     },
@@ -441,6 +470,16 @@
     },
     "DeleteUploadResult": {
       "base": "<p>Represents the result of a delete upload request.</p>",
+      "refs": {
+      }
+    },
+    "DeleteVPCEConfigurationRequest": {
+      "base": null,
+      "refs": {
+      }
+    },
+    "DeleteVPCEConfigurationResult": {
+      "base": null,
       "refs": {
       }
     },
@@ -753,6 +792,16 @@
       "refs": {
       }
     },
+    "GetVPCEConfigurationRequest": {
+      "base": null,
+      "refs": {
+      }
+    },
+    "GetVPCEConfigurationResult": {
+      "base": null,
+      "refs": {
+      }
+    },
     "HostAddress": {
       "base": null,
       "refs": {
@@ -827,6 +876,7 @@
         "Counters$skipped": "<p>The number of skipped entities.</p>",
         "ListDeviceInstancesRequest$maxResults": "<p>An integer specifying the maximum number of items you want to return in the API response.</p>",
         "ListInstanceProfilesRequest$maxResults": "<p>An integer specifying the maximum number of items you want to return in the API response.</p>",
+        "ListVPCEConfigurationsRequest$maxResults": "<p>An integer specifying the maximum number of items you want to return in the API response.</p>",
         "MaxSlotMap$value": null,
         "OfferingStatus$quantity": "<p>The number of available devices in the offering.</p>",
         "PurchaseOfferingRequest$quantity": "<p>The number of device slots you wish to purchase in an offering request.</p>",
@@ -847,6 +897,11 @@
         "RemoteAccessSession$interactionMode": "<p>The interaction mode of the remote access session. Valid values are:</p> <ul> <li> <p>INTERACTIVE: You can interact with the iOS device by viewing, touching, and rotating the screen. You <b>cannot</b> run XCUITest framework-based tests in this mode.</p> </li> <li> <p>NO_VIDEO: You are connected to the device but cannot interact with it or view the screen. This mode has the fastest test execution speed. You <b>can</b> run XCUITest framework-based tests in this mode.</p> </li> <li> <p>VIDEO_ONLY: You can view the screen but cannot touch or rotate it. You <b>can</b> run XCUITest framework-based tests and watch the screen in this mode.</p> </li> </ul>"
       }
     },
+    "InvalidOperationException": {
+      "base": "<p>There was an error with the update request, or you do not have sufficient permissions to update this VPC endpoint configuration.</p>",
+      "refs": {
+      }
+    },
     "IosPaths": {
       "base": null,
       "refs": {
@@ -857,7 +912,8 @@
       "base": "<p>Represents a device.</p>",
       "refs": {
         "GetJobResult$job": "<p>An object containing information about the requested job.</p>",
-        "Jobs$member": null
+        "Jobs$member": null,
+        "StopJobResult$job": "<p>The job that was stopped.</p>"
       }
     },
     "JobTimeoutMinutes": {
@@ -1063,6 +1119,16 @@
       "refs": {
       }
     },
+    "ListVPCEConfigurationsRequest": {
+      "base": null,
+      "refs": {
+      }
+    },
+    "ListVPCEConfigurationsResult": {
+      "base": null,
+      "refs": {
+      }
+    },
     "Location": {
       "base": "<p>Represents a latitude and longitude pair, expressed in geographic coordinate system degrees (for example 47.6204, -122.3491).</p> <p>Elevation is currently not supported.</p>",
       "refs": {
@@ -1112,6 +1178,7 @@
         "IdempotencyException$message": "<p>Any additional information about the exception.</p>",
         "IncompatibilityMessage$message": "<p>A message about the incompatibility.</p>",
         "InstanceProfile$description": "<p>The description of the instance profile.</p>",
+        "InvalidOperationException$message": null,
         "Job$message": "<p>A message about the job's result.</p>",
         "LimitExceededException$message": "<p>Any additional information about the exception.</p>",
         "NetworkProfile$description": "<p>The description of the network profile.</p>",
@@ -1171,6 +1238,7 @@
         "UpdateInstanceProfileRequest$name": "<p>The updated name for your instance profile.</p>",
         "UpdateNetworkProfileRequest$name": "<p>The name of the network profile about which you are returning information.</p>",
         "UpdateProjectRequest$name": "<p>A string representing the new name of the project that you are updating.</p>",
+        "UpdateUploadRequest$name": "<p>The upload's test spec file name. The name should not contain the '/' character. The test spec file name must end with the <code>.yaml</code> or <code>.yml</code> file extension.</p>",
         "Upload$name": "<p>The upload's file name.</p>"
       }
     },
@@ -1339,7 +1407,9 @@
         "ListUniqueProblemsRequest$nextToken": "<p>An identifier that was returned from the previous call to this operation, which can be used to return the next set of items in the list.</p>",
         "ListUniqueProblemsResult$nextToken": "<p>If the number of items that are returned is significantly large, this is an identifier that is also returned, which can be used in a subsequent call to this operation to return the next set of items in the list.</p>",
         "ListUploadsRequest$nextToken": "<p>An identifier that was returned from the previous call to this operation, which can be used to return the next set of items in the list.</p>",
-        "ListUploadsResult$nextToken": "<p>If the number of items that are returned is significantly large, this is an identifier that is also returned, which can be used in a subsequent call to this operation to return the next set of items in the list.</p>"
+        "ListUploadsResult$nextToken": "<p>If the number of items that are returned is significantly large, this is an identifier that is also returned, which can be used in a subsequent call to this operation to return the next set of items in the list.</p>",
+        "ListVPCEConfigurationsRequest$nextToken": "<p>An identifier that was returned from the previous call to this operation, which can be used to return the next set of items in the list.</p>",
+        "ListVPCEConfigurationsResult$nextToken": "<p>An identifier that was returned from the previous call to this operation, which can be used to return the next set of items in the list.</p>"
       }
     },
     "PercentInteger": {
@@ -1518,6 +1588,7 @@
     "ScheduleRunConfiguration": {
       "base": "<p>Represents the settings for a run. Includes things like location, radio states, auxiliary apps, and network profiles.</p>",
       "refs": {
+        "GetDevicePoolCompatibilityRequest$configuration": "<p>An object containing information about the settings for a run.</p>",
         "ScheduleRunRequest$configuration": "<p>Information about the settings for the run to be scheduled.</p>"
       }
     },
@@ -1543,6 +1614,14 @@
       "refs": {
       }
     },
+    "ServiceDnsName": {
+      "base": null,
+      "refs": {
+        "CreateVPCEConfigurationRequest$serviceDnsName": "<p>The DNS name of the service running in your VPC that you want Device Farm to test.</p>",
+        "UpdateVPCEConfigurationRequest$serviceDnsName": "<p>The DNS (domain) name used to connect to your private service in your Amazon VPC. The DNS name must not already be in use on the Internet.</p>",
+        "VPCEConfiguration$serviceDnsName": "<p>The DNS name that maps to the private IP address of the service you want to access.</p>"
+      }
+    },
     "SkipAppResign": {
       "base": null,
       "refs": {
@@ -1556,6 +1635,16 @@
       "base": null,
       "refs": {
         "CreateRemoteAccessSessionRequest$sshPublicKey": "<p>The public key of the <code>ssh</code> key pair you want to use for connecting to remote devices in your remote debugging session. This is only required if <code>remoteDebugEnabled</code> is set to <code>true</code>.</p>"
+      }
+    },
+    "StopJobRequest": {
+      "base": null,
+      "refs": {
+      }
+    },
+    "StopJobResult": {
+      "base": null,
+      "refs": {
       }
     },
     "StopRemoteAccessSessionRequest": {
@@ -1598,6 +1687,7 @@
         "DeviceInstance$udid": "<p>Unique device identifier for the device instance.</p>",
         "InstanceLabels$member": null,
         "IosPaths$member": null,
+        "Job$videoEndpoint": "<p>The endpoint for streaming device video.</p>",
         "MaxSlotMap$key": null,
         "PackageIds$member": null,
         "RemoteAccessSession$endpoint": "<p>The endpoint for the remote access sesssion.</p>",
@@ -1742,13 +1832,40 @@
       "refs": {
       }
     },
+    "UpdateUploadRequest": {
+      "base": null,
+      "refs": {
+      }
+    },
+    "UpdateUploadResult": {
+      "base": null,
+      "refs": {
+      }
+    },
+    "UpdateVPCEConfigurationRequest": {
+      "base": null,
+      "refs": {
+      }
+    },
+    "UpdateVPCEConfigurationResult": {
+      "base": null,
+      "refs": {
+      }
+    },
     "Upload": {
       "base": "<p>An app or a set of one or more tests to upload or that have been uploaded.</p>",
       "refs": {
         "CreateUploadResult$upload": "<p>The newly created upload.</p>",
         "GetUploadResult$upload": "<p>An app or a set of one or more tests to upload or that have been uploaded.</p>",
         "InstallToRemoteAccessSessionResult$appUpload": "<p>An app to upload or that has been uploaded.</p>",
+        "UpdateUploadResult$upload": "<p>A test spec uploaded to Device Farm.</p>",
         "Uploads$member": null
+      }
+    },
+    "UploadCategory": {
+      "base": null,
+      "refs": {
+        "Upload$category": "<p>The upload's category. Allowed values include:</p> <ul> <li> <p>CURATED: An upload managed by AWS Device Farm.</p> </li> <li> <p>PRIVATE: An upload managed by the AWS Device Farm customer.</p> </li> </ul>"
       }
     },
     "UploadStatus": {
@@ -1760,7 +1877,8 @@
     "UploadType": {
       "base": null,
       "refs": {
-        "CreateUploadRequest$type": "<p>The upload's upload type.</p> <p>Must be one of the following values:</p> <ul> <li> <p>ANDROID_APP: An Android upload.</p> </li> <li> <p>IOS_APP: An iOS upload.</p> </li> <li> <p>WEB_APP: A web appliction upload.</p> </li> <li> <p>EXTERNAL_DATA: An external data upload.</p> </li> <li> <p>APPIUM_JAVA_JUNIT_TEST_PACKAGE: An Appium Java JUnit test package upload.</p> </li> <li> <p>APPIUM_JAVA_TESTNG_TEST_PACKAGE: An Appium Java TestNG test package upload.</p> </li> <li> <p>APPIUM_PYTHON_TEST_PACKAGE: An Appium Python test package upload.</p> </li> <li> <p>APPIUM_WEB_JAVA_JUNIT_TEST_PACKAGE: An Appium Java JUnit test package upload.</p> </li> <li> <p>APPIUM_WEB_JAVA_TESTNG_TEST_PACKAGE: An Appium Java TestNG test package upload.</p> </li> <li> <p>APPIUM_WEB_PYTHON_TEST_PACKAGE: An Appium Python test package upload.</p> </li> <li> <p>CALABASH_TEST_PACKAGE: A Calabash test package upload.</p> </li> <li> <p>INSTRUMENTATION_TEST_PACKAGE: An instrumentation upload.</p> </li> <li> <p>UIAUTOMATION_TEST_PACKAGE: A uiautomation test package upload.</p> </li> <li> <p>UIAUTOMATOR_TEST_PACKAGE: A uiautomator test package upload.</p> </li> <li> <p>XCTEST_TEST_PACKAGE: An XCode test package upload.</p> </li> <li> <p>XCTEST_UI_TEST_PACKAGE: An XCode UI test package upload.</p> </li> </ul> <p> <b>Note</b> If you call <code>CreateUpload</code> with <code>WEB_APP</code> specified, AWS Device Farm throws an <code>ArgumentException</code> error.</p>",
+        "CreateUploadRequest$type": "<p>The upload's upload type.</p> <p>Must be one of the following values:</p> <ul> <li> <p>ANDROID_APP: An Android upload.</p> </li> <li> <p>IOS_APP: An iOS upload.</p> </li> <li> <p>WEB_APP: A web application upload.</p> </li> <li> <p>EXTERNAL_DATA: An external data upload.</p> </li> <li> <p>APPIUM_JAVA_JUNIT_TEST_PACKAGE: An Appium Java JUnit test package upload.</p> </li> <li> <p>APPIUM_JAVA_TESTNG_TEST_PACKAGE: An Appium Java TestNG test package upload.</p> </li> <li> <p>APPIUM_PYTHON_TEST_PACKAGE: An Appium Python test package upload.</p> </li> <li> <p>APPIUM_WEB_JAVA_JUNIT_TEST_PACKAGE: An Appium Java JUnit test package upload.</p> </li> <li> <p>APPIUM_WEB_JAVA_TESTNG_TEST_PACKAGE: An Appium Java TestNG test package upload.</p> </li> <li> <p>APPIUM_WEB_PYTHON_TEST_PACKAGE: An Appium Python test package upload.</p> </li> <li> <p>CALABASH_TEST_PACKAGE: A Calabash test package upload.</p> </li> <li> <p>INSTRUMENTATION_TEST_PACKAGE: An instrumentation upload.</p> </li> <li> <p>UIAUTOMATION_TEST_PACKAGE: A uiautomation test package upload.</p> </li> <li> <p>UIAUTOMATOR_TEST_PACKAGE: A uiautomator test package upload.</p> </li> <li> <p>XCTEST_TEST_PACKAGE: An XCode test package upload.</p> </li> <li> <p>XCTEST_UI_TEST_PACKAGE: An XCode UI test package upload.</p> </li> </ul> <p> <b>Note</b> If you call <code>CreateUpload</code> with <code>WEB_APP</code> specified, AWS Device Farm throws an <code>ArgumentException</code> error.</p>",
+        "ListUploadsRequest$type": "<p>The type of upload.</p> <p>Must be one of the following values:</p> <ul> <li> <p>ANDROID_APP: An Android upload.</p> </li> <li> <p>IOS_APP: An iOS upload.</p> </li> <li> <p>WEB_APP: A web appliction upload.</p> </li> <li> <p>EXTERNAL_DATA: An external data upload.</p> </li> <li> <p>APPIUM_JAVA_JUNIT_TEST_PACKAGE: An Appium Java JUnit test package upload.</p> </li> <li> <p>APPIUM_JAVA_TESTNG_TEST_PACKAGE: An Appium Java TestNG test package upload.</p> </li> <li> <p>APPIUM_PYTHON_TEST_PACKAGE: An Appium Python test package upload.</p> </li> <li> <p>APPIUM_WEB_JAVA_JUNIT_TEST_PACKAGE: An Appium Java JUnit test package upload.</p> </li> <li> <p>APPIUM_WEB_JAVA_TESTNG_TEST_PACKAGE: An Appium Java TestNG test package upload.</p> </li> <li> <p>APPIUM_WEB_PYTHON_TEST_PACKAGE: An Appium Python test package upload.</p> </li> <li> <p>CALABASH_TEST_PACKAGE: A Calabash test package upload.</p> </li> <li> <p>INSTRUMENTATION_TEST_PACKAGE: An instrumentation upload.</p> </li> <li> <p>UIAUTOMATION_TEST_PACKAGE: A uiautomation test package upload.</p> </li> <li> <p>UIAUTOMATOR_TEST_PACKAGE: A uiautomator test package upload.</p> </li> <li> <p>XCTEST_TEST_PACKAGE: An XCode test package upload.</p> </li> <li> <p>XCTEST_UI_TEST_PACKAGE: An XCode UI test package upload.</p> </li> <li> <p>APPIUM_JAVA_JUNIT_TEST_SPEC: An Appium Java JUnit test spec upload.</p> </li> <li> <p>APPIUM_JAVA_TESTNG_TEST_SPEC: An Appium Java TestNG test spec upload.</p> </li> <li> <p>APPIUM_PYTHON_TEST_SPEC: An Appium Python test spec upload.</p> </li> <li> <p>APPIUM_WEB_JAVA_JUNIT_TEST_SPEC: An Appium Java JUnit test spec upload.</p> </li> <li> <p>APPIUM_WEB_JAVA_TESTNG_TEST_SPEC: An Appium Java TestNG test spec upload.</p> </li> <li> <p>APPIUM_WEB_PYTHON_TEST_SPEC: An Appium Python test spec upload.</p> </li> <li> <p>INSTRUMENTATION_TEST_SPEC: An instrumentation test spec upload.</p> </li> <li> <p>XCTEST_UI_TEST_SPEC: An XCode UI test spec upload.</p> </li> </ul>",
         "Upload$type": "<p>The upload's type.</p> <p>Must be one of the following values:</p> <ul> <li> <p>ANDROID_APP: An Android upload.</p> </li> <li> <p>IOS_APP: An iOS upload.</p> </li> <li> <p>WEB_APP: A web appliction upload.</p> </li> <li> <p>EXTERNAL_DATA: An external data upload.</p> </li> <li> <p>APPIUM_JAVA_JUNIT_TEST_PACKAGE: An Appium Java JUnit test package upload.</p> </li> <li> <p>APPIUM_JAVA_TESTNG_TEST_PACKAGE: An Appium Java TestNG test package upload.</p> </li> <li> <p>APPIUM_PYTHON_TEST_PACKAGE: An Appium Python test package upload.</p> </li> <li> <p>APPIUM_WEB_JAVA_JUNIT_TEST_PACKAGE: An Appium Java JUnit test package upload.</p> </li> <li> <p>APPIUM_WEB_JAVA_TESTNG_TEST_PACKAGE: An Appium Java TestNG test package upload.</p> </li> <li> <p>APPIUM_WEB_PYTHON_TEST_PACKAGE: An Appium Python test package upload.</p> </li> <li> <p>CALABASH_TEST_PACKAGE: A Calabash test package upload.</p> </li> <li> <p>INSTRUMENTATION_TEST_PACKAGE: An instrumentation upload.</p> </li> <li> <p>UIAUTOMATION_TEST_PACKAGE: A uiautomation test package upload.</p> </li> <li> <p>UIAUTOMATOR_TEST_PACKAGE: A uiautomator test package upload.</p> </li> <li> <p>XCTEST_TEST_PACKAGE: An XCode test package upload.</p> </li> <li> <p>XCTEST_UI_TEST_PACKAGE: An XCode UI test package upload.</p> </li> </ul>"
       }
     },
@@ -1768,6 +1886,52 @@
       "base": null,
       "refs": {
         "ListUploadsResult$uploads": "<p>Information about the uploads.</p>"
+      }
+    },
+    "VPCEConfiguration": {
+      "base": "<p>Represents an Amazon Virtual Private Cloud (VPC) endpoint configuration.</p>",
+      "refs": {
+        "CreateVPCEConfigurationResult$vpceConfiguration": "<p>An object containing information about your VPC endpoint configuration.</p>",
+        "GetVPCEConfigurationResult$vpceConfiguration": "<p>An object containing information about your VPC endpoint configuration.</p>",
+        "UpdateVPCEConfigurationResult$vpceConfiguration": "<p>An object containing information about your VPC endpoint configuration.</p>",
+        "VPCEConfigurations$member": null
+      }
+    },
+    "VPCEConfigurationDescription": {
+      "base": null,
+      "refs": {
+        "CreateVPCEConfigurationRequest$vpceConfigurationDescription": "<p>An optional description, providing more details about your VPC endpoint configuration.</p>",
+        "UpdateVPCEConfigurationRequest$vpceConfigurationDescription": "<p>An optional description, providing more details about your VPC endpoint configuration.</p>",
+        "VPCEConfiguration$vpceConfigurationDescription": "<p>An optional description, providing more details about your VPC endpoint configuration.</p>"
+      }
+    },
+    "VPCEConfigurationName": {
+      "base": null,
+      "refs": {
+        "CreateVPCEConfigurationRequest$vpceConfigurationName": "<p>The friendly name you give to your VPC endpoint configuration, to manage your configurations more easily.</p>",
+        "UpdateVPCEConfigurationRequest$vpceConfigurationName": "<p>The friendly name you give to your VPC endpoint configuration, to manage your configurations more easily.</p>",
+        "VPCEConfiguration$vpceConfigurationName": "<p>The friendly name you give to your VPC endpoint configuration, to manage your configurations more easily.</p>"
+      }
+    },
+    "VPCEConfigurations": {
+      "base": null,
+      "refs": {
+        "ListVPCEConfigurationsResult$vpceConfigurations": "<p>An array of <code>VPCEConfiguration</code> objects containing information about your VPC endpoint configuration.</p>"
+      }
+    },
+    "VPCEServiceName": {
+      "base": null,
+      "refs": {
+        "CreateVPCEConfigurationRequest$vpceServiceName": "<p>The name of the VPC endpoint service running inside your AWS account that you want Device Farm to test.</p>",
+        "UpdateVPCEConfigurationRequest$vpceServiceName": "<p>The name of the VPC endpoint service running inside your AWS account that you want Device Farm to test.</p>",
+        "VPCEConfiguration$vpceServiceName": "<p>The name of the VPC endpoint service running inside your AWS account that you want Device Farm to test.</p>"
+      }
+    },
+    "VideoCapture": {
+      "base": null,
+      "refs": {
+        "ExecutionConfiguration$videoCapture": "<p>Set to true to enable video capture; otherwise, set to false. The default is true.</p>",
+        "Job$videoCapture": "<p>This value is set to true if video capture is enabled; otherwise, it is set to false.</p>"
       }
     }
   }

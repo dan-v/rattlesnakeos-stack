@@ -2,13 +2,34 @@ package stack
 
 import (
 	"archive/zip"
+	"bytes"
 	"io"
 	"io/ioutil"
 	"log"
 	"os"
 	"path/filepath"
 	"strings"
+	"text/template"
 )
+
+func renderTemplate(templateStr string, params interface{}) ([]byte, error) {
+	templ, err := template.New("template").Delims("<%", "%>").Parse(templateStr)
+	if err != nil {
+		return nil, err
+	}
+
+	buffer := new(bytes.Buffer)
+
+	if err = templ.Execute(buffer, params); err != nil {
+		return nil, err
+	}
+
+	outputBytes, err := ioutil.ReadAll(buffer)
+	if err != nil {
+		return nil, err
+	}
+	return outputBytes, nil
+}
 
 func unzip(src, dest string) error {
 	r, err := zip.OpenReader(src)

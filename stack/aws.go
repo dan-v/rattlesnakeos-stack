@@ -8,6 +8,7 @@ import (
 	"github.com/aws/aws-sdk-go/aws/awserr"
 	"github.com/aws/aws-sdk-go/aws/session"
 	"github.com/aws/aws-sdk-go/service/s3"
+	"github.com/dan-v/rattlesnakeos-stack/templates"
 	log "github.com/sirupsen/logrus"
 )
 
@@ -15,6 +16,151 @@ const (
 	awsErrCodeNoSuchBucket = "NoSuchBucket"
 	awsErrCodeNotFound     = "NotFound"
 )
+
+type AWSStackConfig struct {
+	Name            string
+	Region          string
+	Device          string
+	AMI             string
+	SpotPrice       string
+	SSHKey          string
+	PreventShutdown bool
+	Version         string
+	Schedule        string
+	Force           bool
+}
+
+type AWSStack struct {
+	Config                  *AWSStackConfig
+	terraformClient         *terraformClient
+	renderedBuildScript     []byte
+	renderedLambdaFunction  []byte
+	LambdaZipFileLocation   string
+	BuildScriptFileLocation string
+}
+
+func NewAWSStack(config *AWSStackConfig) (*AWSStack, error) {
+	err := checkAWSCreds(config.Region)
+	if err != nil {
+		return nil, err
+	}
+
+	err = s3BucketSetup(config.Name, config.Region)
+	if err != nil {
+		return nil, err
+	}
+
+	if config.AMI == "" {
+		ami, err := getAMI(config.Region)
+		if err != nil {
+			return nil, err
+		}
+		config.AMI = ami
+	}
+
+	renderedLambdaFunction, err := renderTemplate(templates.LambdaTemplate, config)
+	if err != nil {
+		return nil, fmt.Errorf("Failed to render Lambda function: %v", err)
+	}
+
+	renderedBuildScript, err := renderTemplate(templates.BuildTemplate, config)
+	if err != nil {
+		return nil, fmt.Errorf("Failed to render build script: %v", err)
+	}
+
+	stack := &AWSStack{
+		Config:                 config,
+		renderedBuildScript:    renderedBuildScript,
+		renderedLambdaFunction: renderedLambdaFunction,
+	}
+
+	terraformClient, err := newTerraformClient(stack, os.Stdout, os.Stdin)
+	if err != nil {
+		return nil, fmt.Errorf("Failed to create terraform client: %v", err)
+	}
+	stack.terraformClient = terraformClient
+
+	return stack, nil
+}
+
+func (s *AWSStack) Apply() error {
+	defer s.terraformClient.Cleanup()
+
+	log.Info("Creating AWS resources")
+	err := s.terraformClient.Apply()
+	if err != nil {
+		return err
+	}
+	log.Info("Successfully deployed AWS resources")
+	return nil
+}
+
+func (s *AWSStack) Destroy() error {
+	defer s.terraformClient.Cleanup()
+
+	log.Info("Destroying AWS resources")
+	err := s.terraformClient.Destroy()
+	if err != nil {
+		return err
+	}
+	log.Info("Successfully removed AWS resources")
+	return nil
+}
+
+func s3BucketSetup(name, region string) error {
+	sess, err := session.NewSession(aws.NewConfig().WithCredentialsChainVerboseErrors(true))
+	if err != nil {
+		return fmt.Errorf("Failed to create new AWS session: %v", err)
+	}
+	s3Client := s3.New(sess, &aws.Config{Region: &region})
+
+	log.Infof("Creating S3 bucket %s", name)
+	_, err = s3Client.HeadBucket(&s3.HeadBucketInput{Bucket: &name})
+	if err != nil {
+		awsErrCode := err.(awserr.Error).Code()
+		if awsErrCode != awsErrCodeNotFound && awsErrCode != awsErrCodeNoSuchBucket {
+			return fmt.Errorf("Unknown S3 error code: %v", err)
+		}
+
+		bucketInput := &s3.CreateBucketInput{
+			Bucket: &name,
+		}
+		// NOTE the location constraint should only be set if using a bucket OTHER than us-east-1
+		// http://docs.aws.amazon.com/AmazonS3/latest/API/RESTBucketPUT.html
+		if region != "us-east-1" {
+			bucketInput.CreateBucketConfiguration = &s3.CreateBucketConfiguration{
+				LocationConstraint: &region,
+			}
+		}
+
+		_, err = s3Client.CreateBucket(bucketInput)
+		if err != nil {
+			return fmt.Errorf("Failed to create bucket %s - note that this bucket name must be globally unique. %v", name, err)
+		}
+	}
+	return nil
+}
+
+func checkAWSCreds(region string) error {
+	log.Info("Checking AWS credentials")
+	sess, err := session.NewSession(aws.NewConfig().WithCredentialsChainVerboseErrors(true))
+	if err != nil {
+		return fmt.Errorf("Failed to create new AWS session: %v", err)
+	}
+	s3Client := s3.New(sess, &aws.Config{Region: &region})
+	_, err = s3Client.ListBuckets(&s3.ListBucketsInput{})
+	if err != nil {
+		return fmt.Errorf("Unable to list S3 buckets - make sure you have valid admin AWS credentials: %v", err)
+	}
+	return nil
+}
+
+func getAMI(region string) (string, error) {
+	if _, ok := amiMap[region]; !ok {
+		return "", fmt.Errorf("Unknown region %s. Need to manually specify AMI.", region)
+	}
+	return amiMap[region], nil
+}
 
 // ubuntu 16.04 AMI hvm:ebs-ssd
 // https://cloud-images.ubuntu.com/locator/ec2/
@@ -38,137 +184,4 @@ var amiMap = map[string]string{
 	"us-gov-west-1":  "ami-0661f767",
 	"us-west-1":      "ami-4aa04129",
 	"us-west-2":      "ami-ba602bc2",
-}
-
-type StackConfig struct {
-	Name            string
-	Region          string
-	Device          string
-	AMI             string
-	SpotPrice       string
-	SSHKey          string
-	PreventShutdown bool
-	Version         string
-	Schedule        string
-	Force           bool
-}
-
-func AWSApply(config StackConfig) error {
-	err := checkAWSCreds(config.Region)
-	if err != nil {
-		return err
-	}
-
-	if config.AMI == "" {
-		ami, err := getAMI(config.Region)
-		if err != nil {
-			return err
-		}
-		config.AMI = ami
-	}
-
-	err = s3BucketSetup(config)
-	if err != nil {
-		return err
-	}
-
-	terraformClient, err := generateConfigAndGetClient(config)
-	if err != nil {
-		return err
-	}
-	defer terraformClient.Cleanup()
-
-	log.Info("Creating AWS resources")
-	err = terraformClient.Apply()
-	if err != nil {
-		log.Fatalln("Failed to create AWS resources:", err)
-	}
-	log.Info("Successfully deployed AWS resources")
-	return nil
-}
-
-func AWSDestroy(config StackConfig) error {
-	err := checkAWSCreds(config.Region)
-	if err != nil {
-		return err
-	}
-
-	terraformClient, err := generateConfigAndGetClient(config)
-	defer terraformClient.Cleanup()
-
-	log.Info("Destroying AWS resources")
-	err = terraformClient.Destroy()
-	if err != nil {
-		log.Fatalln("Failed to destroy AWS resources:", err)
-	}
-	log.Info("Successfully removed AWS resources")
-	return nil
-}
-
-func checkAWSCreds(region string) error {
-	log.Info("Checking AWS credentials")
-	sess, err := session.NewSession(aws.NewConfig().WithCredentialsChainVerboseErrors(true))
-	if err != nil {
-		return fmt.Errorf("Failed to create new AWS session: %v", err)
-	}
-	s3Client := s3.New(sess, &aws.Config{Region: &region})
-	_, err = s3Client.ListBuckets(&s3.ListBucketsInput{})
-	if err != nil {
-		return fmt.Errorf("Unable to list S3 buckets - make sure you have valid admin AWS credentials: %v", err)
-	}
-	return nil
-}
-
-func s3BucketSetup(config StackConfig) error {
-	sess, err := session.NewSession(aws.NewConfig().WithCredentialsChainVerboseErrors(true))
-	if err != nil {
-		return fmt.Errorf("Failed to create new AWS session: %v", err)
-	}
-	s3Client := s3.New(sess, &aws.Config{Region: &config.Region})
-
-	log.Infof("Creating S3 bucket %s", config.Name)
-	_, err = s3Client.HeadBucket(&s3.HeadBucketInput{Bucket: &config.Name})
-	if err != nil {
-		awsErrCode := err.(awserr.Error).Code()
-		if awsErrCode != awsErrCodeNotFound && awsErrCode != awsErrCodeNoSuchBucket {
-			return fmt.Errorf("Unknown S3 error code: %v", err)
-		}
-
-		bucketInput := &s3.CreateBucketInput{
-			Bucket: &config.Name,
-		}
-		// NOTE the location constraint should only be set if using a bucket OTHER than us-east-1
-		// http://docs.aws.amazon.com/AmazonS3/latest/API/RESTBucketPUT.html
-		if config.Region != "us-east-1" {
-			bucketInput.CreateBucketConfiguration = &s3.CreateBucketConfiguration{
-				LocationConstraint: &config.Region,
-			}
-		}
-
-		_, err = s3Client.CreateBucket(bucketInput)
-		if err != nil {
-			return fmt.Errorf("Failed to create bucket %s - note that this bucket name must be globally unique. %v", config.Name, err)
-		}
-	}
-	return nil
-}
-
-func getAMI(region string) (string, error) {
-	if _, ok := amiMap[region]; !ok {
-		return "", fmt.Errorf("Unknown region %s. Need to manually specify AMI.", region)
-	}
-	return amiMap[region], nil
-}
-
-func generateConfigAndGetClient(config StackConfig) (*TerraformClient, error) {
-	terraformConf, err := generateTerraformConfig(config)
-	if err != nil {
-		return nil, fmt.Errorf("Failed to generate config: %v", err)
-	}
-
-	terraformClient, err := NewTerraformClient(terraformConf, os.Stdout, os.Stdin)
-	if err != nil {
-		return nil, fmt.Errorf("Failed to create client: %v", err)
-	}
-	return terraformClient, nil
 }
