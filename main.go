@@ -17,11 +17,8 @@ var rootCmd = &cobra.Command{
 	Use:   "rattlesnakeos-stack",
 	Short: "Setup AWS infrastructure to build RattlesnakeOS with OTA updates",
 	Args: func(cmd *cobra.Command, args []string) error {
-		// if device != "marlin" && device != "sailfish" && device != "taimen" && device != "walleye" {
-		// 	return errors.New("Must specify either marlin|sailfish|taimen|walleye for device type")
-		// }
-		if device != "marlin" && device != "sailfish" {
-			return errors.New("Must specify either marlin|sailfish for device type")
+		if device != "marlin" && device != "sailfish" && device != "taimen" && device != "walleye" {
+			return errors.New("Must specify either marlin|sailfish|taimen|walleye for device type")
 		}
 		return nil
 	},
