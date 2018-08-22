@@ -133,6 +133,6 @@ version:
 
 zip: all
 	mkdir -p artifacts/zips
-	zip -r artifacts/zips/rattlesnakeos-stack-osx-${VERSION}.zip artifacts/$(VERSION)/darwin/$(TARGET)
-	zip -r artifacts/zips/rattlesnakeos-stack-windows-${VERSION}.zip artifacts/$(VERSION)/windows/$(TARGET).exe
-	zip -r artifacts/zips/rattlesnakeos-stack-linux-${VERSION}.zip artifacts/$(VERSION)/linux/$(TARGET)
+	pushd artifacts/$(VERSION)/darwin && zip -r ../../../artifacts/zips/rattlesnakeos-stack-osx-${VERSION}.zip $(TARGET) && popd
+	pushd artifacts/$(VERSION)/windows && zip -r ../../../artifacts/zips/rattlesnakeos-stack-windows-${VERSION}.zip $(TARGET).exe && popd
+	pushd artifacts/$(VERSION)/linux && zip -r ../../../artifacts/zips/rattlesnakeos-stack-linux-${VERSION}.zip $(TARGET) && popd

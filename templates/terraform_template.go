@@ -195,13 +195,8 @@ resource "aws_iam_role_policy" "rattlesnake_lambda_policy" {
 		"Effect": "Allow",
 		"Action": [
 			"ec2:DescribeSubnets",
-			"ec2:RequestSpotFleet"
-		],
-		"Resource": "*"
-	},
-	{
-		"Effect": "Allow",
-		"Action": [
+			"ec2:RequestSpotFleet",
+			"iam:CreateServiceLinkedRole",
 			"sts:GetCallerIdentity"
 		],
 		"Resource": "*"
