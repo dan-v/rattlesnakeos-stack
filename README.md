@@ -1,8 +1,5 @@
 ## What is RattlesnakeOS
-RattlesnakeOS is privacy focused Android OS based on [AOSP](https://source.android.com/) for Google Pixel phones. It is my migration strategy away from [CopperheadOS](https://en.wikipedia.org/wiki/CopperheadOS) (hence the name similarity) which is no longer maintained. RattlesnakeOS is stock AOSP with no Google apps and a few additional features: [verified boot](https://source.android.com/security/verifiedboot/) with your own signing keys, OTA updates, latest Chromium ([webview](https://www.chromium.org/developers/how-tos/build-instructions-android-webview) + browser), and latest [F-Droid](https://f-droid.org/) (with [privileged extension](https://gitlab.com/fdroid/privileged-extension)).
-
-## What is rattlesnakeos-stack
-Rather than providing random binaries of RattlesnakeOS to install on your phone, I've gone the route of creating a cross platform tool, `rattlesnakeos-stack`, that provisions all of the [AWS](https://aws.amazon.com/) infrastructure needed to continuously build your own personal RattlesnakeOS, with your own signing keys, and your own OTA updates. It uses [AWS Lambda](https://aws.amazon.com/lambda/features/) to provision [EC2 Spot Instances](https://aws.amazon.com/ec2/spot/) that build RattlesnakeOS and upload artifacts to [S3](https://aws.amazon.com/s3/). Resulting OS builds are configured to receive over the air updates from this environment.
+RattlesnakeOS is privacy focused Android OS based on [AOSP](https://source.android.com/) for Google Pixel phones. It is my migration strategy away from [CopperheadOS](https://en.wikipedia.org/wiki/CopperheadOS) (hence the name similarity) which is no longer maintained.
 
 ## Features
 * Based on latest AOSP 9.0 (Android P)
@@ -12,8 +9,11 @@ Rather than providing random binaries of RattlesnakeOS to install on your phone,
 * Latest Chromium [browser](https://www.chromium.org) and [webview](https://www.chromium.org/developers/how-tos/build-instructions-android-webview)
 * Latest [F-Droid](https://f-droid.org/) client and [privileged extension](https://gitlab.com/fdroid/privileged-extension)
 * No Google apps pre-installed
-* Full end to end setup of build environment for RattlesnakeOS in AWS
-* Costs a few dollars a month to run (see FAQ for additional cost breakdown)
+
+## What is rattlesnakeos-stack
+Rather than providing random binaries of RattlesnakeOS to install on your phone, I've gone the route of creating a cross platform tool, `rattlesnakeos-stack`, that provisions all of the [AWS](https://aws.amazon.com/) infrastructure needed to continuously build your own personal RattlesnakeOS, with your own signing keys, and your own OTA updates. It uses [AWS Lambda](https://aws.amazon.com/lambda/features/) to provision [EC2 Spot Instances](https://aws.amazon.com/ec2/spot/) that build RattlesnakeOS and upload artifacts to [S3](https://aws.amazon.com/s3/). Resulting OS builds are configured to receive over the air updates from this environment. It only costs a few dollars a month to run (see FAQ for detailed cost breakdown).
+
+![](/images/overview.png?raw=true)
 
 ## Prerequisites
 * An AWS account - you can [create an AWS account](https://portal.aws.amazon.com/billing/signup) if you don't have one. 
@@ -113,7 +113,7 @@ Flags:
 7. <b>How can I prevent the EC2 instance from immediately terminating on error so I can debug?</b> There is a flag you can pass `rattlesnakeos-stack` called `--prevent-shutdown`. Note that this will keep the instance online for 12 hours or until you manually terminate it.
 8. <b>Why did my EC2 instance randomly terminate?</b> If there wasn't an error notification, this is likely because the [Spot Instance](https://aws.amazon.com/ec2/spot/) bid was not high enough at this specific time. You can see historical spot instance pricing in the [EC2 console](https://console.aws.amazon.com/ec2sp/v1/spot/home). Click `Pricing History`, select c4.4xlarge for `Instance Type` and pick a date range. If you want to avoid having your instance terminated, you can pass an additional flag to `rattlesnakeos-stack` with a higher than default bid: `--spot-price 1.50`
 9. <b>How do OTA updates work?</b> If you go to `Settings->System update settings` you'll see the updater app settings. The updater app will check S3 to see if there are updates and if it finds one will download and apply it your device. There is no progress indicator unfortunately - you'll just got a notification when it's done and it will ask you to reboot. If you want to force a check for OTA updates, you can toggle the `Require battery above warning level` setting and it will check for a new build in your S3 bucket.
-10. <b>What network carriers are supported?</b> I only have access to a single device and carrier to test this on, so I can't make any promises about it working with your specific carrier. Confirmed working: T-Mobile, Rogers, Cricket. Likely not to work: Sprint (has requirements about specific carrier app being on phone to work), Project Fi.
+10. <b>What network carriers are supported?</b> I only have access to a single device and carrier to test this on, so I can't make any promises about it working with your specific carrier. Confirmed working: T-Mobile, Rogers, Cricket, Ting. Likely not to work: Sprint (has requirements about specific carrier app being on phone to work), Project Fi.
 
 ## Uninstalling
 ### How to uninstall rattlesnakeos-stack
