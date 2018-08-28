@@ -90,7 +90,9 @@ get_latest_versions() {
   fi
   
   # check for latest stable chromium version
-  LATEST_CHROMIUM=$(curl -s "$CHROME_URL_LATEST" | jq -r '.[] | select(.os == "android") | .versions[] | select(.channel == "'$CHROME_CHANNEL'") | .current_version' || true)
+  #LATEST_CHROMIUM=$(curl -s "$CHROME_URL_LATEST" | jq -r '.[] | select(.os == "android") | .versions[] | select(.channel == "'$CHROME_CHANNEL'") | .current_version' || true)
+  # TODO: Unpin Chromium version
+  LATEST_CHROMIUM="69.0.3497.53"
   if [ -z "$LATEST_CHROMIUM" ]; then
     aws_notify_simple "ERROR: Unable to get latest Chromium version details. Stopping build."
     exit 1
@@ -269,9 +271,9 @@ build_chromium() {
   cd src
   git checkout "$CHROMIUM_REVISION" -f || true
   git clean -dff || true
-  # temporary workaround for this issue (https://bugs.chromium.org/p/chromium/issues/detail?id=856344)
-  sed -i "/vars = {/a 'chrome_git': 'https://chrome-internal.googlesource.com'," DEPS
   yes | gclient sync --with_branch_heads --jobs 32 -RDf
+  # TODO: temporary workaround for build issue
+  git checkout third_party/proguard/lib/proguard.jar || true
 
   # install dependencies
   echo ttf-mscorefonts-installer msttcorefonts/accepted-mscorefonts-eula select true | sudo debconf-set-selections
