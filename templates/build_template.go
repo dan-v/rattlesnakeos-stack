@@ -115,17 +115,8 @@ get_latest_versions() {
   fi
   AOSP_BRANCH=$(curl -s https://source.android.com/setup/start/build-numbers | grep -A1 "${AOSP_BUILD}" | tail -1 | cut -f2 -d">"|cut -f1 -d"<")
   if [ -z "$AOSP_BRANCH" ]; then
-    # TODO: temporary workaround until build-numbers are updated on website
-    if [ "$AOSP_BUILD" == "PPR2.180905.006" ]; then
-      AOSP_BRANCH="android-9.0.0_r7"
-    fi
-    if [ "$AOSP_BUILD" == "PPR2.180905.005" ]; then
-      AOSP_BRANCH="android-9.0.0_r6"
-    fi
-    if [ -z "$AOSP_BRANCH" ]; then
-      aws_notify_simple "ERROR: Unable to get latest AOSP branch information. Stopping build. This can happen if https://source.android.com/setup/start/build-numbers hasn't been updated yet with newly released factory images."
-      exit 1
-    fi
+    aws_notify_simple "ERROR: Unable to get latest AOSP branch information. Stopping build. This can happen if https://source.android.com/setup/start/build-numbers hasn't been updated yet with newly released factory images."
+    exit 1
   fi
 }
 
@@ -380,9 +371,6 @@ setup_vendor() {
   pushd "${BUILD_DIR}/vendor/android-prepare-vendor"
   sed -i.bkp 's/  USE_DEBUGFS=true/  USE_DEBUGFS=false/; s/  # SYS_TOOLS/  SYS_TOOLS/; s/  # _UMOUNT=/  _UMOUNT=/' execute-all.sh
 
-  # TODO: temporary workaround (see: https://github.com/anestisb/android-prepare-vendor/pull/132)
-  sed -i.bkp 's@<a href=.*$DEV_ALIAS-$BUILDID"@<a href=.*$DEV_ALIAS-$BUILDID-"@' scripts/download-nexus-image.sh
-
   # get vendor files
   yes | "${BUILD_DIR}/vendor/android-prepare-vendor/execute-all.sh" --fuse-ext2 --device "${DEVICE}" --buildID "${AOSP_BUILD}" --output "${BUILD_DIR}/vendor/android-prepare-vendor"
   aws s3 cp - "s3://${AWS_RELEASE_BUCKET}/${DEVICE}-vendor" --acl public-read <<< "${AOSP_BUILD}" || true
@@ -422,7 +410,6 @@ apply_patches() {
   echo "=================================="
   echo "Running apply_patches"
   echo "=================================="
-  patch_carrier_fixes
   patch_apps
   patch_base_config
   patch_device_config
@@ -431,15 +418,6 @@ apply_patches() {
   patch_fdroid
   patch_priv_ext
   patch_launcher
-}
-
-patch_carrier_fixes() {
-  # apply apn fix for pixel 2 only - hopefully fixed in next version of Android
-  # see: https://github.com/AndroidHardeningArchive/device_google_muskie/commit/06c1db7b8dee7134e898fdf0b726fbaaaf6f3fe7#diff-db95ef96c4775967b266a21faf164a08
-  if [ "$DEVICE" == 'walleye' ]; then
-    export TARGET_PREBUILT_KERNEL=${BUILD_DIR}/device/google/wahoo-kernel/Image.lz4-dtb
-    sed -i '1 i\PRODUCT_COPY_FILES := device/google/wahoo/apns-full-conf.xml:system/etc/apns-conf.xml' ${BUILD_DIR}/device/google/muskie/aosp_walleye.mk
-  fi
 }
 
 patch_base_config() {
