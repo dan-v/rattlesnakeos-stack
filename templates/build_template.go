@@ -52,8 +52,7 @@ AWS_SNS_ARN=$(aws --region ${REGION} sns list-topics --query 'Topics[0].TopicArn
 BUILD_TARGET="release aosp_${DEVICE} ${BUILD_TYPE}"
 RELEASE_URL="https://${AWS_RELEASE_BUCKET}.s3.amazonaws.com"
 RELEASE_CHANNEL="${DEVICE}-${BUILD_CHANNEL}"
-# TODO: can switch back to stable once M69 is stable
-CHROME_CHANNEL="beta"
+CHROME_CHANNEL="stable"
 BUILD_DATE=$(date +%Y.%m.%d.%H)
 BUILD_TIMESTAMP=$(date +%s)
 BUILD_DIR="$HOME/rattlesnake-os"
@@ -90,9 +89,7 @@ get_latest_versions() {
   fi
   
   # check for latest stable chromium version
-  #LATEST_CHROMIUM=$(curl -s "$CHROME_URL_LATEST" | jq -r '.[] | select(.os == "android") | .versions[] | select(.channel == "'$CHROME_CHANNEL'") | .current_version' || true)
-  # TODO: Unpin Chromium version
-  LATEST_CHROMIUM="69.0.3497.53"
+  LATEST_CHROMIUM=$(curl -s "$CHROME_URL_LATEST" | jq -r '.[] | select(.os == "android") | .versions[] | select(.channel == "'$CHROME_CHANNEL'") | .current_version' || true)
   if [ -z "$LATEST_CHROMIUM" ]; then
     aws_notify_simple "ERROR: Unable to get latest Chromium version details. Stopping build."
     exit 1
@@ -113,13 +110,22 @@ get_latest_versions() {
   # attempt to automatically pick latest build version and branch. note this is likely to break with any page redesign. should also add some validation here.
   AOSP_BUILD=$(curl -s https://developers.google.com/android/images | grep -A1 "${DEVICE}" | egrep '[a-zA-Z]+ [0-9]{4}\)' | grep "${ANDROID_VERSION}" | tail -1 | cut -d"(" -f2 | cut -d"," -f1)
   if [ -z "$AOSP_BUILD" ]; then
-    aws_notify_simple "ERROR: Unable to get latest AOSP build information. Stopping build."
+    aws_notify_simple "ERROR: Unable to get latest AOSP build information. Stopping build. This lookup is pretty fragile and can break on any page redesign of https://developers.google.com/android/images"
     exit 1
   fi
   AOSP_BRANCH=$(curl -s https://source.android.com/setup/start/build-numbers | grep -A1 "${AOSP_BUILD}" | tail -1 | cut -f2 -d">"|cut -f1 -d"<")
   if [ -z "$AOSP_BRANCH" ]; then
-    aws_notify_simple "ERROR: Unable to get latest AOSP branch information. Stopping build."
-    exit 1
+    # TODO: temporary workaround until build-numbers are updated on website
+    if [ "$AOSP_BUILD" == "PPR2.180905.006" ]; then
+      AOSP_BRANCH="android-9.0.0_r7"
+    fi
+    if [ "$AOSP_BUILD" == "PPR2.180905.005" ]; then
+      AOSP_BRANCH="android-9.0.0_r6"
+    fi
+    if [ -z "$AOSP_BRANCH" ]; then
+      aws_notify_simple "ERROR: Unable to get latest AOSP branch information. Stopping build. This can happen if https://source.android.com/setup/start/build-numbers hasn't been updated yet with newly released factory images."
+      exit 1
+    fi
   fi
 }
 
@@ -267,17 +273,24 @@ build_chromium() {
   # fetch chromium 
   mkdir -p $HOME/chromium
   cd $HOME/chromium
-  fetch --nohooks android || true
+  fetch --nohooks android
   cd src
-  git checkout "$CHROMIUM_REVISION" -f || true
-  git clean -dff || true
-  yes | gclient sync --with_branch_heads --jobs 32 -RDf
-  # TODO: temporary workaround for build issue
-  git checkout third_party/proguard/lib/proguard.jar || true
+
+  # checkout specific revision
+  git checkout "$CHROMIUM_REVISION" -f
 
   # install dependencies
   echo ttf-mscorefonts-installer msttcorefonts/accepted-mscorefonts-eula select true | sudo debconf-set-selections
   sudo ./build/install-build-deps-android.sh
+
+  # run gclient sync (runhooks will run as part of this)
+  yes | gclient sync --with_branch_heads --jobs 32 -RDf
+
+  # cleanup any files in tree not part of this revision
+  git clean -dff
+
+  # reset any modifications
+  git checkout -- .
 
   mkdir -p out/Default
   cat <<EOF > out/Default/args.gn
@@ -297,10 +310,8 @@ android_default_version_name = "$CHROMIUM_REVISION"
 android_default_version_code = "$DEFAULT_VERSION"
 EOF
 
-  build/linux/sysroot_scripts/install-sysroot.py --arch=i386
-  build/linux/sysroot_scripts/install-sysroot.py --arch=amd64
   gn gen out/Default
-  ninja -C out/Default/ monochrome_public_apk
+  autoninja -C out/Default/ monochrome_public_apk
 
   mkdir -p ${BUILD_DIR}/external/chromium/prebuilt/arm64
   cp out/Default/apks/MonochromePublic.apk ${BUILD_DIR}/external/chromium/prebuilt/arm64/
@@ -368,6 +379,9 @@ setup_vendor() {
   echo "=================================="
   pushd "${BUILD_DIR}/vendor/android-prepare-vendor"
   sed -i.bkp 's/  USE_DEBUGFS=true/  USE_DEBUGFS=false/; s/  # SYS_TOOLS/  SYS_TOOLS/; s/  # _UMOUNT=/  _UMOUNT=/' execute-all.sh
+
+  # TODO: temporary workaround (see: https://github.com/anestisb/android-prepare-vendor/pull/132)
+  sed -i.bkp 's@<a href=.*$DEV_ALIAS-$BUILDID"@<a href=.*$DEV_ALIAS-$BUILDID-"@' scripts/download-nexus-image.sh
 
   # get vendor files
   yes | "${BUILD_DIR}/vendor/android-prepare-vendor/execute-all.sh" --fuse-ext2 --device "${DEVICE}" --buildID "${AOSP_BUILD}" --output "${BUILD_DIR}/vendor/android-prepare-vendor"
