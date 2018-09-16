@@ -18,16 +18,19 @@ const (
 )
 
 type AWSStackConfig struct {
-	Name            string
-	Region          string
-	Device          string
-	AMI             string
-	SpotPrice       string
-	SSHKey          string
-	PreventShutdown bool
-	Version         string
-	Schedule        string
-	Force           bool
+	Name              string
+	Region            string
+	Device            string
+	InstanceType      string
+	InstanceRegions   string
+	SkipPrice         string
+	MaxPrice          string
+	SSHKey            string
+	PreventShutdown   bool
+	Version           string
+	Schedule          string
+	Force             bool
+	SkipChromiumBuild bool
 }
 
 type AWSStack struct {
@@ -48,14 +51,6 @@ func NewAWSStack(config *AWSStackConfig) (*AWSStack, error) {
 	err = s3BucketSetup(config.Name, config.Region)
 	if err != nil {
 		return nil, err
-	}
-
-	if config.AMI == "" {
-		ami, err := getAMI(config.Region)
-		if err != nil {
-			return nil, err
-		}
-		config.AMI = ami
 	}
 
 	renderedLambdaFunction, err := renderTemplate(templates.LambdaTemplate, config)
@@ -153,35 +148,4 @@ func checkAWSCreds(region string) error {
 		return fmt.Errorf("Unable to list S3 buckets - make sure you have valid admin AWS credentials: %v", err)
 	}
 	return nil
-}
-
-func getAMI(region string) (string, error) {
-	if _, ok := amiMap[region]; !ok {
-		return "", fmt.Errorf("Unknown region %s. Need to manually specify AMI.", region)
-	}
-	return amiMap[region], nil
-}
-
-// ubuntu 16.04 AMI hvm:ebs-ssd
-// https://cloud-images.ubuntu.com/locator/ec2/
-var amiMap = map[string]string{
-	"ap-northeast-1": "ami-940cdceb",
-	"ap-northeast-2": "ami-467acf28",
-	"ap-northeast-3": "ami-85b3bdf8",
-	"ap-south-1":     "ami-188fba77",
-	"ap-southeast-1": "ami-51a7aa2d",
-	"ap-southeast-2": "ami-47c21a25",
-	"ca-central-1":   "ami-db9e1cbf",
-	"cn-north-1":     "ami-b117c9dc",
-	"cn-northwest-1": "ami-39b8ac5b",
-	"eu-central-1":   "ami-de8fb135",
-	"eu-west-1":      "ami-2a7d75c0",
-	"eu-west-2":      "ami-6b3fd60c",
-	"eu-west-3":      "ami-20ee5e5d",
-	"sa-east-1":      "ami-8eecc9e2",
-	"us-east-1":      "ami-759bc50a",
-	"us-east-2":      "ami-5e8bb23b",
-	"us-gov-west-1":  "ami-0661f767",
-	"us-west-1":      "ami-4aa04129",
-	"us-west-2":      "ami-ba602bc2",
 }

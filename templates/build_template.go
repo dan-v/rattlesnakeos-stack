@@ -33,6 +33,9 @@ PREVENT_SHUTDOWN=<% .PreventShutdown %>
 # force build even if no new versions exist of components
 FORCE_BUILD=<% .Force %>
 
+# skip chromium build if there is an existing build
+SKIP_CHROMIUM_BUILD=<% .SkipChromiumBuild %>
+
 # pin to specific version of android
 ANDROID_VERSION="9.0"
 
@@ -41,6 +44,10 @@ BUILD_TYPE="user"
 
 # build channel (stable or beta)
 BUILD_CHANNEL="stable"
+
+# get current instance details for reference
+INSTANCE_TYPE=$(curl -s http://169.254.169.254/latest/meta-data/instance-type)
+INSTANCE_REGION=$(curl -s http://169.254.169.254/latest/dynamic/instance-identity/document | awk -F\" '/region/ {print $4}')
 
 # aws settings
 AWS_KEYS_BUCKET="${STACK_NAME}-keys"
@@ -143,12 +150,16 @@ check_for_new_versions() {
   fi
 
   # check chromium
-  existing_chromium=$(aws s3 cp "s3://${AWS_RELEASE_BUCKET}/chromium/revision" - || true)
-  if [ "$existing_chromium" == "$LATEST_CHROMIUM" ]; then
-    echo "Chromium build ($existing_chromium) is up to date"
-  else
-    echo "Chromium needs to be updated to ${LATEST_CHROMIUM}"
-    needs_update=true
+  if [ "$SKIP_CHROMIUM_BUILD" = false ]; then
+    existing_chromium=$(aws s3 cp "s3://${AWS_RELEASE_BUCKET}/chromium/revision" - || true)
+    if [ "$existing_chromium" == "$LATEST_CHROMIUM" ]; then
+      echo "Chromium build ($existing_chromium) is up to date"
+    else
+      echo "Chromium needs to be updated to ${LATEST_CHROMIUM}"
+      needs_update=true
+    fi
+  else 
+    echo "Skipping Chromium version check as SKIP_CHROMIUM_BUILD=true"
   fi
 
   # check fdroid
@@ -235,6 +246,16 @@ check_chromium() {
   echo "=================================="
   current=$(aws s3 cp "s3://${AWS_RELEASE_BUCKET}/chromium/revision" - || true)
   echo "Chromium current: $current"
+
+  if [ "$SKIP_CHROMIUM_BUILD" = true ]; then
+    if [ -z "$current" ]; then
+      echo "Can't skip Chromium build as requested as Chromium hasn't been built yet previously"
+    else
+      echo "Skipping Chromium build as requested"
+      aws s3 cp "s3://${AWS_RELEASE_BUCKET}/chromium/MonochromePublic.apk" ${BUILD_DIR}/external/chromium/prebuilt/arm64/
+      return
+    fi
+  fi 
 
   mkdir -p $HOME/chromium
   cd $HOME/chromium
@@ -609,8 +630,8 @@ aws_notify() {
   fi
   ELAPSED="$(($SECONDS / 3600))hrs $((($SECONDS / 60) % 60))min $(($SECONDS % 60))sec"
   aws sns publish --region ${REGION} --topic-arn "$AWS_SNS_ARN" \
-    --message="$(printf "$1\n  Device: %s\n  Stack Name: %s\n  Stack Version: %s %s\n  Release Channel: %s\n  Build Date: %s\n  Elapsed Time: %s\n  AOSP Build: %s\n  AOSP Branch: %s\n  Chromium Version: %s\n  F-Droid Version: %s\n  F-Droid Priv Extension Version: %s\n%s" \
-      "${DEVICE}" "${STACK_NAME}" "${STACK_VERSION}" "${STACK_UPDATE_MESSAGE}" "${RELEASE_CHANNEL}" "${BUILD_DATE}" "${ELAPSED}" "${AOSP_BUILD}" "${AOSP_BRANCH}" "${LATEST_CHROMIUM}" "${FDROID_CLIENT_VERSION}" "${FDROID_PRIV_EXT_VERSION}" "${LOGOUTPUT}")" || true
+    --message="$(printf "$1\n  Device: %s\n  Stack Name: %s\n  Stack Version: %s %s\n  Stack Region: %s\n  Release Channel: %s\n  Instance Type: %s\n  Instance Region: %s\n  Build Date: %s\n  Elapsed Time: %s\n  AOSP Build: %s\n  AOSP Branch: %s\n  Chromium Version: %s\n  F-Droid Version: %s\n  F-Droid Priv Extension Version: %s\n%s" \
+      "${DEVICE}" "${STACK_NAME}" "${STACK_VERSION}" "${STACK_UPDATE_MESSAGE}" "${REGION}" "${RELEASE_CHANNEL}" "${INSTANCE_TYPE}" "${INSTANCE_REGION}" "${BUILD_DATE}" "${ELAPSED}" "${AOSP_BUILD}" "${AOSP_BRANCH}" "${LATEST_CHROMIUM}" "${FDROID_CLIENT_VERSION}" "${FDROID_PRIV_EXT_VERSION}" "${LOGOUTPUT}")" || true
 }
 
 aws_logging() {

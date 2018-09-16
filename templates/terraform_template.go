@@ -196,8 +196,11 @@ resource "aws_iam_role_policy" "rattlesnake_lambda_policy" {
 		"Action": [
 			"ec2:DescribeSubnets",
 			"ec2:RequestSpotFleet",
+			"ec2:DescribeSpotPriceHistory",
 			"iam:CreateServiceLinkedRole",
-			"sts:GetCallerIdentity"
+			"sts:GetCallerIdentity",
+			"sns:Publish",
+			"ec2:DescribeKeyPairs"
 		],
 		"Resource": "*"
 	}
@@ -309,7 +312,7 @@ resource "aws_lambda_function" "rattlesnake_lambda_build" {
 	handler          = "lambda_spot_function.lambda_handler"
 	source_code_hash = "${base64sha256(file("${var.lambda_build_zip_file}"))}"
 	runtime          = "python3.6"
-	timeout          = "20"
+	timeout          = "60"
 }
 
 ###################
