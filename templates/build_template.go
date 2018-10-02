@@ -122,8 +122,14 @@ get_latest_versions() {
   fi
   AOSP_BRANCH=$(curl -s https://source.android.com/setup/start/build-numbers | grep -A1 "${AOSP_BUILD}" | tail -1 | cut -f2 -d">"|cut -f1 -d"<")
   if [ -z "$AOSP_BRANCH" ]; then
-    aws_notify_simple "ERROR: Unable to get latest AOSP branch information. Stopping build. This can happen if https://source.android.com/setup/start/build-numbers hasn't been updated yet with newly released factory images."
-    exit 1
+    # TODO: temporary workaround until build-numbers are updated on website
+    if [ "$AOSP_BUILD" == "PPR2.181005.003" ]; then
+      AOSP_BRANCH="android-9.0.0_r10"
+    fi
+    if [ -z "$AOSP_BRANCH" ]; then
+      aws_notify_simple "ERROR: Unable to get latest AOSP branch information. Stopping build. This can happen if https://source.android.com/setup/start/build-numbers hasn't been updated yet with newly released factory images."
+      exit 1
+    fi
   fi
 }
 
