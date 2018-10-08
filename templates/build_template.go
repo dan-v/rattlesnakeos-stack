@@ -45,9 +45,15 @@ BUILD_TYPE="user"
 # build channel (stable or beta)
 BUILD_CHANNEL="stable"
 
+# user customizable things
+REPO_PATCHES=<% .RepoPatches %>
+REPO_PREBUILTS=<% .RepoPrebuilts %>
+HOSTS_FILE=<% .HostsFile %>
+
 # get current instance details for reference
 INSTANCE_TYPE=$(curl -s http://169.254.169.254/latest/meta-data/instance-type)
 INSTANCE_REGION=$(curl -s http://169.254.169.254/latest/dynamic/instance-identity/document | awk -F\" '/region/ {print $4}')
+INSTANCE_IP=$(curl -s http://169.254.169.254/latest/meta-data/public-ipv4)
 
 # aws settings
 AWS_KEYS_BUCKET="${STACK_NAME}-keys"
@@ -437,6 +443,7 @@ apply_patches() {
   echo "=================================="
   echo "Running apply_patches"
   echo "=================================="
+  patch_custom
   patch_apps
   patch_base_config
   patch_device_config
@@ -445,6 +452,44 @@ apply_patches() {
   patch_fdroid
   patch_priv_ext
   patch_launcher
+}
+
+patch_custom() {
+  # allow custom patches to be applied to AOSP build tree
+  patches_dir="$HOME/patches"
+  if [ -z "$REPO_PATCHES" ]; then
+    echo "No custom patches requested"
+  else
+    echo "Cloning custom patches $REPO_PATCHES to ${patches_dir}"
+    git clone $REPO_PATCHES ${patches_dir}
+    pushd $BUILD_DIR
+    while read patch; do
+      echo "Applying patch $patch"
+      patch -p1 < ${patches_dir}/$patch
+    done < ${patches_dir}/manifest
+  fi
+  
+  # allow prebuilt applications to be added to build tree
+  prebuilt_dir="$BUILD_DIR/packages/apps/Custom"
+  if [ -z "$REPO_PREBUILTS" ]; then
+    echo "No custom apks requested"
+  else
+    echo "Putting custom prebuilts from $REPO_PREBUILTS in build tree location ${prebuilt_dir}"
+    git clone $REPO_PREBUILTS ${prebuilt_dir}
+    for file in ${prebuilt_dir}/*/ ; do 
+      package_name=$(awk -F"=" '/LOCAL_MODULE /{print $2}' $file/Android.mk)
+      sed -i "\$aPRODUCT_PACKAGES += ${package_name}" ${BUILD_DIR}/build/make/target/product/core.mk
+    done
+  fi
+
+  # allow custom hosts file
+  hosts_file_location="$BUILD_DIR/system/core/rootdir/etc/hosts"
+  if [ -z "$HOSTS_FILE" ]; then
+    echo "No custom hosts file requested"
+  else
+    echo "Replacing hosts file with $HOSTS_FILE"
+    wget -O $hosts_file_location "$HOSTS_FILE"
+  fi
 }
 
 patch_base_config() {
@@ -636,8 +681,8 @@ aws_notify() {
   fi
   ELAPSED="$(($SECONDS / 3600))hrs $((($SECONDS / 60) % 60))min $(($SECONDS % 60))sec"
   aws sns publish --region ${REGION} --topic-arn "$AWS_SNS_ARN" \
-    --message="$(printf "$1\n  Device: %s\n  Stack Name: %s\n  Stack Version: %s %s\n  Stack Region: %s\n  Release Channel: %s\n  Instance Type: %s\n  Instance Region: %s\n  Build Date: %s\n  Elapsed Time: %s\n  AOSP Build: %s\n  AOSP Branch: %s\n  Chromium Version: %s\n  F-Droid Version: %s\n  F-Droid Priv Extension Version: %s\n%s" \
-      "${DEVICE}" "${STACK_NAME}" "${STACK_VERSION}" "${STACK_UPDATE_MESSAGE}" "${REGION}" "${RELEASE_CHANNEL}" "${INSTANCE_TYPE}" "${INSTANCE_REGION}" "${BUILD_DATE}" "${ELAPSED}" "${AOSP_BUILD}" "${AOSP_BRANCH}" "${LATEST_CHROMIUM}" "${FDROID_CLIENT_VERSION}" "${FDROID_PRIV_EXT_VERSION}" "${LOGOUTPUT}")" || true
+    --message="$(printf "$1\n  Device: %s\n  Stack Name: %s\n  Stack Version: %s %s\n  Stack Region: %s\n  Release Channel: %s\n  Instance Type: %s\n  Instance Region: %s\n  Instance IP: %s\n  Build Date: %s\n  Elapsed Time: %s\n  AOSP Build: %s\n  AOSP Branch: %s\n  Chromium Version: %s\n  F-Droid Version: %s\n  F-Droid Priv Extension Version: %s\n%s" \
+      "${DEVICE}" "${STACK_NAME}" "${STACK_VERSION}" "${STACK_UPDATE_MESSAGE}" "${REGION}" "${RELEASE_CHANNEL}" "${INSTANCE_TYPE}" "${INSTANCE_REGION}" "${INSTANCE_IP}" "${BUILD_DATE}" "${ELAPSED}" "${AOSP_BUILD}" "${AOSP_BRANCH}" "${LATEST_CHROMIUM}" "${FDROID_CLIENT_VERSION}" "${FDROID_PRIV_EXT_VERSION}" "${LOGOUTPUT}")" || true
 }
 
 aws_logging() {

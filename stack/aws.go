@@ -31,6 +31,9 @@ type AWSStackConfig struct {
 	Schedule          string
 	Force             bool
 	SkipChromiumBuild bool
+	RepoPatches       string
+	RepoPrebuilts     string
+	HostsFile         string
 }
 
 type AWSStack struct {
