@@ -8,22 +8,27 @@ from urllib.request import urlopen
 from urllib.request import HTTPError
 from datetime import datetime, timedelta
 
-# ubuntu 16.04 AMI hvm:ebs-ssd: https://cloud-images.ubuntu.com/locator/ec2/
+# ubuntu 18.04 AMI hvm:ebs-ssd: https://cloud-images.ubuntu.com/locator/ec2/
 REGION_AMIS = {
-    "ap-northeast-1": "ami-940cdceb",
-    "ap-northeast-2": "ami-467acf28",
-    "ap-south-1":     "ami-188fba77",
-    "ap-southeast-1": "ami-51a7aa2d",
-    "ap-southeast-2": "ami-47c21a25",
-    "ca-central-1":   "ami-db9e1cbf",
-    "eu-central-1":   "ami-de8fb135",
-    "eu-west-1":      "ami-2a7d75c0",
-    "eu-west-2":      "ami-6b3fd60c",
-    "sa-east-1":      "ami-8eecc9e2",
-    "us-east-1":      "ami-759bc50a",
-    "us-east-2":      "ami-5e8bb23b",
-    "us-west-1":      "ami-4aa04129",
-    "us-west-2":      "ami-ba602bc2"
+    "us-east-1": "ami-0ac019f4fcb7cb7e6",
+    "us-west-1": "ami-063aa838bd7631e0b",
+    "ap-northeast-3": "ami-05e896b95030bd37c",
+    "ap-northeast-2": "ami-06e7b9c5e0c4dd014",
+    "ap-northeast-1": "ami-07ad4b1c3af1ea214",
+    "sa-east-1": "ami-03c6239555bb12112",
+    "ap-southeast-1": "ami-0c5199d385b432989",
+    "ca-central-1": "ami-0427e8367e3770df1",
+    "ap-southeast-2": "ami-07a3bd4944eb120a0",
+    "us-west-2": "ami-0bbe6b35405ecebdb",
+    "us-east-2": "ami-0f65671a86f061fcd",
+    "ap-south-1": "ami-0d773a3b7bb2bb1c1",
+    "eu-central-1": "ami-0bdf93799014acdc4",
+    "eu-west-1": "ami-00035f41c82244dab",
+    "eu-west-2": "ami-0b0a60c0a2bd40612",
+    "eu-west-3": "ami-08182c55a1c188dee",
+    "cn-north-1": "ami-05596fb52c3802012",
+    "cn-northwest-1": "ami-03f7db8b059795736",
+    "us-gov-west-1": "ami-33dc4252"
 }
 
 NAME = '<% .Name %>'

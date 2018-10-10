@@ -50,18 +50,17 @@ REPO_PATCHES=<% .RepoPatches %>
 REPO_PREBUILTS=<% .RepoPrebuilts %>
 HOSTS_FILE=<% .HostsFile %>
 
-# get current instance details for reference
-INSTANCE_TYPE=$(curl -s http://169.254.169.254/latest/meta-data/instance-type)
-INSTANCE_REGION=$(curl -s http://169.254.169.254/latest/dynamic/instance-identity/document | awk -F\" '/region/ {print $4}')
-INSTANCE_IP=$(curl -s http://169.254.169.254/latest/meta-data/public-ipv4)
-
 # aws settings
 AWS_KEYS_BUCKET="${STACK_NAME}-keys"
 AWS_RELEASE_BUCKET="${STACK_NAME}-release"
 AWS_LOGS_BUCKET="${STACK_NAME}-logs"
 AWS_SNS_ARN=$(aws --region ${REGION} sns list-topics --query 'Topics[0].TopicArn' --output text | cut -d":" -f1,2,3,4,5)":${STACK_NAME}"
+INSTANCE_TYPE=$(curl -s http://169.254.169.254/latest/meta-data/instance-type)
+INSTANCE_REGION=$(curl -s http://169.254.169.254/latest/dynamic/instance-identity/document | awk -F\" '/region/ {print $4}')
+INSTANCE_IP=$(curl -s http://169.254.169.254/latest/meta-data/public-ipv4)
 
 # build settings
+SECONDS=0
 BUILD_TARGET="release aosp_${DEVICE} ${BUILD_TYPE}"
 RELEASE_URL="https://${AWS_RELEASE_BUCKET}.s3.amazonaws.com"
 RELEASE_CHANNEL="${DEVICE}-${BUILD_CHANNEL}"
@@ -71,8 +70,7 @@ BUILD_TIMESTAMP=$(date +%s)
 BUILD_DIR="$HOME/rattlesnake-os"
 CERTIFICATE_SUBJECT='/CN=RattlesnakeOS'
 OFFICIAL_FDROID_KEY="43238d512c1e5eb2d6569f4a3afbf5523418b82e0a3ed1552770abb9a9c9ccab"
-MARLIN_KERNEL_SOURCE_DIR="${BUILD_DIR}/kernel/google/marlin"
-SECONDS=0
+MARLIN_KERNEL_SOURCE_DIR="${HOME}/kernel/google/marlin"
 
 # urls
 ANDROID_SDK_URL="https://dl.google.com/android/repository/sdk-tools-linux-4333796.zip"
@@ -91,55 +89,56 @@ FDROID_PRIV_EXT_VERSION=
 AOSP_BUILD=
 AOSP_BRANCH=
 get_latest_versions() {
+  log_header ${FUNCNAME}
+
   sudo apt-get -y install jq
   
   # check if running latest stack
-  LATEST_STACK_VERSION=$(curl -s "$STACK_URL_LATEST" | jq -r '.name' || true)
-  if [ "$LATEST_STACK_VERSION" == "$STACK_VERSION" ]; then
+  LATEST_STACK_VERSION=$(curl --fail -s "$STACK_URL_LATEST" | jq -r '.name')
+  if [ -z "$LATEST_STACK_VERSION" ]; then
+    aws_notify_simple "ERROR: Unable to get latest rattlesnakeos-stack version details. Stopping build."
+    exit 1
+  elif [ "$LATEST_STACK_VERSION" == "$STACK_VERSION" ]; then
     echo "Running the latest rattlesnakeos-stack version $LATEST_STACK_VERSION"
   else
     STACK_UPDATE_MESSAGE="WARNING: you should upgrade to the latest version: ${LATEST_STACK_VERSION}"
   fi
   
   # check for latest stable chromium version
-  LATEST_CHROMIUM=$(curl -s "$CHROME_URL_LATEST" | jq -r '.[] | select(.os == "android") | .versions[] | select(.channel == "'$CHROME_CHANNEL'") | .current_version' || true)
+  LATEST_CHROMIUM=$(curl --fail -s "$CHROME_URL_LATEST" | jq -r '.[] | select(.os == "android") | .versions[] | select(.channel == "'$CHROME_CHANNEL'") | .current_version')
   if [ -z "$LATEST_CHROMIUM" ]; then
     aws_notify_simple "ERROR: Unable to get latest Chromium version details. Stopping build."
     exit 1
   fi
   
   # fdroid - get latest non alpha tags from gitlab
-  FDROID_CLIENT_VERSION=$(curl -s "$FDROID_CLIENT_URL_LATEST" | jq -r '[.[] | select(.name | test("^[0-9]+\\.[0-9]+")) | select(.name | contains("alpha") | not) | select(.name | contains("ota") | not)][0] | .name')
+  FDROID_CLIENT_VERSION=$(curl --fail -s "$FDROID_CLIENT_URL_LATEST" | jq -r '[.[] | select(.name | test("^[0-9]+\\.[0-9]+")) | select(.name | contains("alpha") | not) | select(.name | contains("ota") | not)][0] | .name')
   if [ -z "$FDROID_CLIENT_VERSION" ]; then
     aws_notify_simple "ERROR: Unable to get latest F-Droid version details. Stopping build."
     exit 1
   fi
-  FDROID_PRIV_EXT_VERSION=$(curl -s "$FDROID_PRIV_EXT_URL_LATEST" | jq -r '[.[] | select(.name | test("^[0-9]+\\.[0-9]+")) | select(.name | contains("alpha") | not) | select(.name | contains("ota") | not)][0] | .name')
+  FDROID_PRIV_EXT_VERSION=$(curl --fail -s "$FDROID_PRIV_EXT_URL_LATEST" | jq -r '[.[] | select(.name | test("^[0-9]+\\.[0-9]+")) | select(.name | contains("alpha") | not) | select(.name | contains("ota") | not)][0] | .name')
   if [ -z "$FDROID_PRIV_EXT_VERSION" ]; then
     aws_notify_simple "ERROR: Unable to get latest F-Droid privilege extension version details. Stopping build."
     exit 1
   fi
   
   # attempt to automatically pick latest build version and branch. note this is likely to break with any page redesign. should also add some validation here.
-  AOSP_BUILD=$(curl -s https://developers.google.com/android/images | grep -A1 "${DEVICE}" | egrep '[a-zA-Z]+ [0-9]{4}\)' | grep "${ANDROID_VERSION}" | tail -1 | cut -d"(" -f2 | cut -d"," -f1)
+  AOSP_BUILD=$(curl --fail -s https://developers.google.com/android/images | grep -A1 "${DEVICE}" | egrep '[a-zA-Z]+ [0-9]{4}\)' | grep "${ANDROID_VERSION}" | tail -1 | cut -d"(" -f2 | cut -d"," -f1)
   if [ -z "$AOSP_BUILD" ]; then
     aws_notify_simple "ERROR: Unable to get latest AOSP build information. Stopping build. This lookup is pretty fragile and can break on any page redesign of https://developers.google.com/android/images"
     exit 1
   fi
-  AOSP_BRANCH=$(curl -s https://source.android.com/setup/start/build-numbers | grep -A1 "${AOSP_BUILD}" | tail -1 | cut -f2 -d">"|cut -f1 -d"<")
+  AOSP_BRANCH=$(curl --fail -s https://source.android.com/setup/start/build-numbers | grep -A1 "${AOSP_BUILD}" | tail -1 | cut -f2 -d">"|cut -f1 -d"<")
   if [ -z "$AOSP_BRANCH" ]; then
-    # TODO: temporary workaround until build-numbers are updated on website
-    if [ "$AOSP_BUILD" == "PPR2.181005.003" ]; then
-      AOSP_BRANCH="android-9.0.0_r10"
-    fi
-    if [ -z "$AOSP_BRANCH" ]; then
-      aws_notify_simple "ERROR: Unable to get latest AOSP branch information. Stopping build. This can happen if https://source.android.com/setup/start/build-numbers hasn't been updated yet with newly released factory images."
-      exit 1
-    fi
+    aws_notify_simple "ERROR: Unable to get latest AOSP branch information. Stopping build. This can happen if https://source.android.com/setup/start/build-numbers hasn't been updated yet with newly released factory images."
+    exit 1
   fi
 }
 
 check_for_new_versions() {
+  log_header ${FUNCNAME}
+
   echo "Checking if any new versions of software exist"
   needs_update=false
 
@@ -205,12 +204,16 @@ check_for_new_versions() {
 }
 
 full_run() {
+  log_header ${FUNCNAME}
+
   get_latest_versions
   check_for_new_versions
   aws_notify "RattlesnakeOS Build STARTED"
   setup_env
   check_chromium
-  fetch_aosp_source
+  aosp_repo_init
+  aosp_repo_modifications
+  aosp_repo_sync
   setup_vendor
   aws_import_keys
   apply_patches
@@ -219,32 +222,32 @@ full_run() {
     rebuild_marlin_kernel
   fi
   build_aosp
-  aws_release
+  release "${DEVICE}"
+  aws_upload
   checkpoint_versions
   aws_notify "RattlesnakeOS Build SUCCESS"
 }
 
 setup_env() {
-  echo "=================================="
-  echo "Running setup_env"
-  echo "=================================="
+  log_header ${FUNCNAME}
 
   # setup build dir
   mkdir -p "$BUILD_DIR"
 
-  # install packages
+  # install required packages
   sudo apt-get update
-  sudo apt-get --assume-yes install openjdk-8-jdk git-core gnupg flex bison build-essential zip curl zlib1g-dev gcc-multilib g++-multilib libc6-dev-i386 lib32ncurses5-dev x11proto-core-dev libx11-dev lib32z-dev ccache libgl1-mesa-dev libxml2-utils xsltproc unzip python-networkx liblz4-tool
-  sudo apt-get --assume-yes build-dep "linux-image-$(uname --kernel-release)"
-  sudo apt-get --assume-yes install repo gperf jq fuseext2
+  sudo apt-get -y install repo gperf jq openjdk-8-jdk git-core gnupg flex bison build-essential zip curl zlib1g-dev gcc-multilib g++-multilib libc6-dev-i386 lib32ncurses5-dev x11proto-core-dev libx11-dev lib32z-dev ccache libgl1-mesa-dev libxml2-utils xsltproc unzip python-networkx liblz4-tool pxz
+  sudo apt-get -y build-dep "linux-image-$(uname --kernel-release)"
 
   # setup android sdk (required for fdroid build)
-  mkdir -p ${HOME}/sdk
-  pushd ${HOME}/sdk
-  wget ${ANDROID_SDK_URL} -O sdk-tools.zip
-  unzip sdk-tools.zip
-  yes | ./tools/bin/sdkmanager --licenses
-  ./tools/android update sdk -u --use-sdk-wrapper
+  if [ ! -f "${HOME}/sdk/tools/bin/sdkmanager" ]; then
+    mkdir -p ${HOME}/sdk
+    cd ${HOME}/sdk
+    retry wget ${ANDROID_SDK_URL} -O sdk-tools.zip
+    unzip sdk-tools.zip
+    yes | ./tools/bin/sdkmanager --licenses
+    ./tools/android update sdk -u --use-sdk-wrapper
+  fi
 
   # setup git
   git config --get --global user.name || git config --global user.name 'unknown'
@@ -253,45 +256,42 @@ setup_env() {
 }
 
 check_chromium() {
-  echo "=================================="
-  echo "Running check_chromium"
-  echo "=================================="
+  log_header ${FUNCNAME}
+
   current=$(aws s3 cp "s3://${AWS_RELEASE_BUCKET}/chromium/revision" - || true)
-  echo "Chromium current: $current"
+  log "Chromium current: $current"
 
   if [ "$SKIP_CHROMIUM_BUILD" = true ]; then
     if [ -z "$current" ]; then
-      echo "Can't skip Chromium build as requested as Chromium hasn't been built yet previously"
+      log "Can't skip Chromium build as requested as Chromium hasn't been built yet previously"
     else
-      echo "Skipping Chromium build as requested"
+      log "Skipping Chromium build as requested"
       aws s3 cp "s3://${AWS_RELEASE_BUCKET}/chromium/MonochromePublic.apk" ${BUILD_DIR}/external/chromium/prebuilt/arm64/
       return
     fi
   fi 
 
-  mkdir -p $HOME/chromium
-  cd $HOME/chromium
-  echo "Chromium latest: $LATEST_CHROMIUM"
-
+  log "Chromium latest: $LATEST_CHROMIUM"
   if [ "$LATEST_CHROMIUM" == "$current" ]; then
-    echo "Chromium latest ($LATEST_CHROMIUM) matches current ($current) - just copying s3 chromium artifact"
+    log "Chromium latest ($LATEST_CHROMIUM) matches current ($current) - just copying s3 chromium artifact"
     aws s3 cp "s3://${AWS_RELEASE_BUCKET}/chromium/MonochromePublic.apk" ${BUILD_DIR}/external/chromium/prebuilt/arm64/
   else
-    echo "Building chromium $LATEST_CHROMIUM"
+    log "Building chromium $LATEST_CHROMIUM"
     build_chromium $LATEST_CHROMIUM
   fi
   rm -rf $HOME/chromium
 }
 
 build_chromium() {
-  echo "=================================="
-  echo "Running build_chromium"
-  echo "=================================="
+  log_header ${FUNCNAME}
+
   CHROMIUM_REVISION=$1
   DEFAULT_VERSION=$(echo $CHROMIUM_REVISION | awk -F"." '{ printf "%s%03d52\n",$3,$4}')
 
   # depot tools setup
-  git clone https://chromium.googlesource.com/chromium/tools/depot_tools.git $HOME/depot_tools || true
+  if [ ! -d "$HOME/depot_tools" ]; then
+    retry git clone https://chromium.googlesource.com/chromium/tools/depot_tools.git $HOME/depot_tools
+  fi
   export PATH="$PATH:$HOME/depot_tools"
 
   # fetch chromium 
@@ -316,6 +316,7 @@ build_chromium() {
   # reset any modifications
   git checkout -- .
 
+  # generate configuration
   mkdir -p out/Default
   cat <<EOF > out/Default/args.gn
 target_os = "android"
@@ -333,25 +334,34 @@ android_channel = "stable"
 android_default_version_name = "$CHROMIUM_REVISION"
 android_default_version_code = "$DEFAULT_VERSION"
 EOF
-
   gn gen out/Default
+
+  # build chromium monochrome_public target
   autoninja -C out/Default/ monochrome_public_apk
 
+  # copy to build tree
   mkdir -p ${BUILD_DIR}/external/chromium/prebuilt/arm64
   cp out/Default/apks/MonochromePublic.apk ${BUILD_DIR}/external/chromium/prebuilt/arm64/
+
+  # upload to s3 for future builds
   aws s3 cp "${BUILD_DIR}/external/chromium/prebuilt/arm64/MonochromePublic.apk" "s3://${AWS_RELEASE_BUCKET}/chromium/MonochromePublic.apk"
   echo "${CHROMIUM_REVISION}" | aws s3 cp - "s3://${AWS_RELEASE_BUCKET}/chromium/revision"
 }
 
-fetch_aosp_source() {
-  echo "=================================="
-  echo "Running fetch_aosp_source"
-  echo "=================================="
-  pushd "${BUILD_DIR}"
+aosp_repo_init() {
+  log_header ${FUNCNAME}
+  cd "${BUILD_DIR}"
+
   repo init --manifest-url "$MANIFEST_URL" --manifest-branch "$AOSP_BRANCH" --depth 1 || true
+}
+
+aosp_repo_modifications() {
+  log_header ${FUNCNAME}
+  cd "${BUILD_DIR}"
 
   # make modifications to default AOSP
   if ! grep -q "RattlesnakeOS" .repo/manifest.xml; then
+    # really ugly awk script to add additional repos to manifest
     awk -i inplace \
       -v ANDROID_VERSION="$ANDROID_VERSION" \
       -v FDROID_CLIENT_VERSION="$FDROID_CLIENT_VERSION" \
@@ -362,50 +372,37 @@ fetch_aosp_source() {
       print "  <remote name=\"fdroid\" fetch=\"https://gitlab.com/fdroid/\" />";
       print "  <remote name=\"prepare-vendor\" fetch=\"https://github.com/anestisb/\" revision=\"master\" />";
       print "  ";
-      print "  <project path=\"script\" name=\"script\" remote=\"github\" />";
       print "  <project path=\"external/chromium\" name=\"platform_external_chromium\" remote=\"github\" />";
       print "  <project path=\"packages/apps/Updater\" name=\"platform_packages_apps_Updater\" remote=\"github\" />";
       print "  <project path=\"packages/apps/F-Droid\" name=\"fdroidclient\" remote=\"fdroid\" revision=\"refs/tags/" FDROID_CLIENT_VERSION "\" />";
       print "  <project path=\"packages/apps/F-DroidPrivilegedExtension\" name=\"privileged-extension\" remote=\"fdroid\" revision=\"refs/tags/" FDROID_PRIV_EXT_VERSION "\" />";
       print "  <project path=\"vendor/android-prepare-vendor\" name=\"android-prepare-vendor\" remote=\"prepare-vendor\" />"}' .repo/manifest.xml
-  else
-    echo "Skipping modification of .repo/manifest.xml as they have already been made"
-  fi
   
-  # remove things from manifest
-  sed -i '/chromium-webview/d' .repo/manifest.xml
-  sed -i '/packages\/apps\/Browser2/d' .repo/manifest.xml
-  sed -i '/packages\/apps\/Calendar/d' .repo/manifest.xml
-  sed -i '/packages\/apps\/QuickSearchBox/d' .repo/manifest.xml
+    # remove things from manifest
+    sed -i '/chromium-webview/d' .repo/manifest.xml
+    sed -i '/packages\/apps\/Browser2/d' .repo/manifest.xml
+    sed -i '/packages\/apps\/Calendar/d' .repo/manifest.xml
+    sed -i '/packages\/apps\/QuickSearchBox/d' .repo/manifest.xml
+  else
+    log "Skipping modification of .repo/manifest.xml as they have already been made"
+  fi
+}
+
+aosp_repo_sync() {
+  log_header ${FUNCNAME}
+  cd "${BUILD_DIR}"
 
   # sync with retries
   for i in {1..10}; do
     repo sync -c --no-tags --no-clone-bundle --jobs 32 && break
   done
-
-  # remove webview
-  rm -rf platform/external/chromium-webview
-  sed -i '/webview \\/d' build/make/target/product/core_minimal.mk
-
-  # remove Browser2
-  sed -i '/Browser2/d' build/make/target/product/core.mk
-
-  # remove Calendar
-  sed -i '/Calendar \\/d' build/make/target/product/core.mk
-
-  # remove QuickSearchBox
-  sed -i '/QuickSearchBox/d' build/make/target/product/core.mk
 }
 
 setup_vendor() {
-  echo "=================================="
-  echo "Running setup_vendor"
-  echo "=================================="
-  pushd "${BUILD_DIR}/vendor/android-prepare-vendor"
-  sed -i.bkp 's/  USE_DEBUGFS=true/  USE_DEBUGFS=false/; s/  # SYS_TOOLS/  SYS_TOOLS/; s/  # _UMOUNT=/  _UMOUNT=/' execute-all.sh
+  log_header ${FUNCNAME}
 
-  # get vendor files
-  yes | "${BUILD_DIR}/vendor/android-prepare-vendor/execute-all.sh" --fuse-ext2 --device "${DEVICE}" --buildID "${AOSP_BUILD}" --output "${BUILD_DIR}/vendor/android-prepare-vendor"
+  # get vendor files (with timeout)
+  timeout 30m "${BUILD_DIR}/vendor/android-prepare-vendor/execute-all.sh" --debugfs --yes --device "${DEVICE}" --buildID "${AOSP_BUILD}" --output "${BUILD_DIR}/vendor/android-prepare-vendor"
   aws s3 cp - "s3://${AWS_RELEASE_BUCKET}/${DEVICE}-vendor" --acl public-read <<< "${AOSP_BUILD}" || true
 
   # copy vendor files to build tree
@@ -422,29 +419,26 @@ setup_vendor() {
     rm --recursive --force "${BUILD_DIR}/vendor/google_devices/muskie" || true
     mv "${BUILD_DIR}/vendor/android-prepare-vendor/walleye/$(tr '[:upper:]' '[:lower:]' <<< "${AOSP_BUILD}")/vendor/google_devices/muskie" "${BUILD_DIR}/vendor/google_devices"
   fi
-
-  popd
 }
 
 aws_import_keys() {
-  echo "=================================="
-  echo "Running aws_import_keys"
-  echo "=================================="
+  log_header ${FUNCNAME}
+
   if [ "$(aws s3 ls "s3://${AWS_KEYS_BUCKET}/${DEVICE}" | wc -l)" == '0' ]; then
     aws_gen_keys
   else
-    echo "Keys already exist for ${DEVICE} - grabbing them from S3"
+    log "Keys already exist for ${DEVICE} - grabbing them from S3"
     mkdir -p "${BUILD_DIR}/keys"
-    aws s3 sync "s3://${AWS_KEYS_BUCKET}" "${BUILD_DIR}/keys"
+    retry aws s3 sync "s3://${AWS_KEYS_BUCKET}" "${BUILD_DIR}/keys"
   fi
 }
 
 apply_patches() {
-  echo "=================================="
-  echo "Running apply_patches"
-  echo "=================================="
+  log_header ${FUNCNAME}
+
   patch_custom
-  patch_apps
+  patch_aosp_removals
+  patch_add_apps
   patch_base_config
   patch_device_config
   patch_chromium_webview
@@ -454,50 +448,79 @@ apply_patches() {
   patch_launcher
 }
 
+patch_aosp_removals() {
+  log_header ${FUNCNAME}
+  cd "${BUILD_DIR}"
+
+  # remove aosp webview
+  rm -rf platform/external/chromium-webview
+  sed -i '/webview \\/d' build/make/target/product/core_minimal.mk
+
+  # remove Browser2
+  sed -i '/Browser2/d' build/make/target/product/core.mk
+
+  # remove Calendar
+  sed -i '/Calendar \\/d' build/make/target/product/core.mk
+
+  # remove QuickSearchBox
+  sed -i '/QuickSearchBox/d' build/make/target/product/core.mk
+}
+
+# TODO: most of this is fragile and unforgiving
 patch_custom() {
-  # allow custom patches to be applied to AOSP build tree
+  log_header ${FUNCNAME}
+  
+  # allow custom patches and shell scripts to be applied
   patches_dir="$HOME/patches"
   if [ -z "$REPO_PATCHES" ]; then
-    echo "No custom patches requested"
+    log "No custom patches requested"
   else
-    echo "Cloning custom patches $REPO_PATCHES to ${patches_dir}"
-    git clone $REPO_PATCHES ${patches_dir}
-    pushd $BUILD_DIR
+    cd $BUILD_DIR
+    log "Cloning custom patches $REPO_PATCHES to ${patches_dir}"
+    retry git clone $REPO_PATCHES ${patches_dir}
     while read patch; do
-      echo "Applying patch $patch"
-      patch -p1 < ${patches_dir}/$patch
+      log "Applying patch $patch"
+      case "$patch" in
+          *.patch) patch -p1 < ${patches_dir}/$patch ;;
+          *.sh)    . ${patches_dir}/$patch ;;
+          *)       log "unknown patch type for ${patch}. skipping" ;;
+      esac
     done < ${patches_dir}/manifest
   fi
   
   # allow prebuilt applications to be added to build tree
   prebuilt_dir="$BUILD_DIR/packages/apps/Custom"
   if [ -z "$REPO_PREBUILTS" ]; then
-    echo "No custom apks requested"
+    log "No custom prebuilts requested"
   else
-    echo "Putting custom prebuilts from $REPO_PREBUILTS in build tree location ${prebuilt_dir}"
-    git clone $REPO_PREBUILTS ${prebuilt_dir}
-    for file in ${prebuilt_dir}/*/ ; do 
-      package_name=$(awk -F"=" '/LOCAL_MODULE /{print $2}' $file/Android.mk)
+    log "Putting custom prebuilts from $REPO_PREBUILTS in build tree location ${prebuilt_dir}"
+    retry git clone $REPO_PREBUILTS ${prebuilt_dir}
+    while read package_name; do
+      log "Adding custom PRODUCT_PACKAGES += ${package_name} to ${BUILD_DIR}/build/make/target/product/core.mk"
       sed -i "\$aPRODUCT_PACKAGES += ${package_name}" ${BUILD_DIR}/build/make/target/product/core.mk
-    done
+    done < ${prebuilt_dir}/manifest
   fi
 
   # allow custom hosts file
   hosts_file_location="$BUILD_DIR/system/core/rootdir/etc/hosts"
   if [ -z "$HOSTS_FILE" ]; then
-    echo "No custom hosts file requested"
+    log "No custom hosts file requested"
   else
-    echo "Replacing hosts file with $HOSTS_FILE"
-    wget -O $hosts_file_location "$HOSTS_FILE"
+    log "Replacing hosts file with $HOSTS_FILE"
+    retry wget -O $hosts_file_location "$HOSTS_FILE"
   fi
 }
 
 patch_base_config() {
+  log_header ${FUNCNAME}
+
   # enable swipe up gesture functionality as option
   sed -i 's@<bool name="config_swipe_up_gesture_setting_available">false</bool>@<bool name="config_swipe_up_gesture_setting_available">true</bool>@' ${BUILD_DIR}/frameworks/base/core/res/res/values/config.xml
 }
 
 patch_device_config() {
+  log_header ${FUNCNAME}
+
   # set proper model names
   sed -i 's@PRODUCT_MODEL := AOSP on msm8996@PRODUCT_MODEL := Pixel XL@' ${BUILD_DIR}/device/google/marlin/aosp_marlin.mk
   sed -i 's@PRODUCT_MANUFACTURER := google@PRODUCT_MANUFACTURER := Google@' ${BUILD_DIR}/device/google/marlin/aosp_marlin.mk
@@ -508,6 +531,8 @@ patch_device_config() {
 }
 
 patch_chromium_webview() {
+  log_header ${FUNCNAME}
+
   cat <<EOF > ${BUILD_DIR}/frameworks/base/core/res/res/xml/config_webview_packages.xml
 <?xml version="1.0" encoding="utf-8"?>
 <webviewproviders>
@@ -518,21 +543,27 @@ EOF
 }
 
 patch_fdroid() {
+  log_header ${FUNCNAME}
+
   echo "sdk.dir=${HOME}/sdk" > ${BUILD_DIR}/packages/apps/F-Droid/local.properties
   echo "sdk.dir=${HOME}/sdk" > ${BUILD_DIR}/packages/apps/F-Droid/app/local.properties
   sed -i 's/gradle assembleRelease/..\/gradlew assembleRelease/' ${BUILD_DIR}/packages/apps/F-Droid/Android.mk
   sed -i 's@fdroid_apk   := build/outputs/apk/$(fdroid_dir)-release-unsigned.apk@fdroid_apk   := build/outputs/apk/full/release/app-full-release-unsigned.apk@'  ${BUILD_DIR}/packages/apps/F-Droid/Android.mk
 }
 
-patch_apps() {
-  sed -i.original "\$aPRODUCT_PACKAGES += Updater" ${BUILD_DIR}/build/make/target/product/core.mk
-  sed -i.original "\$aPRODUCT_PACKAGES += F-DroidPrivilegedExtension" ${BUILD_DIR}/build/make/target/product/core.mk
-  sed -i.original "\$aPRODUCT_PACKAGES += F-Droid" ${BUILD_DIR}/build/make/target/product/core.mk
-  sed -i.original "\$aPRODUCT_PACKAGES += chromium" ${BUILD_DIR}/build/make/target/product/core.mk
+patch_add_apps() {
+  log_header ${FUNCNAME}
+
+  sed -i "\$aPRODUCT_PACKAGES += Updater" ${BUILD_DIR}/build/make/target/product/core.mk
+  sed -i "\$aPRODUCT_PACKAGES += F-DroidPrivilegedExtension" ${BUILD_DIR}/build/make/target/product/core.mk
+  sed -i "\$aPRODUCT_PACKAGES += F-Droid" ${BUILD_DIR}/build/make/target/product/core.mk
+  sed -i "\$aPRODUCT_PACKAGES += chromium" ${BUILD_DIR}/build/make/target/product/core.mk
 }
 
 patch_updater() {
-  pushd "$BUILD_DIR"/packages/apps/Updater/res/values
+  log_header ${FUNCNAME}
+
+  cd "$BUILD_DIR"/packages/apps/Updater/res/values
   sed --in-place --expression "s@s3bucket@${RELEASE_URL}/@g" config.xml
 }
 
@@ -541,34 +572,17 @@ fdpe_hash() {
 }
 
 patch_priv_ext() {
-  unofficial_sailfish_releasekey_hash=$(fdpe_hash "${BUILD_DIR}/keys/sailfish/releasekey.x509.pem")
-  unofficial_sailfish_platform_hash=$(fdpe_hash "${BUILD_DIR}/keys/sailfish/platform.x509.pem")
-  unofficial_marlin_releasekey_hash=$(fdpe_hash "${BUILD_DIR}/keys/marlin/releasekey.x509.pem")
-  unofficial_marlin_platform_hash=$(fdpe_hash "${BUILD_DIR}/keys/marlin/platform.x509.pem")
-  unofficial_taimen_releasekey_hash=$(fdpe_hash "${BUILD_DIR}/keys/taimen/releasekey.x509.pem")
-  unofficial_taimen_platform_hash=$(fdpe_hash "${BUILD_DIR}/keys/taimen/platform.x509.pem")
-  unofficial_walleye_releasekey_hash=$(fdpe_hash "${BUILD_DIR}/keys/walleye/releasekey.x509.pem")
-  unofficial_walleye_platform_hash=$(fdpe_hash "${BUILD_DIR}/keys/walleye/platform.x509.pem")
+  log_header ${FUNCNAME}
 
-  if [ "$DEVICE" == 'marlin' ]; then
-    sed -i 's/'${OFFICIAL_FDROID_KEY}'")/'${unofficial_marlin_releasekey_hash}'"),\n            new Pair<>("org.fdroid.fdroid", "'${unofficial_marlin_platform_hash}'")/' \
+  unofficial_releasekey_hash=$(fdpe_hash "${BUILD_DIR}/keys/${DEVICE}/releasekey.x509.pem")
+  unofficial_platform_hash=$(fdpe_hash "${BUILD_DIR}/keys/${DEVICE}/platform.x509.pem")
+  sed -i 's/'${OFFICIAL_FDROID_KEY}'")/'${unofficial_releasekey_hash}'"),\n            new Pair<>("org.fdroid.fdroid", "'${unofficial_platform_hash}'")/' \
       "${BUILD_DIR}/packages/apps/F-DroidPrivilegedExtension/app/src/main/java/org/fdroid/fdroid/privileged/ClientWhitelist.java"
-  fi
-  if [ "$DEVICE" == 'sailfish' ]; then
-    sed -i 's/'${OFFICIAL_FDROID_KEY}'")/'${unofficial_sailfish_releasekey_hash}'"),\n            new Pair<>("org.fdroid.fdroid", "'${unofficial_sailfish_platform_hash}'")/' \
-      "${BUILD_DIR}/packages/apps/F-DroidPrivilegedExtension/app/src/main/java/org/fdroid/fdroid/privileged/ClientWhitelist.java"
-  fi
-  if [ "$DEVICE" == 'taimen' ]; then
-    sed -i 's/'${OFFICIAL_FDROID_KEY}'")/'${unofficial_taimen_releasekey_hash}'"),\n            new Pair<>("org.fdroid.fdroid", "'${unofficial_taimen_platform_hash}'")/' \
-      "${BUILD_DIR}/packages/apps/F-DroidPrivilegedExtension/app/src/main/java/org/fdroid/fdroid/privileged/ClientWhitelist.java"
-  fi
-  if [ "$DEVICE" == 'walleye' ]; then
-    sed -i 's/'${OFFICIAL_FDROID_KEY}'")/'${unofficial_walleye_releasekey_hash}'"),\n            new Pair<>("org.fdroid.fdroid", "'${unofficial_walleye_platform_hash}'")/' \
-      "${BUILD_DIR}/packages/apps/F-DroidPrivilegedExtension/app/src/main/java/org/fdroid/fdroid/privileged/ClientWhitelist.java"
-  fi
 }
 
 patch_launcher() {
+  log_header ${FUNCNAME}
+
   # disable QuickSearchBox widget on home screen
   sed -i.original "s/QSB_ON_FIRST_SCREEN = true;/QSB_ON_FIRST_SCREEN = false;/" "${BUILD_DIR}/packages/apps/Launcher3/src/com/android/launcher3/config/BaseFlags.java"
   # fix compile error with uninitialized variable
@@ -576,20 +590,20 @@ patch_launcher() {
 }
 
 rebuild_marlin_kernel() {
-  echo "=================================="
-  echo "Running rebuild_marlin_kernel"
-  echo "=================================="
+  log_header ${FUNCNAME}
+
   # checkout kernel source on proper commit
   mkdir -p "${MARLIN_KERNEL_SOURCE_DIR}"
-  git clone "${KERNEL_SOURCE_URL}" "${MARLIN_KERNEL_SOURCE_DIR}"
+  retry git clone "${KERNEL_SOURCE_URL}" "${MARLIN_KERNEL_SOURCE_DIR}"
   # TODO: make this a bit more robust
   kernel_commit_id=$(lz4cat "${BUILD_DIR}/device/google/marlin-kernel/Image.lz4-dtb" | grep -a 'Linux version' | cut -d ' ' -f3 | cut -d'-' -f2 | sed 's/^g//g')
   cd "${MARLIN_KERNEL_SOURCE_DIR}"
-  echo "Checking out kernel commit ${kernel_commit_id}"
+  log "Checking out kernel commit ${kernel_commit_id}"
   git checkout ${kernel_commit_id}
 
   # run in another shell to avoid it mucking with environment variables for normal AOSP build
   bash -c "\
+    set -e;
     cd ${BUILD_DIR};
     . build/envsetup.sh;
     make -j$(nproc --all) dtc mkdtimg;
@@ -604,24 +618,106 @@ rebuild_marlin_kernel() {
 }
 
 build_aosp() {
-  echo "=================================="
-  echo "Running build_aosp"
-  echo "=================================="
-  pushd "$BUILD_DIR"
-  source "${BUILD_DIR}/script/setup.sh"
+  log_header ${FUNCNAME}
+
+  cd "$BUILD_DIR"
+
+  ############################
+  # from original setup.sh script
+  ############################
+  source build/envsetup.sh
+  export LANG=C
+  export _JAVA_OPTIONS=-XX:-UsePerfData
+  export BUILD_NUMBER=$(cat out/build_number.txt 2>/dev/null || date --utc +%Y.%m.%d.%H)
+  log "BUILD_NUMBER=$BUILD_NUMBER"
+  export DISPLAY_BUILD_NUMBER=true
+  chrt -b -p 0 $$
 
   choosecombo $BUILD_TARGET
-  make -j $(nproc) target-files-package
-  make -j $(nproc) brillo_update_payload
-
-  "${BUILD_DIR}/script/release.sh" "$DEVICE"
+  log "Running target-files-package"
+  retry make -j $(nproc) target-files-package
+  log "Running brillo_update_payload"
+  retry make -j $(nproc) brillo_update_payload
 }
 
-aws_release() {
-  echo "=================================="
-  echo "Running aws_release"
-  echo "=================================="
-  pushd "${BUILD_DIR}/out"
+get_radio_image() {
+  grep -Po "require version-$1=\K.+" vendor/$2/vendor-board-info.txt | tr '[:upper:]' '[:lower:]'
+}
+
+release() {
+  log_header ${FUNCNAME}
+
+  cd "$BUILD_DIR"
+
+  ############################
+  # from original setup.sh script
+  ############################
+  source build/envsetup.sh
+  export LANG=C
+  export _JAVA_OPTIONS=-XX:-UsePerfData
+  export BUILD_NUMBER=$(cat out/build_number.txt 2>/dev/null || date --utc +%Y.%m.%d.%H)
+  log "BUILD_NUMBER=$BUILD_NUMBER"
+  export DISPLAY_BUILD_NUMBER=true
+  chrt -b -p 0 $$
+
+  ############################
+  # from original release.sh script
+  ############################
+  KEY_DIR=keys/$1
+  OUT=out/release-$1-${BUILD_NUMBER}
+  source device/common/clear-factory-images-variables.sh
+
+  DEVICE=$1
+  BOOTLOADER=$(get_radio_image bootloader google_devices/${DEVICE})
+  RADIO=$(get_radio_image baseband google_devices/${DEVICE})
+  PREFIX=aosp_
+  BUILD=$BUILD_NUMBER
+  VERSION=$(grep -Po "export BUILD_ID=\K.+" build/core/build_id.mk | tr '[:upper:]' '[:lower:]')
+  PRODUCT=${DEVICE}
+  TARGET_FILES=$DEVICE-target_files-$BUILD.zip
+
+  # make sure output directory exists
+  mkdir -p $OUT
+
+  # depending on device need verity key or avb key
+  if [[ $DEVICE != taimen && $DEVICE != walleye ]]; then
+    VERITY_SWITCHES=(--replace_verity_public_key "$KEY_DIR/verity_key.pub" --replace_verity_private_key "$KEY_DIR/verity"
+                      --replace_verity_keyid "$KEY_DIR/verity.x509.pem")
+  else
+    VERITY_SWITCHES=(--avb_vbmeta_key "$KEY_DIR/avb.pem" --avb_vbmeta_algorithm SHA256_RSA2048)
+  fi
+  
+  log "Running sign_target_files_apks"
+  build/tools/releasetools/sign_target_files_apks -o -d "$KEY_DIR" "${VERITY_SWITCHES[@]}" \
+    out/target/product/$DEVICE/obj/PACKAGING/target_files_intermediates/$PREFIX$DEVICE-target_files-$BUILD_NUMBER.zip \
+    $OUT/$TARGET_FILES
+  
+  log "Running ota_from_target_files"
+  build/tools/releasetools/ota_from_target_files --block -k "$KEY_DIR/releasekey" "${EXTRA_OTA[@]}" $OUT/$TARGET_FILES \
+      $OUT/$DEVICE-ota_update-$BUILD.zip
+  
+  log "Running img_from_target_files"
+  sed -i 's/zipfile\.ZIP_DEFLATED/zipfile\.ZIP_STORED/' build/tools/releasetools/img_from_target_files.py
+  build/tools/releasetools/img_from_target_files $OUT/$TARGET_FILES $OUT/$DEVICE-img-$BUILD.zip
+  
+  log "Running generate-factory-images"
+  cd $OUT
+  sed -i 's/zip -r/tar cvf/' ../../device/common/generate-factory-images-common.sh
+  sed -i 's/factory\.zip/factory\.tar/' ../../device/common/generate-factory-images-common.sh
+  sed -i '/^mv / d' ../../device/common/generate-factory-images-common.sh
+  source ../../device/common/generate-factory-images-common.sh
+  mv $DEVICE-$VERSION-factory.tar $DEVICE-factory-$BUILD_NUMBER.tar
+  rm -f $DEVICE-factory-$BUILD_NUMBER.tar.xz
+
+  log "Running compress of factory image with pxz"
+  time pxz -v -T0 -9 -z $DEVICE-factory-$BUILD_NUMBER.tar
+}
+
+# TODO: cleanup this function
+aws_upload() {
+  log_header ${FUNCNAME}
+
+  cd "${BUILD_DIR}/out"
   build_date="$(< build_number.txt)"
   build_timestamp="$(unzip -p "release-${DEVICE}-${build_date}/${DEVICE}-ota_update-${build_date}.zip" META-INF/com/android/metadata | grep 'post-timestamp' | cut --delimiter "=" --fields 2)"
 
@@ -629,14 +725,13 @@ aws_release() {
   read -r old_metadata <<< "$(wget -O - "${RELEASE_URL}/${RELEASE_CHANNEL}")"
   old_date="$(cut -d ' ' -f 1 <<< "${old_metadata}")"
   (
-  aws s3 cp "${BUILD_DIR}/out/release-${DEVICE}-${build_date}/${DEVICE}-ota_update-${build_date}.zip" "s3://${AWS_RELEASE_BUCKET}" --acl public-read &&
-  echo "${build_date} ${build_timestamp} ${AOSP_BUILD}" | aws s3 cp - "s3://${AWS_RELEASE_BUCKET}/${RELEASE_CHANNEL}" --acl public-read &&
-  echo "${BUILD_TIMESTAMP}" | aws s3 cp - "s3://${AWS_RELEASE_BUCKET}/${RELEASE_CHANNEL}-true-timestamp" --acl public-read
+    aws s3 cp "${BUILD_DIR}/out/release-${DEVICE}-${build_date}/${DEVICE}-ota_update-${build_date}.zip" "s3://${AWS_RELEASE_BUCKET}" --acl public-read &&
+    echo "${build_date} ${build_timestamp} ${AOSP_BUILD}" | aws s3 cp - "s3://${AWS_RELEASE_BUCKET}/${RELEASE_CHANNEL}" --acl public-read &&
+    echo "${BUILD_TIMESTAMP}" | aws s3 cp - "s3://${AWS_RELEASE_BUCKET}/${RELEASE_CHANNEL}-true-timestamp" --acl public-read
   ) && ( aws s3 rm "s3://${AWS_RELEASE_BUCKET}/${DEVICE}-ota_update-${old_date}.zip" || true )
 
-  if [ "$(aws s3 ls "s3://${AWS_RELEASE_BUCKET}/${DEVICE}-factory-latest.tar.xz" | wc -l)" == '0' ]; then
-    aws s3 cp "${BUILD_DIR}/out/release-${DEVICE}-${build_date}/${DEVICE}-factory-${build_date}.tar.xz" "s3://${AWS_RELEASE_BUCKET}/${DEVICE}-factory-latest.tar.xz"
-  fi
+  # upload factory image
+  retry aws s3 cp "${BUILD_DIR}/out/release-${DEVICE}-${build_date}/${DEVICE}-factory-${build_date}.tar.xz" "s3://${AWS_RELEASE_BUCKET}/${DEVICE}-factory-latest.tar.xz"
 
   # cleanup old target files if some exist
   if [ "$(aws s3 ls "s3://${AWS_RELEASE_BUCKET}/${DEVICE}-target" | wc -l)" != '0' ]; then
@@ -644,10 +739,23 @@ aws_release() {
   fi
 
   # copy new target file to s3
-  aws s3 cp "${BUILD_DIR}/out/release-${DEVICE}-${build_date}/${DEVICE}-target_files-${build_date}.zip" "s3://${AWS_RELEASE_BUCKET}/${DEVICE}-target/${DEVICE}-target-files-${build_date}.zip"
+  retry aws s3 cp "${BUILD_DIR}/out/release-${DEVICE}-${build_date}/${DEVICE}-target_files-${build_date}.zip" "s3://${AWS_RELEASE_BUCKET}/${DEVICE}-target/${DEVICE}-target-files-${build_date}.zip"
+}
+
+cleanup_target_files() {
+  log_header ${FUNCNAME}
+
+  aws s3 sync "s3://${AWS_RELEASE_BUCKET}/${DEVICE}-target" "${BUILD_DIR}/${DEVICE}-target"
+  cd "${BUILD_DIR}/${DEVICE}-target"
+  for target_file in ${DEVICE}-target-files-*.zip ; do
+    old_date=$(echo "$target_file" | cut --delimiter "-" --fields 4 | cut --delimiter "." --fields 5 --complement)
+    aws s3 rm "s3://${AWS_RELEASE_BUCKET}/${DEVICE}-target/${DEVICE}-target-files-${old_date}.zip" || true
+  done
 }
 
 checkpoint_versions() {
+  log_header ${FUNCNAME}
+
   # checkpoint stack version
   echo "${STACK_VERSION}" | aws s3 cp - "s3://${AWS_RELEASE_BUCKET}/rattlesnakeos-stack/revision"
 
@@ -656,25 +764,15 @@ checkpoint_versions() {
   echo "${FDROID_CLIENT_VERSION}" | aws s3 cp - "s3://${AWS_RELEASE_BUCKET}/fdroid/revision"
 }
 
-cleanup_target_files() {
-  echo "=================================="
-  echo "Running cleanup_target_files"
-  echo "=================================="
-  aws s3 sync "s3://${AWS_RELEASE_BUCKET}/${DEVICE}-target" "${BUILD_DIR}/${DEVICE}-target"
-  pushd "${BUILD_DIR}/out"
-  current_date="$(< build_number.txt)"
-  pushd "${BUILD_DIR}/${DEVICE}-target"
-  for target_file in ${DEVICE}-target-files-*.zip ; do
-    old_date=$(echo "$target_file" | cut --delimiter "-" --fields 4 | cut --delimiter "." --fields 5 --complement)
-    aws s3 rm "s3://${AWS_RELEASE_BUCKET}/${DEVICE}-target/${DEVICE}-target-files-${old_date}.zip" || true
-  done
-}
-
 aws_notify_simple() {
+  log_header ${FUNCNAME}
+
   aws sns publish --region ${REGION} --topic-arn "$AWS_SNS_ARN" --message "$1"
 }
 
 aws_notify() {
+  log_header ${FUNCNAME}
+
   LOGOUTPUT=
   if [ ! -z "$2" ]; then
     LOGOUTPUT=$(tail -c 20000 /var/log/cloud-init-output.log)
@@ -686,6 +784,8 @@ aws_notify() {
 }
 
 aws_logging() {
+  log_header ${FUNCNAME}
+
   df -h
   du -chs "${BUILD_DIR}" || true
   uptime
@@ -693,16 +793,17 @@ aws_logging() {
 }
 
 aws_gen_keys() {
+  log_header ${FUNCNAME}
+
   gen_keys
-  aws s3 sync "${BUILD_DIR}/keys" "s3://${AWS_KEYS_BUCKET}"
+  retry aws s3 sync "${BUILD_DIR}/keys" "s3://${AWS_KEYS_BUCKET}"
 }
 
 gen_keys() {
-  echo "=================================="
-  echo "Running gen_keys"
-  echo "=================================="
+  log_header ${FUNCNAME}
+
   mkdir --parents "${BUILD_DIR}/keys/${DEVICE}"
-  pushd "${BUILD_DIR}/keys/${DEVICE}"
+  cd "${BUILD_DIR}/keys/${DEVICE}"
   for key in {releasekey,platform,shared,media,verity} ; do
     # make_key exits with unsuccessful code 1 instead of 0, need ! to negate
     ! "${BUILD_DIR}/development/tools/make_key" "$key" "$CERTIFICATE_SUBJECT"
@@ -718,19 +819,16 @@ gen_keys() {
 }
 
 gen_avb_key() {
-  echo "=================================="
-  echo "Running gen_avb_key"
-  echo "=================================="
-  pushd "$BUILD_DIR"
+  log_header ${FUNCNAME}
+
+  cd "$BUILD_DIR"
   openssl genrsa -out "${BUILD_DIR}/keys/$1/avb.pem" 2048
   ${BUILD_DIR}/external/avb/avbtool extract_public_key --key "${BUILD_DIR}/keys/$1/avb.pem" --output "${BUILD_DIR}/keys/$1/avb_pkmd.bin"
 }
 
 gen_verity_key() {
-  echo "=================================="
-  echo "Running gen_verity_key"
-  echo "=================================="
-  pushd "$BUILD_DIR"
+  log_header ${FUNCNAME}
+  cd "$BUILD_DIR"
 
   make -j 20 generate_verity_key
   "${BUILD_DIR}/out/host/linux-x86/bin/generate_verity_key" -convert "${BUILD_DIR}/keys/$1/verity.x509.pem" "${BUILD_DIR}/keys/$1/verity_key"
@@ -739,16 +837,61 @@ gen_verity_key() {
 }
 
 cleanup() {
+  log_header ${FUNCNAME}
+
   rv=$?
   aws_logging
   if [ $rv -ne 0 ]; then
     aws_notify "RattlesnakeOS Build FAILED" 1
   fi
   if [ "${PREVENT_SHUTDOWN}" = true ]; then
-    echo "Skipping shutdown"
+    log "Skipping shutdown"
   else
     sudo shutdown -h now
   fi
+}
+
+log_header() {
+  echo "=================================="
+  echo "$(date "+%Y-%m-%d %H:%M:%S"): Running $1"
+  echo "=================================="
+}
+
+log() {
+  echo "$(date "+%Y-%m-%d %H:%M:%S"): $1"
+}
+
+retry() {
+  set +e
+  local max_attempts=${ATTEMPTS-3}
+  local timeout=${TIMEOUT-1}
+  local attempt=0
+  local exitCode=0
+
+  while [[ $attempt < $max_attempts ]]
+  do
+    "$@"
+    exitCode=$?
+
+    if [[ $exitCode == 0 ]]
+    then
+      break
+    fi
+
+    log "Failure! Retrying ($@) in $timeout.."
+    sleep $timeout
+    attempt=$(( attempt + 1 ))
+    timeout=$(( timeout * 2 ))
+  done
+
+  if [[ $exitCode != 0 ]]
+  then
+    log "Failed too many times! ($@)"
+  fi
+
+  set -e
+
+  return $exitCode
 }
 
 trap cleanup 0
