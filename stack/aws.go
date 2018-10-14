@@ -18,22 +18,24 @@ const (
 )
 
 type AWSStackConfig struct {
-	Name              string
-	Region            string
-	Device            string
-	InstanceType      string
-	InstanceRegions   string
-	SkipPrice         string
-	MaxPrice          string
-	SSHKey            string
-	PreventShutdown   bool
-	Version           string
-	Schedule          string
-	Force             bool
-	SkipChromiumBuild bool
-	RepoPatches       string
-	RepoPrebuilts     string
-	HostsFile         string
+	Name            string
+	Region          string
+	Device          string
+	InstanceType    string
+	InstanceRegions string
+	SkipPrice       string
+	MaxPrice        string
+	SSHKey          string
+	PreventShutdown bool
+	Version         string
+	Schedule        string
+	Force           bool
+	ChromiumVersion string
+	RepoPatches     string
+	RepoPrebuilts   string
+	HostsFile       string
+	EncryptedKeys   bool
+	AMI             string
 }
 
 type AWSStack struct {

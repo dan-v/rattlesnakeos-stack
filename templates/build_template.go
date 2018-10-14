@@ -33,8 +33,13 @@ PREVENT_SHUTDOWN=<% .PreventShutdown %>
 # force build even if no new versions exist of components
 FORCE_BUILD=<% .Force %>
 
-# skip chromium build if there is an existing build
-SKIP_CHROMIUM_BUILD=<% .SkipChromiumBuild %>
+# version of chromium to pin to if requested
+CHROMIUM_PINNED_VERSION=<% .ChromiumVersion %>
+
+# whether keys are client side encrypted or not
+ENCRYPTED_KEYS="<% .EncryptedKeys %>"
+ENCRYPTION_KEY=
+ENCRYPTION_PIPE="/tmp/key"
 
 # pin to specific version of android
 ANDROID_VERSION="9.0"
@@ -52,6 +57,7 @@ HOSTS_FILE=<% .HostsFile %>
 
 # aws settings
 AWS_KEYS_BUCKET="${STACK_NAME}-keys"
+AWS_ENCRYPTED_KEYS_BUCKET="${STACK_NAME}-keys-encrypted"
 AWS_RELEASE_BUCKET="${STACK_NAME}-release"
 AWS_LOGS_BUCKET="${STACK_NAME}-logs"
 AWS_SNS_ARN=$(aws --region ${REGION} sns list-topics --query 'Topics[0].TopicArn' --output text | cut -d":" -f1,2,3,4,5)":${STACK_NAME}"
@@ -68,6 +74,7 @@ CHROME_CHANNEL="stable"
 BUILD_DATE=$(date +%Y.%m.%d.%H)
 BUILD_TIMESTAMP=$(date +%s)
 BUILD_DIR="$HOME/rattlesnake-os"
+KEYS_DIR="${BUILD_DIR}/keys"
 CERTIFICATE_SUBJECT='/CN=RattlesnakeOS'
 OFFICIAL_FDROID_KEY="43238d512c1e5eb2d6569f4a3afbf5523418b82e0a3ed1552770abb9a9c9ccab"
 MARLIN_KERNEL_SOURCE_DIR="${HOME}/kernel/google/marlin"
@@ -80,6 +87,8 @@ STACK_URL_LATEST="https://api.github.com/repos/dan-v/rattlesnakeos-stack/release
 FDROID_CLIENT_URL_LATEST="https://gitlab.com/api/v4/projects/36189/repository/tags"
 FDROID_PRIV_EXT_URL_LATEST="https://gitlab.com/api/v4/projects/1481578/repository/tags"
 KERNEL_SOURCE_URL="https://android.googlesource.com/kernel/msm"
+AOSP_URL_BUILD="https://developers.google.com/android/images"
+AOSP_URL_BRANCH="https://source.android.com/setup/start/build-numbers"
 
 STACK_UPDATE_MESSAGE=
 LATEST_STACK_VERSION=
@@ -124,14 +133,14 @@ get_latest_versions() {
   fi
   
   # attempt to automatically pick latest build version and branch. note this is likely to break with any page redesign. should also add some validation here.
-  AOSP_BUILD=$(curl --fail -s https://developers.google.com/android/images | grep -A1 "${DEVICE}" | egrep '[a-zA-Z]+ [0-9]{4}\)' | grep "${ANDROID_VERSION}" | tail -1 | cut -d"(" -f2 | cut -d"," -f1)
+  AOSP_BUILD=$(curl --fail -s ${AOSP_URL_BUILD} | grep -A1 "${DEVICE}" | egrep '[a-zA-Z]+ [0-9]{4}\)' | grep "${ANDROID_VERSION}" | tail -1 | cut -d"(" -f2 | cut -d"," -f1)
   if [ -z "$AOSP_BUILD" ]; then
-    aws_notify_simple "ERROR: Unable to get latest AOSP build information. Stopping build. This lookup is pretty fragile and can break on any page redesign of https://developers.google.com/android/images"
+    aws_notify_simple "ERROR: Unable to get latest AOSP build information. Stopping build. This lookup is pretty fragile and can break on any page redesign of ${AOSP_URL_BUILD}"
     exit 1
   fi
-  AOSP_BRANCH=$(curl --fail -s https://source.android.com/setup/start/build-numbers | grep -A1 "${AOSP_BUILD}" | tail -1 | cut -f2 -d">"|cut -f1 -d"<")
+  AOSP_BRANCH=$(curl --fail -s ${AOSP_URL_BRANCH} | grep -A1 "${AOSP_BUILD}" | tail -1 | cut -f2 -d">"|cut -f1 -d"<")
   if [ -z "$AOSP_BRANCH" ]; then
-    aws_notify_simple "ERROR: Unable to get latest AOSP branch information. Stopping build. This can happen if https://source.android.com/setup/start/build-numbers hasn't been updated yet with newly released factory images."
+    aws_notify_simple "ERROR: Unable to get latest AOSP branch information. Stopping build. This can happen if ${AOSP_URL_BRANCH} hasn't been updated yet with newly released factory images."
     exit 1
   fi
 }
@@ -160,19 +169,20 @@ check_for_new_versions() {
     needs_update=true
   fi
 
-  # check chromium
-  if [ "$SKIP_CHROMIUM_BUILD" = false ]; then
-    existing_chromium=$(aws s3 cp "s3://${AWS_RELEASE_BUCKET}/chromium/revision" - || true)
-    if [ "$existing_chromium" == "$LATEST_CHROMIUM" ]; then
-      echo "Chromium build ($existing_chromium) is up to date"
-    else
-      echo "Chromium needs to be updated to ${LATEST_CHROMIUM}"
-      needs_update=true
-    fi
-  else 
-    echo "Skipping Chromium version check as SKIP_CHROMIUM_BUILD=true"
-  fi
 
+  # check chromium
+  if [ ! -z "$CHROMIUM_PINNED_VERSION" ]; then
+    log "Setting LATEST_CHROMIUM to pinned version $CHROMIUM_PINNED_VERSION"
+    LATEST_CHROMIUM="$CHROMIUM_PINNED_VERSION"
+  fi
+  existing_chromium=$(aws s3 cp "s3://${AWS_RELEASE_BUCKET}/chromium/revision" - || true)
+  if [ "$existing_chromium" == "$LATEST_CHROMIUM" ]; then
+    echo "Chromium build ($existing_chromium) is up to date"
+  else
+    echo "Chromium needs to be updated to ${LATEST_CHROMIUM}"
+    needs_update=true
+  fi
+  
   # check fdroid
   existing_fdroid_client=$(aws s3 cp "s3://${AWS_RELEASE_BUCKET}/fdroid/revision" - || true)
   if [ "$existing_fdroid_client" == "$FDROID_CLIENT_VERSION" ]; then
@@ -208,14 +218,15 @@ full_run() {
 
   get_latest_versions
   check_for_new_versions
+  initial_key_setup
   aws_notify "RattlesnakeOS Build STARTED"
   setup_env
   check_chromium
   aosp_repo_init
   aosp_repo_modifications
   aosp_repo_sync
-  setup_vendor
   aws_import_keys
+  setup_vendor
   apply_patches
   # only marlin and sailfish need kernel rebuilt so that verity_key is included
   if [ "${DEVICE}" == "marlin" ] || [ "${DEVICE}" == "sailfish" ]; then
@@ -226,6 +237,91 @@ full_run() {
   aws_upload
   checkpoint_versions
   aws_notify "RattlesnakeOS Build SUCCESS"
+}
+
+get_encryption_key() {
+  additional_message=""
+  if [ "$(aws s3 ls "s3://${AWS_ENCRYPTED_KEYS_BUCKET}/${DEVICE}" | wc -l)" == '0' ]; then
+    additional_message="Since you have no encrypted signing keys in s3://${AWS_ENCRYPTED_KEYS_BUCKET}/${DEVICE} yet - new signing keys will be generated and encrypted with provided key."
+  fi
+
+  wait_time="10m"
+  error_message=""
+  while [ 1 ]; do 
+    aws sns publish --region ${REGION} --topic-arn "$AWS_SNS_ARN" \
+      --message="$(printf "%s Need to login to the EC2 instance and provide the encryption key (5 minute timeout before shutdown). %s\n\nssh ubuntu@%s 'printf \"Enter encryption key: \" && read k && echo \"\$k\" > %s'" "$error_message" "$additional_message" "${INSTANCE_IP}" "${ENCRYPTION_PIPE}")"
+    error_message=""
+
+    log "Waiting for encryption key (with $wait_time timeout) to be provided over named pipe $ENCRYPTION_PIPE"
+    set +e
+    ENCRYPTION_KEY=$(timeout $wait_time cat $ENCRYPTION_PIPE)
+    if [ $? -ne 0 ]; then
+      set -e
+      log "Timeout ($wait_time) waiting for encryption key"
+      aws_notify_simple "Timeout ($wait_time) waiting for encryption key. Terminating build process."
+      exit 1
+    fi
+    set -e
+    if [ -z "$ENCRYPTION_KEY" ]; then
+      error_message="ERROR: Empty encryption key received - try again."
+      log "$error_message"
+      continue
+    fi
+    log "Received encryption key over named pipe $ENCRYPTION_PIPE"
+
+    if [ "$(aws s3 ls "s3://${AWS_ENCRYPTED_KEYS_BUCKET}/${DEVICE}" | wc -l)" == '0' ]; then
+      log "No existing encrypting keys - new keys will be generated later in build process."
+    else
+      log "Verifying encryption key is valid by syncing encrypted signing keys from S3 and decrypting"
+      aws s3 sync "s3://${AWS_ENCRYPTED_KEYS_BUCKET}" "${KEYS_DIR}"
+      
+      decryption_error=false
+      set +e
+      for f in $(find "${KEYS_DIR}" -type f -name '*.gpg'); do 
+        output_file=$(echo $f | awk -F".gpg" '{print $1}')
+        log "Decrypting $f to ${output_file}..."
+        gpg -d --batch --passphrase "${ENCRYPTION_KEY}" $f > $output_file
+        if [ $? -ne 0 ]; then
+          log "Failed to decrypt $f"
+          decryption_error=true
+        fi
+      done
+      set -e
+      if [ "$decryption_error" = true ]; then
+        log 
+        error_message="ERROR: Failed to decrypt signing keys with provided key - try again."
+        log "$error_message"
+        continue
+      fi
+    fi
+    break
+  done
+}
+
+initial_key_setup() {
+  # setup in memory file system to hold keys
+  log "Mounting in memory filesystem at ${KEYS_DIR} to hold keys"
+  mkdir -p $KEYS_DIR
+  sudo mount -t tmpfs -o size=20m tmpfs $KEYS_DIR || true
+
+  # additional steps for getting encryption key up front
+  if [ "$ENCRYPTED_KEYS" = true ]; then
+    log "Encrypted keys option was specified"
+
+    # send warning if user has selected encrypted keys option but still has normal keys
+    if [ "$(aws s3 ls "s3://${AWS_KEYS_BUCKET}/${DEVICE}" | wc -l)" != '0' ]; then
+      if [ "$(aws s3 ls "s3://${AWS_ENCRYPTED_KEYS_BUCKET}/${DEVICE}" | wc -l)" == '0' ]; then
+        aws_notify_simple "It looks like you have selected --encrypted-keys option and have existing signing keys in s3://${AWS_KEYS_BUCKET}/${DEVICE} but you haven't migrated your keys to s3://${AWS_ENCRYPTED_KEYS_BUCKET}/${DEVICE}. This means new encrypted signing keys will be generated and you'll need to flash a new factory image on your device. If you want to keep your existing keys - cancel this build and follow the steps on migrating your keys in the FAQ."
+      fi
+    fi
+
+    sudo apt-get -y install gpg
+    if [ ! -e "$ENCRYPTION_PIPE" ]; then
+      mkfifo $ENCRYPTION_PIPE
+    fi
+
+    get_encryption_key
+  fi
 }
 
 setup_env() {
@@ -261,16 +357,6 @@ check_chromium() {
   current=$(aws s3 cp "s3://${AWS_RELEASE_BUCKET}/chromium/revision" - || true)
   log "Chromium current: $current"
 
-  if [ "$SKIP_CHROMIUM_BUILD" = true ]; then
-    if [ -z "$current" ]; then
-      log "Can't skip Chromium build as requested as Chromium hasn't been built yet previously"
-    else
-      log "Skipping Chromium build as requested"
-      aws s3 cp "s3://${AWS_RELEASE_BUCKET}/chromium/MonochromePublic.apk" ${BUILD_DIR}/external/chromium/prebuilt/arm64/
-      return
-    fi
-  fi 
-
   log "Chromium latest: $LATEST_CHROMIUM"
   if [ "$LATEST_CHROMIUM" == "$current" ]; then
     log "Chromium latest ($LATEST_CHROMIUM) matches current ($current) - just copying s3 chromium artifact"
@@ -305,9 +391,11 @@ build_chromium() {
 
   # install dependencies
   echo ttf-mscorefonts-installer msttcorefonts/accepted-mscorefonts-eula select true | sudo debconf-set-selections
+  log "Installing chromium build dependencies"
   sudo ./build/install-build-deps-android.sh
 
   # run gclient sync (runhooks will run as part of this)
+  log "Running gclient sync (this takes a while)"
   yes | gclient sync --with_branch_heads --jobs 32 -RDf
 
   # cleanup any files in tree not part of this revision
@@ -336,7 +424,7 @@ android_default_version_code = "$DEFAULT_VERSION"
 EOF
   gn gen out/Default
 
-  # build chromium monochrome_public target
+  log "Building chromium monochrome_public target"
   autoninja -C out/Default/ monochrome_public_apk
 
   # copy to build tree
@@ -407,29 +495,17 @@ setup_vendor() {
 
   # copy vendor files to build tree
   mkdir --parents "${BUILD_DIR}/vendor/google_devices" || true
-  rm --recursive --force "${BUILD_DIR}/vendor/google_devices/$DEVICE" || true
+  rm -rf "${BUILD_DIR}/vendor/google_devices/$DEVICE" || true
   mv "${BUILD_DIR}/vendor/android-prepare-vendor/${DEVICE}/$(tr '[:upper:]' '[:lower:]' <<< "${AOSP_BUILD}")/vendor/google_devices/${DEVICE}" "${BUILD_DIR}/vendor/google_devices"
 
   # smaller devices need big brother vendor files
   if [ "$DEVICE" == 'sailfish' ]; then
-    rm --recursive --force "${BUILD_DIR}/vendor/google_devices/marlin" || true
+    rm -rf "${BUILD_DIR}/vendor/google_devices/marlin" || true
     mv "${BUILD_DIR}/vendor/android-prepare-vendor/sailfish/$(tr '[:upper:]' '[:lower:]' <<< "${AOSP_BUILD}")/vendor/google_devices/marlin" "${BUILD_DIR}/vendor/google_devices"
   fi
   if [ "$DEVICE" == 'walleye' ]; then
-    rm --recursive --force "${BUILD_DIR}/vendor/google_devices/muskie" || true
+    rm -rf "${BUILD_DIR}/vendor/google_devices/muskie" || true
     mv "${BUILD_DIR}/vendor/android-prepare-vendor/walleye/$(tr '[:upper:]' '[:lower:]' <<< "${AOSP_BUILD}")/vendor/google_devices/muskie" "${BUILD_DIR}/vendor/google_devices"
-  fi
-}
-
-aws_import_keys() {
-  log_header ${FUNCNAME}
-
-  if [ "$(aws s3 ls "s3://${AWS_KEYS_BUCKET}/${DEVICE}" | wc -l)" == '0' ]; then
-    aws_gen_keys
-  else
-    log "Keys already exist for ${DEVICE} - grabbing them from S3"
-    mkdir -p "${BUILD_DIR}/keys"
-    retry aws s3 sync "s3://${AWS_KEYS_BUCKET}" "${BUILD_DIR}/keys"
   fi
 }
 
@@ -574,11 +650,11 @@ fdpe_hash() {
 patch_priv_ext() {
   log_header ${FUNCNAME}
 
-  unofficial_releasekey_hash=$(fdpe_hash "${BUILD_DIR}/keys/${DEVICE}/releasekey.x509.pem")
-  unofficial_platform_hash=$(fdpe_hash "${BUILD_DIR}/keys/${DEVICE}/platform.x509.pem")
+  unofficial_releasekey_hash=$(fdpe_hash "${KEYS_DIR}/${DEVICE}/releasekey.x509.pem")
+  unofficial_platform_hash=$(fdpe_hash "${KEYS_DIR}/${DEVICE}/platform.x509.pem")
   sed -i 's/'${OFFICIAL_FDROID_KEY}'")/'${unofficial_releasekey_hash}'"),\n            new Pair<>("org.fdroid.fdroid", "'${unofficial_platform_hash}'")/' \
       "${BUILD_DIR}/packages/apps/F-DroidPrivilegedExtension/app/src/main/java/org/fdroid/fdroid/privileged/ClientWhitelist.java"
-}
+} 
 
 patch_launcher() {
   log_header ${FUNCNAME}
@@ -608,7 +684,7 @@ rebuild_marlin_kernel() {
     . build/envsetup.sh;
     make -j$(nproc --all) dtc mkdtimg;
     export PATH=${BUILD_DIR}/out/host/linux-x86/bin:${PATH};
-    ln --verbose --symbolic ${BUILD_DIR}/keys/${DEVICE}/verity_user.der.x509 ${MARLIN_KERNEL_SOURCE_DIR}/verity_user.der.x509;
+    ln --verbose --symbolic ${KEYS_DIR}/${DEVICE}/verity_user.der.x509 ${MARLIN_KERNEL_SOURCE_DIR}/verity_user.der.x509;
     cd ${MARLIN_KERNEL_SOURCE_DIR};
     make -j$(nproc --all) ARCH=arm64 marlin_defconfig;
     make -j$(nproc --all) ARCH=arm64 CONFIG_COMPAT_VDSO=n CROSS_COMPILE=${BUILD_DIR}/prebuilts/gcc/linux-x86/aarch64/aarch64-linux-android-4.9/bin/aarch64-linux-android-;
@@ -792,18 +868,38 @@ aws_logging() {
   aws s3 cp /var/log/cloud-init-output.log "s3://${AWS_LOGS_BUCKET}/${DEVICE}/$(date +%s)"
 }
 
-aws_gen_keys() {
+aws_import_keys() {
   log_header ${FUNCNAME}
 
-  gen_keys
-  retry aws s3 sync "${BUILD_DIR}/keys" "s3://${AWS_KEYS_BUCKET}"
+  if [ "$ENCRYPTED_KEYS" = true ]; then
+    if [ "$(aws s3 ls "s3://${AWS_ENCRYPTED_KEYS_BUCKET}/${DEVICE}" | wc -l)" == '0' ]; then
+      log "No encrypted keys were found - generating encrypted keys"
+      gen_keys
+      for f in $(find "${KEYS_DIR}" -type f); do 
+        log "Encrypting file ${f} to ${f}.gpg"
+        gpg --symmetric --batch --passphrase "$ENCRYPTION_KEY" --cipher-algo AES256 $f
+      done
+      log "Syncing encrypted keys to S3 s3://${AWS_ENCRYPTED_KEYS_BUCKET}"
+      aws s3 sync "${KEYS_DIR}" "s3://${AWS_ENCRYPTED_KEYS_BUCKET}" --exclude "*" --include "*.gpg"
+    fi
+  else 
+    if [ "$(aws s3 ls "s3://${AWS_KEYS_BUCKET}/${DEVICE}" | wc -l)" == '0' ]; then
+      log "No keys were found - generating keys"
+      gen_keys
+      log "Syncing keys to S3 s3://${AWS_KEYS_BUCKET}"
+      aws s3 sync "${KEYS_DIR}" "s3://${AWS_KEYS_BUCKET}"
+    else
+      log "Keys already exist for ${DEVICE} - syncing them from S3"
+      aws s3 sync "s3://${AWS_KEYS_BUCKET}" "${KEYS_DIR}"
+    fi 
+  fi
 }
 
 gen_keys() {
   log_header ${FUNCNAME}
 
-  mkdir --parents "${BUILD_DIR}/keys/${DEVICE}"
-  cd "${BUILD_DIR}/keys/${DEVICE}"
+  mkdir -p "${KEYS_DIR}/${DEVICE}"
+  cd "${KEYS_DIR}/${DEVICE}"
   for key in {releasekey,platform,shared,media,verity} ; do
     # make_key exits with unsuccessful code 1 instead of 0, need ! to negate
     ! "${BUILD_DIR}/development/tools/make_key" "$key" "$CERTIFICATE_SUBJECT"
@@ -822,8 +918,8 @@ gen_avb_key() {
   log_header ${FUNCNAME}
 
   cd "$BUILD_DIR"
-  openssl genrsa -out "${BUILD_DIR}/keys/$1/avb.pem" 2048
-  ${BUILD_DIR}/external/avb/avbtool extract_public_key --key "${BUILD_DIR}/keys/$1/avb.pem" --output "${BUILD_DIR}/keys/$1/avb_pkmd.bin"
+  openssl genrsa -out "${KEYS_DIR}/$1/avb.pem" 2048
+  ${BUILD_DIR}/external/avb/avbtool extract_public_key --key "${KEYS_DIR}/$1/avb.pem" --output "${KEYS_DIR}/$1/avb_pkmd.bin"
 }
 
 gen_verity_key() {
@@ -831,14 +927,12 @@ gen_verity_key() {
   cd "$BUILD_DIR"
 
   make -j 20 generate_verity_key
-  "${BUILD_DIR}/out/host/linux-x86/bin/generate_verity_key" -convert "${BUILD_DIR}/keys/$1/verity.x509.pem" "${BUILD_DIR}/keys/$1/verity_key"
+  "${BUILD_DIR}/out/host/linux-x86/bin/generate_verity_key" -convert "${KEYS_DIR}/$1/verity.x509.pem" "${KEYS_DIR}/$1/verity_key"
   make clobber
-  openssl x509 -outform der -in "${BUILD_DIR}/keys/$1/verity.x509.pem" -out "${BUILD_DIR}/keys/$1/verity_user.der.x509"
+  openssl x509 -outform der -in "${KEYS_DIR}/$1/verity.x509.pem" -out "${KEYS_DIR}/$1/verity_user.der.x509"
 }
 
 cleanup() {
-  log_header ${FUNCNAME}
-
   rv=$?
   aws_logging
   if [ $rv -ne 0 ]; then

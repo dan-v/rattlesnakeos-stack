@@ -81,7 +81,7 @@ Flags:
 ```
 
 ## First Time Setup After Deployment
-* Setup email notifications for builds. <i>Note: you may miss some of the first notifications as the build may have kicked off already and sent notifications before email notifications were configured.</i>
+* Setup email notifications for builds. <i>Note: you may miss some of the first notifications as an EC2 instance should have immediately launched after setting up initial stack and it may send notifications before you are subscribed to them. If you chose advanced encrypted keys option the launched instance may timeout waiting for an encryption key and terminate - you'll just need to kick off a manual build in this case (see FAQ) after setting up email notifications.</i>
   * Go to the [SNS console](https://us-west-2.console.aws.amazon.com/sns/v2/home?region=us-west-2#/topics)
   * Click on the topic named `rattlesnakeos-<yourstackname>`
   * Click on `Create subscription` button
@@ -100,7 +100,7 @@ Flags:
 * After successfully flashing your device, you will now be running RattlesnakeOS and all future updates will happen through the built in OTA updater.
 * <b>I highly suggest backing up your generated signing keys</b>. To backup your signing keys:
   * Go to the [S3 Console](https://s3.console.aws.amazon.com/s3/buckets/).
-  * Click on `rattlesnakeos-<yourstackname>-keys` bucket.
+  * Click on `rattlesnakeos-<yourstackname>-keys` bucket or if using encrypted keys option `rattlesnakeos-<yourstackname>-keys-encrypted` (and don't lose your encryption key!).
   * Download all these keys there and store them in a safe place.
 
 ## How to update rattlesnakeos-stack
@@ -136,6 +136,23 @@ If there wasn't an error notification, this is likely because the [Spot Instance
 If you go to `Settings->System update settings` you'll see the updater app settings. The updater app will check S3 to see if there are updates and if it finds one will download and apply it your device. There is no progress indicator unfortunately - you'll just got a notification when it's done and it will ask you to reboot. If you want to force a check for OTA updates, you can toggle the `Require battery above warning level` setting and it will check for a new build in your S3 bucket.
 #### <b>What network carriers are supported?</b> 
 I only have access to a single device and carrier to test this on, so I can't make any promises about it working with your specific carrier. Confirmed working: T-Mobile, Rogers, Cricket, Ting. Likely not to work: Sprint (has requirements about specific carrier app being on phone to work), Project Fi.
+#### <b>How do I migrate to using encrypted signing keys?</b> 
+If you have an existing stack and want to move to encrypted signing keys you'll need to migrate your keys. Note: if you don't do this migration process new signing keys will be generated during the build process and you'll need to flash a new factory image (losing all data) to be able to use these builds.
+* First you'll need to update your stack to use the `--encrypted-keys` option. After updating your stack, a new S3 bucket will be created `s3://<rattlsnakeos-stackname>-keys-encrypted/`.
+* Next you'll need to copy your existing signing keys from S3, encrypt them with GPG (be sure to use a strong key), and then copy them over to new S3 bucket.
+```sh
+mkdir -p key-migration
+cd key-migration
+aws s3 sync s3://<rattlsnakeos-stackname>-keys/ .
+echo -n "Encryption key: "
+read -s key
+echo
+for f in $(find . -type f); do 
+  gpg --symmetric --batch --passphrase "${key}" --cipher-algo AES256 $f
+done
+aws s3 sync . s3://<rattlsnakeos-stackname>-keys-encrypted/ --exclude "*" --include "*.gpg"
+```
+* After running a full build and updating your device, you can remove the keys from the original `s3://<rattlsnakeos-stackname>-keys` bucket.
 
 ## Uninstalling
 ### How to uninstall rattlesnakeos-stack

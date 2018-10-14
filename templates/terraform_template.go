@@ -104,6 +104,22 @@ resource "aws_iam_role_policy" "rattlesnake_ec2_policy" {
 		"Effect": "Allow",
 		"Action": [
 			"s3:GetObject",
+			"s3:PutObject"
+		],
+		"Resource": "arn:aws:s3:::${var.name}-keys-encrypted/*"
+	},
+	{
+		"Effect": "Allow",
+		"Action": [
+			"s3:ListBucket",
+			"s3:GetBucketLocation"
+		],
+		"Resource": "arn:aws:s3:::${var.name}-keys-encrypted"
+	},
+	{
+		"Effect": "Allow",
+		"Action": [
+			"s3:GetObject",
 			"s3:PutObject",
 			"s3:ListMultipartUploadParts",
 			"s3:AbortMultipartUpload"
@@ -228,10 +244,52 @@ resource "aws_iam_role" "rattlesnake_spot_fleet_role" {
 EOF
 }
 
-resource "aws_iam_policy_attachment" "rattlesnake_spot_fleet_policy_attachment" {
-  name       = "EC2SpotFleetRole"
-  roles      = ["${aws_iam_role.rattlesnake_spot_fleet_role.name}"]
-  policy_arn = "arn:aws:iam::aws:policy/service-role/AmazonEC2SpotFleetRole"
+resource "aws_iam_policy" "rattlesnake_spot_fleet_policy" {
+	name = "${var.name}-spot-fleet-policy"
+	policy = <<EOF
+{
+"Version": "2012-10-17",
+"Statement": [
+	{
+		"Effect": "Allow",
+		"Action": [
+				"ec2:DescribeImages",
+				"ec2:DescribeSubnets",
+				"ec2:RequestSpotInstances",
+				"ec2:TerminateInstances",
+				"ec2:DescribeInstanceStatus",
+				"iam:PassRole"
+		],
+		"Resource": [
+				"*"
+		]
+},
+{
+		"Effect": "Allow",
+		"Action": [
+				"elasticloadbalancing:RegisterInstancesWithLoadBalancer"
+		],
+		"Resource": [
+				"arn:aws:elasticloadbalancing:*:*:loadbalancer/*"
+		]
+},
+{
+		"Effect": "Allow",
+		"Action": [
+				"elasticloadbalancing:RegisterTargets"
+		],
+		"Resource": [
+				"*"
+		]
+}
+]
+}
+EOF
+}
+
+resource "aws_iam_role_policy_attachment" "rattlesnake_spot_fleet_policy_attachment" {
+	role       = "${aws_iam_role.rattlesnake_spot_fleet_role.name}"
+	policy_arn = "${aws_iam_policy.rattlesnake_spot_fleet_policy.arn}"
 }
 
 ###################
@@ -239,6 +297,18 @@ resource "aws_iam_policy_attachment" "rattlesnake_spot_fleet_policy_attachment" 
 ###################
 resource "aws_s3_bucket" "rattlesnake_s3_keys" {
   bucket = "${var.name}-keys"
+  acl    = "private"
+
+  server_side_encryption_configuration {
+    rule {
+      apply_server_side_encryption_by_default {
+        sse_algorithm = "AES256"
+      }
+    }
+  }
+}
+resource "aws_s3_bucket" "rattlesnake_s3_keys_enc" {
+  bucket = "${var.name}-keys-encrypted"
   acl    = "private"
 
   server_side_encryption_configuration {

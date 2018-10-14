@@ -9,6 +9,7 @@ import (
 	"os"
 	"os/exec"
 	"runtime"
+	"strings"
 
 	"github.com/dan-v/rattlesnakeos-stack/templates"
 	log "github.com/sirupsen/logrus"
@@ -45,6 +46,9 @@ func newTerraformClient(config *AWSStack, stdout, stderr io.Writer) (*terraformC
 
 	// write out shell script
 	config.BuildScriptFileLocation = tempDir.Path(buildScriptFilename)
+	if runtime.GOOS == "windows" {
+		config.BuildScriptFileLocation = strings.Replace(config.BuildScriptFileLocation, "\\", "/", -1)
+	}
 	err = ioutil.WriteFile(config.BuildScriptFileLocation, config.renderedBuildScript, 0644)
 	if err != nil {
 		return nil, err
@@ -62,6 +66,9 @@ func newTerraformClient(config *AWSStack, stdout, stderr io.Writer) (*terraformC
 		return nil, err
 	}
 	config.LambdaZipFileLocation = tempDir.Path(lambdaZipFilename)
+	if runtime.GOOS == "windows" {
+		config.LambdaZipFileLocation = strings.Replace(config.LambdaZipFileLocation, "\\", "/", -1)
+	}
 
 	// render terraform template
 	renderedTerraform, err := renderTemplate(templates.TerraformTemplate, config)
@@ -112,7 +119,11 @@ func (client *terraformClient) Destroy() error {
 }
 
 func (client *terraformClient) terraform(args []string, stdout io.Writer) error {
-	cmd := exec.Command(client.tempDir.Path("terraform"), args...)
+	terraformBinary := "terraform"
+	if runtime.GOOS == "windows" {
+		terraformBinary = "terraform.exe"
+	}
+	cmd := exec.Command(client.tempDir.Path(terraformBinary), args...)
 	cmd.Dir = client.configDir
 	cmd.Stdout = stdout
 	cmd.Stderr = client.stderr
@@ -166,7 +177,11 @@ func setupBinary(tempDir *TempDir) error {
 		return err
 	}
 
-	if err := os.Chmod(tempDir.Path("terraform"), 0700); err != nil {
+	terraformBinary := "terraform"
+	if runtime.GOOS == "windows" {
+		terraformBinary = "terraform.exe"
+	}
+	if err := os.Chmod(tempDir.Path(terraformBinary), 0700); err != nil {
 		return err
 	}
 

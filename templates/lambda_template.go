@@ -42,6 +42,7 @@ SSH_KEY_NAME = '<% .SSHKey %>'
 MAX_PRICE = '<% .MaxPrice %>'
 SKIP_PRICE = '<% .SkipPrice %>'
 REGIONS = '<% .InstanceRegions %>'
+AMI_OVERRIDE = '<% .AMI %>'
 
 def send_sns_message(subject, message):
     account_id = boto3.client('sts').get_caller_identity().get('Account')
@@ -94,6 +95,11 @@ def lambda_handler(event, context):
         send_sns_message("RattlesnakeOS Spot Instance SKIPPED", message)
         return message
 
+    # AMI to launch with
+    ami = REGION_AMIS[cheapest_region]
+    if AMI_OVERRIDE:
+        ami = AMI_OVERRIDE
+
     # create ec2 client for cheapest region
     client = boto3.client('ec2', region_name=cheapest_region)
     
@@ -128,7 +134,7 @@ runcmd:
         'TerminateInstancesWithExpiration': True,
         'LaunchSpecifications': [
             {
-                'ImageId': REGION_AMIS[cheapest_region],
+                'ImageId': ami,
                 'SubnetId': subnets,
                 'InstanceType': INSTANCE_TYPE,
                 'IamInstanceProfile': {
