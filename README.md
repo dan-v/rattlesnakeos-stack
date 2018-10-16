@@ -60,11 +60,14 @@ To see full list of options you can pass rattlesnake-stack you can use the help 
 ...
 
 Flags:
+      --ami-id string             override default AMI image for builds
+      --chromium-version string   specify the version of Chromium you want (e.g. 69.0.3497.100) to pin to. if not specified, the latest stable version of Chromium is used.
   -d, --device string             device you want to build for: 'marlin' (Pixel XL), 'sailfish' (Pixel), 'taimen' (Pixel 2 XL), 'walleye' (Pixel 2)
+      --encrypted-keys            an advanced option that allows signing keys to be stored with symmetric gpg encryption and decrypted into memory during the build process. this option requires manual intervention during builds where you will be sent a notification and need to provide the key required for decryption over SSH to continue the build process. important: if you have an existing stack - please see the FAQ for how to migrate your keys
       --force                     build even if there are no changes in available version of AOSP, Chromium, or F-Droid.
   -h, --help                      help for rattlesnakeos-stack
       --hosts-file string         an advanced option that allows you to specify a replacement /etc/hosts file to enable global dns adblocking (e.g. https://raw.githubusercontent.com/StevenBlack/hosts/master/hosts). note: be careful with this, as you 1) won't get any sort of notification on blocking 2) if you need to unblock something you'll have to rebuild the OS
-      --instance-regions string   possible regions to launch spot instance. (default "us-west-2,us-west-1,us-east-1,us-east-2")
+      --instance-regions string   possible regions to launch spot instance. the region with cheapest spot instance price will be used. (default "us-west-2,us-west-1,us-east-1,us-east-2")
       --instance-type string      EC2 instance type (e.g. c4.4xlarge) to use for the build. (default "c5.4xlarge")
       --max-price string          max ec2 spot instance bid. if this value is too low, you may not obtain an instance or it may terminate during a build. (default "1.00")
   -n, --name string               name for stack. note: this must be a valid/unique S3 bucket name.
@@ -74,7 +77,6 @@ Flags:
       --repo-patches string       an advanced option that allows you to specify a git repo with patches to apply to AOSP build tree. see https://github.com/RattlesnakeOS/community_patches for more details.
       --repo-prebuilts string     an advanced option that allows you to specify a git repo with prebuilt APKs. see https://github.com/RattlesnakeOS/example_prebuilts for more details.
       --schedule string           cron expression that defines when to kick off builds. note: if you give invalid expression it will fail to deploy stack. see: https://docs.aws.amazon.com/AmazonCloudWatch/latest/events/ScheduledEvents.html#CronExpressions (default "rate(14 days)")
-      --skip-chromium             if you want to avoid doing chromium builds (still need the initial build though) for a period of time you can enable this
       --skip-price string         skip requesting ec2 spot instance if price is above this value to begin with. (default "0.68")
       --ssh-key string            aws ssh key to add to ec2 spot instances. this is optional but is useful for debugging build issues on the instance.
       --version                   version for rattlesnakeos-stack
