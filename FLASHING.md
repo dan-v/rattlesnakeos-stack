@@ -112,3 +112,5 @@ OEM unlocking needs to be disabled now from within the operating system.
 Enable the developer settings menu by going to `Settings -> About device` and pressing on the build number menu entry until developer mode is enabled.
 
 Next, go to `Settings -> Developer` settings and toggle off the `Enable OEM unlocking` setting.
+
+<b>Note: I think it's important to mention that disabling OEM unlocking does significantly increase the security of your device, but it also increases potential for bricking your phone. If you somehow manage to get the device into a non booting state while OEM unlocking is disabled AND you lose the generated signing keys, you wouldn't be able to generate a new valid image to get your phone booting and it would essentially be bricked.</b>

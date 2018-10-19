@@ -33,3 +33,4 @@
 artifacts
 rattlesnakeos-stack
 .vscode/
+*.toml

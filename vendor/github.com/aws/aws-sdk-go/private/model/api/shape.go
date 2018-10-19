@@ -40,13 +40,15 @@ type ShapeRef struct {
 	Streaming     bool
 	XMLAttribute  bool
 	// Ignore, if set, will not be sent over the wire
-	Ignore           bool
-	XMLNamespace     XMLInfo
-	Payload          string
-	IdempotencyToken bool   `json:"idempotencyToken"`
-	TimestampFormat  string `json:"timestampFormat"`
-	JSONValue        bool   `json:"jsonvalue"`
-	Deprecated       bool   `json:"deprecated"`
+	Ignore              bool
+	XMLNamespace        XMLInfo
+	Payload             string
+	IdempotencyToken    bool   `json:"idempotencyToken"`
+	TimestampFormat     string `json:"timestampFormat"`
+	JSONValue           bool   `json:"jsonvalue"`
+	Deprecated          bool   `json:"deprecated"`
+	DeprecatedMsg       string `json:"deprecatedMessage"`
+	EndpointDiscoveryID bool   `json:"endpointdiscoveryid"`
 
 	OrigShapeName string `json:"-"`
 
@@ -96,7 +98,8 @@ type Shape struct {
 	// Defines if the shape is a placeholder and should not be used directly
 	Placeholder bool
 
-	Deprecated bool `json:"deprecated"`
+	Deprecated    bool   `json:"deprecated"`
+	DeprecatedMsg string `json:"deprecatedMessage"`
 
 	Validations ShapeValidations
 
@@ -180,6 +183,13 @@ func (s *Shape) MemberNames() []string {
 	}
 	sort.Strings(names)
 	return names
+}
+
+// HasMember will return whether or not the shape has a given
+// member by name.
+func (s *Shape) HasMember(name string) bool {
+	_, ok := s.MemberRefs[name]
+	return ok
 }
 
 // GoTypeWithPkgName returns a shape's type as a string with the package name in
@@ -584,7 +594,8 @@ var structShapeTmpl = func() *template.Template {
 	shapeTmpl := template.Must(
 		template.New("structShapeTmpl").
 			Funcs(template.FuncMap{
-				"GetCrosslinkURL": GetCrosslinkURL,
+				"GetCrosslinkURL":  GetCrosslinkURL,
+				"GetDeprecatedMsg": getDeprecatedMessage,
 			}).
 			Parse(structShapeTmplDef),
 	)
@@ -610,6 +621,12 @@ var structShapeTmpl = func() *template.Template {
 
 const structShapeTmplDef = `
 {{ .Docstring }}
+{{ if .Deprecated -}}
+{{ if .Docstring -}}
+//
+{{ end -}}
+// Deprecated: {{ GetDeprecatedMsg .DeprecatedMsg .ShapeName }}
+{{ end -}}
 {{ $context := . -}}
 type {{ .ShapeName }} struct {
 	_ struct{} {{ .GoTags true false }}
@@ -622,6 +639,10 @@ type {{ .ShapeName }} struct {
 
 		{{ if $doc -}}
 			{{ $doc }}
+			{{ if $elem.Deprecated -}}
+			//
+			// Deprecated: {{ GetDeprecatedMsg $elem.DeprecatedMsg $name }}
+			{{ end -}}
 		{{ end -}}
 		{{ if $isBlob -}}
 			{{ if $doc -}}

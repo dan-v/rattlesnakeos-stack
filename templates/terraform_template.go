@@ -296,7 +296,8 @@ resource "aws_iam_role_policy_attachment" "rattlesnake_spot_fleet_policy_attachm
 # S3
 ###################
 resource "aws_s3_bucket" "rattlesnake_s3_keys" {
-  bucket = "${var.name}-keys"
+	bucket = "${var.name}-keys"
+	force_destroy = true
   acl    = "private"
 
   server_side_encryption_configuration {
@@ -308,7 +309,8 @@ resource "aws_s3_bucket" "rattlesnake_s3_keys" {
   }
 }
 resource "aws_s3_bucket" "rattlesnake_s3_keys_enc" {
-  bucket = "${var.name}-keys-encrypted"
+	bucket = "${var.name}-keys-encrypted"
+	force_destroy = true
   acl    = "private"
 
   server_side_encryption_configuration {
@@ -320,7 +322,8 @@ resource "aws_s3_bucket" "rattlesnake_s3_keys_enc" {
   }
 }
 resource "aws_s3_bucket" "rattlesnake_s3_logs" {
-  bucket = "${var.name}-logs"
+	bucket = "${var.name}-logs"
+	force_destroy = true
   acl    = "private"
 
   server_side_encryption_configuration {
@@ -332,7 +335,8 @@ resource "aws_s3_bucket" "rattlesnake_s3_logs" {
   }
 }
 resource "aws_s3_bucket" "rattlesnake_s3_release" {
-  bucket = "${var.name}-release"
+	bucket = "${var.name}-release"
+	force_destroy = true
   acl    = "private"
 
   server_side_encryption_configuration {
@@ -344,7 +348,8 @@ resource "aws_s3_bucket" "rattlesnake_s3_release" {
   }
 }
 resource "aws_s3_bucket" "rattlesnake_s3_script" {
-  bucket = "${var.name}-script"
+	bucket = "${var.name}-script"
+	force_destroy = true
   acl    = "private"
 
   server_side_encryption_configuration {

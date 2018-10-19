@@ -23,10 +23,37 @@ type Operation struct {
 	ErrorRefs     []ShapeRef `json:"errors"`
 	Paginator     *Paginator
 	Deprecated    bool   `json:"deprecated"`
+	DeprecatedMsg string `json:"deprecatedMessage"`
 	AuthType      string `json:"authtype"`
 	imports       map[string]bool
 
 	EventStreamAPI *EventStreamAPI
+
+	IsEndpointDiscoveryOp bool               `json:"endpointoperation"`
+	EndpointDiscovery     *EndpointDiscovery `json:"endpointdiscovery"`
+}
+
+// EndpointDiscovery represents a map of key values pairs that represents
+// metadata about how a given API will make a call to the discovery endpoint.
+type EndpointDiscovery struct {
+	// Required indicates that for a given operation that endpoint is required.
+	// Any required endpoint discovery operation cannot have endpoint discovery
+	// turned off.
+	Required bool `json:"required"`
+}
+
+// OperationForMethod returns the API operation name that corresponds to the
+// client method name provided.
+func (a *API) OperationForMethod(name string) *Operation {
+	for _, op := range a.Operations {
+		for _, m := range op.Methods() {
+			if m == name {
+				return op
+			}
+		}
+	}
+
+	return nil
 }
 
 // A HTTPInfo defines the method of HTTP request for the Operation.
@@ -34,6 +61,24 @@ type HTTPInfo struct {
 	Method       string
 	RequestURI   string
 	ResponseCode uint
+}
+
+// Methods Returns a list of method names that will be generated.
+func (o *Operation) Methods() []string {
+	methods := []string{
+		o.ExportedName,
+		o.ExportedName + "Request",
+		o.ExportedName + "WithContext",
+	}
+
+	if o.Paginator != nil {
+		methods = append(methods, []string{
+			o.ExportedName + "Pages",
+			o.ExportedName + "PagesWithContext",
+		}...)
+	}
+
+	return methods
 }
 
 // HasInput returns if the Operation accepts an input paramater
@@ -71,13 +116,14 @@ func (o *Operation) GetSigner() string {
 var tplOperation = template.Must(template.New("operation").Funcs(template.FuncMap{
 	"GetCrosslinkURL":       GetCrosslinkURL,
 	"EnableStopOnSameToken": enableStopOnSameToken,
+	"GetDeprecatedMsg":      getDeprecatedMessage,
 }).Parse(`
 const op{{ .ExportedName }} = "{{ .Name }}"
 
 // {{ .ExportedName }}Request generates a "aws/request.Request" representing the
 // client's request for the {{ .ExportedName }} operation. The "output" return
 // value will be populated with the request's response once the request completes
-// successfuly.
+// successfully.
 //
 // Use "Send" method on the returned Request to send the API call to the service.
 // the "output" return value is not valid until after Send returns without error.
@@ -100,6 +146,9 @@ const op{{ .ExportedName }} = "{{ .Name }}"
 {{ if ne $crosslinkURL "" -}} 
 //
 // See also, {{ $crosslinkURL }}
+{{ end -}}
+{{- if .Deprecated }}//
+// Deprecated: {{ GetDeprecatedMsg .DeprecatedMsg .ExportedName }}
 {{ end -}}
 func (c *{{ .API.StructName }}) {{ .ExportedName }}Request(` +
 	`input {{ .InputRef.GoType }}) (req *request.Request, output {{ .OutputRef.GoType }}) {
@@ -138,6 +187,39 @@ func (c *{{ .API.StructName }}) {{ .ExportedName }}Request(` +
 			req.Handlers.Unmarshal.PushBack(output.unmarshalInitialResponse)
 		{{ end -}}
 	{{ end -}}
+	{{ if .EndpointDiscovery -}}
+
+	{{if not .EndpointDiscovery.Required -}}
+		if aws.BoolValue(req.Config.EnableEndpointDiscovery) {
+	{{end -}}
+			de := discoverer{{ .API.EndpointDiscoveryOp.Name }}{
+				Required: {{ .EndpointDiscovery.Required }},
+				EndpointCache: c.endpointCache,
+				Params: map[string]*string{
+					"op": aws.String(req.Operation.Name),
+					{{ range $key, $ref := .InputRef.Shape.MemberRefs -}}
+					{{ if $ref.EndpointDiscoveryID -}}
+					"{{ $ref.OrigShapeName }}": input.{{ $key }},
+					{{ end -}}
+					{{- end }}
+				},
+				Client: c,
+			}
+
+			for k, v := range de.Params {
+				if v == nil {
+					delete(de.Params, k)
+				}
+			}
+
+			req.Handlers.Build.PushFrontNamed(request.NamedHandler{
+				Name: "crr.endpointdiscovery",
+				Fn: de.Handler,
+			})
+	{{if not .EndpointDiscovery.Required -}}
+		}
+	{{ end -}}
+	{{ end -}}
 	return
 }
 
@@ -168,6 +250,9 @@ func (c *{{ .API.StructName }}) {{ .ExportedName }}Request(` +
 {{ if ne $crosslinkURL "" -}} 
 // See also, {{ $crosslinkURL }}
 {{ end -}}
+{{- if .Deprecated }}//
+// Deprecated: {{ GetDeprecatedMsg .DeprecatedMsg .ExportedName }}
+{{ end -}}
 func (c *{{ .API.StructName }}) {{ .ExportedName }}(` +
 	`input {{ .InputRef.GoType }}) ({{ .OutputRef.GoType }}, error) {
 	req, out := c.{{ .ExportedName }}Request(input)
@@ -183,6 +268,9 @@ func (c *{{ .API.StructName }}) {{ .ExportedName }}(` +
 // the context is nil a panic will occur. In the future the SDK may create
 // sub-contexts for http.Requests. See https://golang.org/pkg/context/
 // for more information on using Contexts.
+{{ if .Deprecated }}//
+// Deprecated: {{ GetDeprecatedMsg .DeprecatedMsg (printf "%s%s" .ExportedName "WithContext") }}
+{{ end -}}
 func (c *{{ .API.StructName }}) {{ .ExportedName }}WithContext(` +
 	`ctx aws.Context, input {{ .InputRef.GoType }}, opts ...request.Option) ` +
 	`({{ .OutputRef.GoType }}, error) {
@@ -210,6 +298,9 @@ func (c *{{ .API.StructName }}) {{ .ExportedName }}WithContext(` +
 //            return pageNum <= 3
 //        })
 //
+{{ if .Deprecated }}//
+// Deprecated: {{ GetDeprecatedMsg .DeprecatedMsg (printf "%s%s" .ExportedName "Pages") }}
+{{ end -}}
 func (c *{{ .API.StructName }}) {{ .ExportedName }}Pages(` +
 	`input {{ .InputRef.GoType }}, fn func({{ .OutputRef.GoType }}, bool) bool) error {
 	return c.{{ .ExportedName }}PagesWithContext(aws.BackgroundContext(), input, fn)
@@ -222,6 +313,9 @@ func (c *{{ .API.StructName }}) {{ .ExportedName }}Pages(` +
 // the context is nil a panic will occur. In the future the SDK may create
 // sub-contexts for http.Requests. See https://golang.org/pkg/context/
 // for more information on using Contexts.
+{{ if .Deprecated }}//
+// Deprecated: {{ GetDeprecatedMsg .DeprecatedMsg (printf "%s%s" .ExportedName "PagesWithContext") }}
+{{ end -}}
 func (c *{{ .API.StructName }}) {{ .ExportedName }}PagesWithContext(` +
 	`ctx aws.Context, ` +
 	`input {{ .InputRef.GoType }}, ` +
@@ -250,6 +344,76 @@ func (c *{{ .API.StructName }}) {{ .ExportedName }}PagesWithContext(` +
 	return p.Err()
 }
 {{ end }}
+
+{{ if .IsEndpointDiscoveryOp -}}
+
+type discoverer{{ .ExportedName }} struct {
+	Client *{{ .API.StructName }}
+	Required bool
+	EndpointCache *crr.EndpointCache
+	Params map[string]*string
+	Key string
+}
+
+func (d *discoverer{{ .ExportedName }}) Discover() (crr.Endpoint, error) {
+	input := &{{ .API.EndpointDiscoveryOp.InputRef.ShapeName }}{
+		{{ if .API.EndpointDiscoveryOp.InputRef.Shape.HasMember "Operation" -}}
+		Operation: d.Params["op"],
+		{{ end -}}
+		{{ if .API.EndpointDiscoveryOp.InputRef.Shape.HasMember "Identifiers" -}}
+		Identifiers: d.Params,
+		{{ end -}}
+	}
+
+	resp, err := d.Client.{{ .API.EndpointDiscoveryOp.Name }}(input)
+	if err != nil {
+		return crr.Endpoint{}, err
+	}
+
+	endpoint := crr.Endpoint{
+		Key: d.Key,
+	}
+
+	for _, e := range resp.Endpoints {
+		if e.Address == nil {
+			continue
+		}
+
+		cachedInMinutes := aws.Int64Value(e.CachePeriodInMinutes)
+		u, err := url.Parse(*e.Address)
+		if err != nil {
+			continue
+		}
+
+		addr := crr.WeightedAddress{
+			URL: u,
+			Expired:  time.Now().Add(time.Duration(cachedInMinutes) * time.Minute),
+		}
+
+		endpoint.Add(addr)
+	}
+
+	d.EndpointCache.Add(endpoint)
+
+	return endpoint, nil
+}
+
+func (d *discoverer{{ .ExportedName }}) Handler(r *request.Request) {
+	endpointKey := crr.BuildEndpointKey(d.Params)
+	d.Key = endpointKey
+
+	endpoint, err := d.EndpointCache.Get(d, endpointKey, d.Required)
+	if err != nil {
+		r.Error = err
+		return
+	}
+
+	if endpoint.URL != nil && len(endpoint.URL.String()) > 0 {
+		r.HTTPRequest.URL = endpoint.URL
+	}
+}
+{{ end -}}
+
 `))
 
 // GoCode returns a string of rendered GoCode for this Operation
@@ -261,6 +425,12 @@ func (o *Operation) GoCode() string {
 		o.API.imports["github.com/aws/aws-sdk-go/private/protocol"] = true
 		o.API.imports["github.com/aws/aws-sdk-go/private/protocol/rest"] = true
 		o.API.imports["github.com/aws/aws-sdk-go/private/protocol/"+o.API.ProtocolPackage()] = true
+	}
+
+	if o.API.EndpointDiscoveryOp != nil {
+		o.API.imports["github.com/aws/aws-sdk-go/aws/crr"] = true
+		o.API.imports["time"] = true
+		o.API.imports["net/url"] = true
 	}
 
 	err := tplOperation.Execute(&buf, o)

@@ -3,11 +3,13 @@ package stack
 import (
 	"fmt"
 	"os"
+	"strings"
 
 	"github.com/aws/aws-sdk-go/aws"
 	"github.com/aws/aws-sdk-go/aws/awserr"
 	"github.com/aws/aws-sdk-go/aws/session"
 	"github.com/aws/aws-sdk-go/service/s3"
+	"github.com/aws/aws-sdk-go/service/sns"
 	"github.com/dan-v/rattlesnakeos-stack/templates"
 	log "github.com/sirupsen/logrus"
 )
@@ -17,10 +19,22 @@ const (
 	awsErrCodeNotFound     = "NotFound"
 )
 
+type RepoPatches []struct {
+	Repo    string
+	Patches []string
+	Scripts []string
+}
+
+type RepoPrebuilts []struct {
+	Repo    string
+	Modules []string
+}
+
 type AWSStackConfig struct {
 	Name            string
 	Region          string
 	Device          string
+	Email           string
 	InstanceType    string
 	InstanceRegions string
 	SkipPrice       string
@@ -31,8 +45,8 @@ type AWSStackConfig struct {
 	Schedule        string
 	Force           bool
 	ChromiumVersion string
-	RepoPatches     string
-	RepoPrebuilts   string
+	RepoPatches     *RepoPatches
+	RepoPrebuilts   *RepoPrebuilts
 	HostsFile       string
 	EncryptedKeys   bool
 	AMI             string
@@ -91,7 +105,43 @@ func (s *AWSStack) Apply() error {
 	if err != nil {
 		return err
 	}
-	log.Info("Successfully deployed AWS resources")
+	log.Infof("Successfully deployed/updated AWS resources for stack %v", s.Config.Name)
+
+	sess, err := session.NewSession(aws.NewConfig().WithCredentialsChainVerboseErrors(true))
+	snsClient := sns.New(sess, &aws.Config{Region: &s.Config.Region})
+	resp, err := snsClient.ListTopics(&sns.ListTopicsInput{NextToken: aws.String("")})
+	for _, topic := range resp.Topics {
+		topicName := strings.Split(*topic.TopicArn, ":")[5]
+		if topicName == s.Config.Name {
+			// check if subscription exists
+			resp, err := snsClient.ListSubscriptionsByTopic(&sns.ListSubscriptionsByTopicInput{
+				NextToken: aws.String(""),
+				TopicArn:  aws.String(*topic.TopicArn),
+			})
+			if err != nil {
+				return fmt.Errorf("Failed to list SNS subscriptions for topic %v: %v", *topic.TopicArn, err)
+			}
+			for _, subscription := range resp.Subscriptions {
+				if *subscription.Endpoint == s.Config.Email {
+					return nil
+				}
+			}
+
+			// subscribe if not setup
+			_, err = snsClient.Subscribe(&sns.SubscribeInput{
+				Protocol: aws.String("email"),
+				TopicArn: aws.String(*topic.TopicArn),
+				Endpoint: aws.String(s.Config.Email),
+			})
+			if err != nil {
+				return fmt.Errorf("Failed to setup email notifications: %v", err)
+			}
+			log.Infof("Successfully setup email notifications for %v - you'll "+
+				"need to click link in confirmation email to get notifications.", s.Config.Email)
+			break
+		}
+	}
+
 	return nil
 }
 
@@ -114,7 +164,6 @@ func s3BucketSetup(name, region string) error {
 	}
 	s3Client := s3.New(sess, &aws.Config{Region: &region})
 
-	log.Infof("Creating S3 bucket %s", name)
 	_, err = s3Client.HeadBucket(&s3.HeadBucketInput{Bucket: &name})
 	if err != nil {
 		awsErrCode := err.(awserr.Error).Code()
@@ -133,6 +182,7 @@ func s3BucketSetup(name, region string) error {
 			}
 		}
 
+		log.Infof("Creating S3 bucket %s", name)
 		_, err = s3Client.CreateBucket(bucketInput)
 		if err != nil {
 			return fmt.Errorf("Failed to create bucket %s - note that this bucket name must be globally unique. %v", name, err)

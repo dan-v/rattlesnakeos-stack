@@ -68,8 +68,6 @@ BUILD_TYPE="user"
 BUILD_CHANNEL="stable"
 
 # user customizable things
-REPO_PATCHES=<% .RepoPatches %>
-REPO_PREBUILTS=<% .RepoPrebuilts %>
 HOSTS_FILE=<% .HostsFile %>
 
 # aws settings
@@ -131,9 +129,7 @@ get_latest_versions() {
   fi
   
   # check for latest stable chromium version
-  #LATEST_CHROMIUM=$(curl --fail -s "$CHROME_URL_LATEST" | jq -r '.[] | select(.os == "android") | .versions[] | select(.channel == "'$CHROME_CHANNEL'") | .current_version')
-  # TODO: Unpin Chromium version
-  LATEST_CHROMIUM="69.0.3497.100"
+  LATEST_CHROMIUM=$(curl --fail -s "$CHROME_URL_LATEST" | jq -r '.[] | select(.os == "android") | .versions[] | select(.channel == "'$CHROME_CHANNEL'") | .current_version')
   if [ -z "$LATEST_CHROMIUM" ]; then
     aws_notify_simple "ERROR: Unable to get latest Chromium version details. Stopping build."
     exit 1
@@ -429,14 +425,11 @@ build_chromium() {
 target_os = "android"
 target_cpu = "arm64"
 is_debug = false
-
 is_official_build = true
 is_component_build = false
-symbol_level = 0
-
+symbol_level = 1
 ffmpeg_branding = "Chrome"
 proprietary_codecs = true
-
 android_channel = "stable"
 android_default_version_name = "$CHROMIUM_REVISION"
 android_default_version_code = "$DEFAULT_VERSION"
@@ -490,6 +483,15 @@ aosp_repo_modifications() {
     sed -i '/packages\/apps\/Browser2/d' .repo/manifest.xml
     sed -i '/packages\/apps\/Calendar/d' .repo/manifest.xml
     sed -i '/packages\/apps\/QuickSearchBox/d' .repo/manifest.xml
+
+    # temporary workaround for AOSP build issue in android-9.0.0_r16 (https://issuetracker.google.com/issues/119158513)
+    # build/make/core/base_rules.mk:260: error: hardware/qcom/display/msm8998/include: MODULE.TARGET.HEADER_LIBRARIES.display_headers already defined by hardware/qcom/sdm845/display.
+    # 00:59:12 ckati failed with: exit status 1
+    if [ "${DEVICE}" == "marlin" ] || [ "${DEVICE}" == "sailfish" ] || [ "${DEVICE}" == "walleye" ] || [ "${DEVICE}" == "taimen" ]; then
+      sed -i '/sdm845\/display/d' .repo/manifest.xml
+    else
+      sed -i '/msm8998/d' .repo/manifest.xml
+    fi
   else
     log "Skipping modification of .repo/manifest.xml as they have already been made"
   fi
@@ -561,36 +563,36 @@ patch_aosp_removals() {
 patch_custom() {
   log_header ${FUNCNAME}
   
+  cd $BUILD_DIR
+
   # allow custom patches and shell scripts to be applied
   patches_dir="$HOME/patches"
-  if [ -z "$REPO_PATCHES" ]; then
-    log "No custom patches requested"
-  else
-    cd $BUILD_DIR
-    log "Cloning custom patches $REPO_PATCHES to ${patches_dir}"
-    retry git clone $REPO_PATCHES ${patches_dir}
-    while read patch; do
-      log "Applying patch $patch"
-      case "$patch" in
-          *.patch) patch -p1 --no-backup-if-mismatch < ${patches_dir}/$patch ;;
-          *.sh)    . ${patches_dir}/$patch ;;
-          *)       log "unknown patch type for ${patch}. skipping" ;;
-      esac
-    done < ${patches_dir}/manifest
-  fi
-  
+  <% if .RepoPatches %>
+  <% range $i, $r := .RepoPatches %>
+    retry git clone <% $r.Repo %> ${patches_dir}/<% $i %>
+    <% range $r.Patches %>
+      log "Applying patch <% . %>"
+      patch -p1 -no-backup-if-mismatch < ${patches_dir}/<% $i %>/<% . %>
+    <% end %>
+    <% range $r.Scripts %>
+      log "Applying shell script <% . %>"
+      . ${patches_dir}/<% $i %>/<% . %>
+    <% end %>
+  <% end %>
+  <% end %>
+
   # allow prebuilt applications to be added to build tree
   prebuilt_dir="$BUILD_DIR/packages/apps/Custom"
-  if [ -z "$REPO_PREBUILTS" ]; then
-    log "No custom prebuilts requested"
-  else
-    log "Putting custom prebuilts from $REPO_PREBUILTS in build tree location ${prebuilt_dir}"
-    retry git clone $REPO_PREBUILTS ${prebuilt_dir}
-    while read package_name; do
-      log "Adding custom PRODUCT_PACKAGES += ${package_name} to ${BUILD_DIR}/build/make/target/product/core.mk"
-      sed -i "\$aPRODUCT_PACKAGES += ${package_name}" ${BUILD_DIR}/build/make/target/product/core.mk
-    done < ${prebuilt_dir}/manifest
-  fi
+  <% if .RepoPrebuilts %>
+  <% range $i, $r := .RepoPrebuilts %>
+    log "Putting custom prebuilts from <% $r.Repo %> in build tree location ${prebuilt_dir}/<% $i %>"
+    retry git clone <% $r.Repo %> ${prebuilt_dir}/<% $i %>
+    <% range .Modules %>
+      log "Adding custom PRODUCT_PACKAGES += <% . %> to ${BUILD_DIR}/build/make/target/product/core.mk"
+      sed -i "\$aPRODUCT_PACKAGES += <% . %>" ${BUILD_DIR}/build/make/target/product/core.mk
+    <% end %>
+  <% end %>
+  <% end %>
 
   # allow custom hosts file
   hosts_file_location="$BUILD_DIR/system/core/rootdir/etc/hosts"
@@ -621,8 +623,8 @@ patch_device_config() {
   sed -i 's@PRODUCT_MODEL := AOSP on taimen@PRODUCT_MODEL := Pixel 2 XL@' ${BUILD_DIR}/device/google/taimen/aosp_taimen.mk
   sed -i 's@PRODUCT_MODEL := AOSP on walleye@PRODUCT_MODEL := Pixel 2@' ${BUILD_DIR}/device/google/muskie/aosp_walleye.mk
 
-  sed -i 's@PRODUCT_MODEL := AOSP on crosshatch@PRODUCT_MODEL := Pixel 3 XL@' ${BUILD_DIR}/device/google/crosshatch/aosp_crosshatch.mk
-  sed -i 's@PRODUCT_MODEL := AOSP on blueline@PRODUCT_MODEL := Pixel 3@' ${BUILD_DIR}/device/google/crosshatch/aosp_blueline.mk
+  sed -i 's@PRODUCT_MODEL := AOSP on crosshatch@PRODUCT_MODEL := Pixel 3 XL@' ${BUILD_DIR}/device/google/crosshatch/aosp_crosshatch.mk || true
+  sed -i 's@PRODUCT_MODEL := AOSP on blueline@PRODUCT_MODEL := Pixel 3@' ${BUILD_DIR}/device/google/crosshatch/aosp_blueline.mk || true
 }
 
 patch_chromium_webview() {
