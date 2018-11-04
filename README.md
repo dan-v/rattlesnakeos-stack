@@ -62,7 +62,7 @@ These are some examples of more advanced options that can be used.
 
 To see full list of options you can pass rattlesnake-stack you can use the help flag (-h)
 
-```sh
+```none
 ...
 
 Flags:
