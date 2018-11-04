@@ -71,12 +71,19 @@ TMPDIR=$PWD/tmp ./flash-all.sh
 ```
 
 ## Setting custom AVB key
-On the <b>Pixel 2 and Pixel 2 XL</b>, the public key needs to be set for Android Verified Boot 2.0 before locking the bootloader again:
+On the <b>Pixel 1 and Pixel 1 XL</b>, a locked bootloader will blindly accept whatever public key is embedded in the image.  It will display a yellow screen if an unknown public key is used, and skip the warning if Google's key is used.  This provides only limited protection from tampering when running custom images.  On these units, there is no way to set a custom AVB key.
+
+On newer Pixel devices, a locked bootloader will verify the signing key to make sure it matches the same key set by the user (or Google's master key).  If the image was signed using the avb\_custom\_key, a yellow warning screen will be displayed. If the image was signed with Google's key, no warning will be shown.  If the image was signed with an unrecognized key, the device will refuse to boot.
+
+Therefore, the public key needs to be set before locking the bootloader again.  The procedure for doing so is:
 ```
-fastboot flash avb_custom_key taimen-avb_pkmd.bin
+aws s3 cp s3://<rattlesnakeos-stackname>-keys/taimen/avb_pkmd.bin .
+fastboot flash avb_custom_key avb_pkmd.bin
 ```
 
-To confirm that the key is set, verify that avb_user_settable_key_set is yes:
+If you used `--encrypted-keys`, you will need to download the key from `s3://<rattlesnakeos-stackname>-keys-encrypted` and decrypt it manually.
+
+To confirm that the key is set, verify that `avb_user_settable_key_set` is yes:
 ```
 fastboot getvar avb_user_settable_key_set
 ```

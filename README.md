@@ -175,7 +175,7 @@ If you decide this isn't for you and you want to remove all the provisioned AWS 
 ### How to revert back to stock Android
 For Pixel and Pixel XL, just unlock your bootloader and flash stock factory image.
 
-For Pixel 2 and Pixel 2 XL, you'll need to clear the configured AVB public key after unlocking the bootloader and before locking it again with the stock factory images.
+For newer devices, you'll need to clear the configured AVB public key after unlocking the bootloader and before locking it again with the stock factory images.
 
 ```sh
 fastboot erase avb_custom_key
