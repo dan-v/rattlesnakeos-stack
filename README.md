@@ -3,7 +3,7 @@ RattlesnakeOS is privacy focused Android OS based on [AOSP](https://source.andro
 
 ## Features
 * Based on latest AOSP 9.0 (Android P)
-* Support for <b>Google Pixel, Pixel XL, Pixel 2, Pixel 2 XL</b>
+* Support for <b>Google Pixel, Pixel XL, Pixel 2, Pixel 2 XL, Pixel 3, Pixel 3 XL</b>
 * Monthly software and firmware security fixes delivered through built in OTA updater
 * Maintain [verified boot](https://source.android.com/security/verifiedboot/) with a locked bootloader just like official Android but with your own personal signing keys
 * Latest Chromium [browser](https://www.chromium.org) and [webview](https://www.chromium.org/developers/how-tos/build-instructions-android-webview)
@@ -45,6 +45,12 @@ Deploy stack with default options for your specific device.
 
 # Pixel 2 (walleye)
 ./rattlesnakeos-stack --region us-west-2 --name rattlesnakeos-<yourstackname> --device walleye --ssh-key <yourkeyname>
+
+# Pixel 3 XL (crosshatch)
+./rattlesnakeos-stack --region us-west-2 --name rattlesnakeos-<yourstackname> --device crosshatch --ssh-key <yourkeyname>
+
+# Pixel 3 (blueline)
+./rattlesnakeos-stack --region us-west-2 --name rattlesnakeos-<yourstackname> --device blueline --ssh-key <yourkeyname>
 ```
 
 #### Advanced Examples
@@ -62,7 +68,7 @@ To see full list of options you can pass rattlesnake-stack you can use the help 
 Flags:
       --ami-id string             override default AMI image for builds
       --chromium-version string   specify the version of Chromium you want (e.g. 69.0.3497.100) to pin to. if not specified, the latest stable version of Chromium is used.
-  -d, --device string             device you want to build for: 'marlin' (Pixel XL), 'sailfish' (Pixel), 'taimen' (Pixel 2 XL), 'walleye' (Pixel 2)
+  -d, --device string             device you want to build for; to list supported devices use '-d list'
       --encrypted-keys            an advanced option that allows signing keys to be stored with symmetric gpg encryption and decrypted into memory during the build process. this option requires manual intervention during builds where you will be sent a notification and need to provide the key required for decryption over SSH to continue the build process. important: if you have an existing stack - please see the FAQ for how to migrate your keys
       --force                     build even if there are no changes in available version of AOSP, Chromium, or F-Droid.
   -h, --help                      help for rattlesnakeos-stack

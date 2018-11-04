@@ -2,6 +2,7 @@ package main
 
 import (
 	"errors"
+	"fmt"
 	"os"
 
 	"github.com/dan-v/rattlesnakeos-stack/stack"
@@ -13,13 +14,27 @@ var version string
 var name, region, device, sshKey, maxPrice, skipPrice, schedule, instanceType, instanceRegions, repoPatches, repoPrebuilts, hostsFile, chromiumVersion, ami string
 var remove, preventShutdown, force, encryptedKeys bool
 
+var supportedDevices = []string{"marlin", "sailfish", "taimen", "walleye", "crosshatch", "blueline"}
+var supportedDeviceNames = []string{"Pixel 1 XL", "Pixel 1", "Pixel 2 XL", "Pixel 2", "Pixel 3 XL", "Pixel 3"}
+
 var rootCmd = &cobra.Command{
 	Use:   "rattlesnakeos-stack",
 	Short: "Setup AWS infrastructure to build RattlesnakeOS with OTA updates",
 	Args: func(cmd *cobra.Command, args []string) error {
-		if device != "marlin" && device != "sailfish" && device != "taimen" && device != "walleye" {
-			return errors.New("Must specify either marlin|sailfish|taimen|walleye for device type")
+		if device == "" {
+			return errors.New("Must specify device type; to list supported devices use '-d list'")
 		}
+		for _, d := range supportedDevices {
+			if d == device {
+				return nil
+			}
+		}
+
+		fmt.Println("Supported devices:")
+		for i := 0; i < len(supportedDevices); i++ {
+			fmt.Printf("  %-16s %s\n", supportedDevices[i], supportedDeviceNames[i])
+		}
+		os.Exit(-1)
 		return nil
 	},
 	Version: version,
@@ -68,7 +83,7 @@ func init() {
 		"aws region for stack deployment (e.g. us-west-2)")
 	rootCmd.MarkFlagRequired("region")
 	rootCmd.Flags().StringVarP(&device, "device", "d", "",
-		"device you want to build for: 'marlin' (Pixel XL), 'sailfish' (Pixel), 'taimen' (Pixel 2 XL), 'walleye' (Pixel 2)")
+		"device you want to build for; to list supported devices use '-d list'")
 	rootCmd.MarkFlagRequired("device")
 	rootCmd.Flags().StringVar(&sshKey, "ssh-key", "",
 		"aws ssh key to add to ec2 spot instances. this is optional but is useful for debugging build issues on the instance.")

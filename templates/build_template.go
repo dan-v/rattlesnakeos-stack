@@ -10,12 +10,29 @@ fi
 
 # check if supported device
 DEVICE=$1
-if [ "$DEVICE" == 'sailfish' ] || [ "$DEVICE" == 'marlin' ] || [ "$DEVICE" == 'walleye' ] || [ "$DEVICE" == 'taimen' ]; then
-  echo "Supported device $DEVICE - continuing build"
-else 
-  echo "Unsupported device $DEVICE"
-  exit 1
-fi
+case "$DEVICE" in
+  marlin|sailfish)
+    DEVICE_FAMILY=marlin
+    AVB_MODE=verity_only
+    ;;
+  taimen)
+    DEVICE_FAMILY=taimen
+    AVB_MODE=vbmeta_simple
+    ;;
+  walleye)
+    DEVICE_FAMILY=muskie
+    AVB_MODE=vbmeta_simple
+    ;;
+  crosshatch|blueline)
+    DEVICE_FAMILY=crosshatch
+    AVB_MODE=vbmeta_chained
+    ;;
+  *)
+    echo "warning: unknown device $DEVICE, using Pixel 3 defaults"
+    DEVICE_FAMILY=$1
+    AVB_MODE=vbmeta_chained
+    ;;
+esac
 
 # set region
 REGION=<% .Region %>
@@ -501,13 +518,9 @@ setup_vendor() {
   mv "${BUILD_DIR}/vendor/android-prepare-vendor/${DEVICE}/$(tr '[:upper:]' '[:lower:]' <<< "${AOSP_BUILD}")/vendor/google_devices/${DEVICE}" "${BUILD_DIR}/vendor/google_devices"
 
   # smaller devices need big brother vendor files
-  if [ "$DEVICE" == 'sailfish' ]; then
-    rm -rf "${BUILD_DIR}/vendor/google_devices/marlin" || true
-    mv "${BUILD_DIR}/vendor/android-prepare-vendor/sailfish/$(tr '[:upper:]' '[:lower:]' <<< "${AOSP_BUILD}")/vendor/google_devices/marlin" "${BUILD_DIR}/vendor/google_devices"
-  fi
-  if [ "$DEVICE" == 'walleye' ]; then
-    rm -rf "${BUILD_DIR}/vendor/google_devices/muskie" || true
-    mv "${BUILD_DIR}/vendor/android-prepare-vendor/walleye/$(tr '[:upper:]' '[:lower:]' <<< "${AOSP_BUILD}")/vendor/google_devices/muskie" "${BUILD_DIR}/vendor/google_devices"
+  if [ "$DEVICE" != "$DEVICE_FAMILY" ]; then
+    rm -rf "${BUILD_DIR}/vendor/google_devices/$DEVICE_FAMILY" || true
+    mv "${BUILD_DIR}/vendor/android-prepare-vendor/$DEVICE/$(tr '[:upper:]' '[:lower:]' <<< "${AOSP_BUILD}")/vendor/google_devices/$DEVICE_FAMILY" "${BUILD_DIR}/vendor/google_devices"
   fi
 }
 
@@ -604,8 +617,12 @@ patch_device_config() {
   sed -i 's@PRODUCT_MANUFACTURER := google@PRODUCT_MANUFACTURER := Google@' ${BUILD_DIR}/device/google/marlin/aosp_marlin.mk
   sed -i 's@PRODUCT_MODEL := AOSP on msm8996@PRODUCT_MODEL := Pixel@' ${BUILD_DIR}/device/google/marlin/aosp_sailfish.mk
   sed -i 's@PRODUCT_MANUFACTURER := google@PRODUCT_MANUFACTURER := Google@' ${BUILD_DIR}/device/google/marlin/aosp_sailfish.mk
+
   sed -i 's@PRODUCT_MODEL := AOSP on taimen@PRODUCT_MODEL := Pixel 2 XL@' ${BUILD_DIR}/device/google/taimen/aosp_taimen.mk
   sed -i 's@PRODUCT_MODEL := AOSP on walleye@PRODUCT_MODEL := Pixel 2@' ${BUILD_DIR}/device/google/muskie/aosp_walleye.mk
+
+  sed -i 's@PRODUCT_MODEL := AOSP on crosshatch@PRODUCT_MODEL := Pixel 3 XL@' ${BUILD_DIR}/device/google/crosshatch/aosp_crosshatch.mk
+  sed -i 's@PRODUCT_MODEL := AOSP on blueline@PRODUCT_MODEL := Pixel 3@' ${BUILD_DIR}/device/google/crosshatch/aosp_blueline.mk
 }
 
 patch_chromium_webview() {
@@ -758,15 +775,28 @@ release() {
   mkdir -p $OUT
 
   # depending on device need verity key or avb key
-  if [[ $DEVICE != taimen && $DEVICE != walleye ]]; then
-    VERITY_SWITCHES=(--replace_verity_public_key "$KEY_DIR/verity_key.pub" --replace_verity_private_key "$KEY_DIR/verity"
-                      --replace_verity_keyid "$KEY_DIR/verity.x509.pem")
-  else
-    VERITY_SWITCHES=(--avb_vbmeta_key "$KEY_DIR/avb.pem" --avb_vbmeta_algorithm SHA256_RSA2048)
-  fi
-  
+  case "${AVB_MODE}" in
+    verity_only)
+      AVB_SWITCHES=(--replace_verity_public_key "$KEY_DIR/verity_key.pub"
+                    --replace_verity_private_key "$KEY_DIR/verity"
+                    --replace_verity_keyid "$KEY_DIR/verity.x509.pem")
+      ;;
+    vbmeta_simple)
+      # Pixel 2: one vbmeta struct, no chaining
+      AVB_SWITCHES=(--avb_vbmeta_key "$KEY_DIR/avb.pem"
+                    --avb_vbmeta_algorithm SHA256_RSA2048)
+      ;;
+    vbmeta_chained)
+      # Pixel 3: main vbmeta struct points to a chained vbmeta struct in system.img
+      AVB_SWITCHES=(--avb_vbmeta_key "$KEY_DIR/avb.pem"
+                    --avb_vbmeta_algorithm SHA256_RSA2048
+                    --avb_system_key "$KEY_DIR/avb.pem"
+                    --avb_system_algorithm SHA256_RSA2048)
+      ;;
+  esac
+
   log "Running sign_target_files_apks"
-  build/tools/releasetools/sign_target_files_apks -o -d "$KEY_DIR" "${VERITY_SWITCHES[@]}" \
+  build/tools/releasetools/sign_target_files_apks -o -d "$KEY_DIR" "${AVB_SWITCHES[@]}" \
     out/target/product/$DEVICE/obj/PACKAGING/target_files_intermediates/$PREFIX$DEVICE-target_files-$BUILD_NUMBER.zip \
     $OUT/$TARGET_FILES
   
@@ -907,11 +937,9 @@ gen_keys() {
     ! "${BUILD_DIR}/development/tools/make_key" "$key" "$CERTIFICATE_SUBJECT"
   done
 
-  if [ "${DEVICE}" == "marlin" ] || [ "${DEVICE}" == "sailfish" ]; then
+  if [ "${AVB_MODE}" == "verity_only" ]; then
     gen_verity_key "${DEVICE}"
-  fi
-
-  if [ "${DEVICE}" == "walleye" ] || [ "${DEVICE}" == "taimen" ]; then
+  else
     gen_avb_key "${DEVICE}"
   fi
 }
