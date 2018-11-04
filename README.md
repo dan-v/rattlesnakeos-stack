@@ -140,21 +140,21 @@ If you go to `Settings->System update settings` you'll see the updater app setti
 I only have access to a single device and carrier to test this on, so I can't make any promises about it working with your specific carrier. Confirmed working: T-Mobile, Rogers, Cricket, Ting. Likely not to work: Sprint (has requirements about specific carrier app being on phone to work), Project Fi.
 #### <b>How do I migrate to using encrypted signing keys?</b> 
 If you have an existing stack and want to move to encrypted signing keys you'll need to migrate your keys. Note: if you don't do this migration process new signing keys will be generated during the build process and you'll need to flash a new factory image (losing all data) to be able to use these builds.
-* First you'll need to update your stack to use the `--encrypted-keys` option. After updating your stack, a new S3 bucket will be created `s3://<rattlsnakeos-stackname>-keys-encrypted/`.
+* First you'll need to update your stack to use the `--encrypted-keys` option. After updating your stack, a new S3 bucket will be created `s3://<rattlesnakeos-stackname>-keys-encrypted/`.
 * Next you'll need to copy your existing signing keys from S3, encrypt them with GPG (be sure to use a strong key), and then copy them over to new S3 bucket.
 ```sh
 mkdir -p key-migration
 cd key-migration
-aws s3 sync s3://<rattlsnakeos-stackname>-keys/ .
+aws s3 sync s3://<rattlesnakeos-stackname>-keys/ .
 echo -n "Encryption key: "
 read -s key
 echo
 for f in $(find . -type f); do 
   gpg --symmetric --batch --passphrase "${key}" --cipher-algo AES256 $f
 done
-aws s3 sync . s3://<rattlsnakeos-stackname>-keys-encrypted/ --exclude "*" --include "*.gpg"
+aws s3 sync . s3://<rattlesnakeos-stackname>-keys-encrypted/ --exclude "*" --include "*.gpg"
 ```
-* After running a full build and updating your device, you can remove the keys from the original `s3://<rattlsnakeos-stackname>-keys` bucket.
+* After running a full build and updating your device, you can remove the keys from the original `s3://<rattlesnakeos-stackname>-keys` bucket.
 
 ## Uninstalling
 ### How to uninstall rattlesnakeos-stack
