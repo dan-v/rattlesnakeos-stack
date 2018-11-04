@@ -559,7 +559,7 @@ patch_custom() {
     while read patch; do
       log "Applying patch $patch"
       case "$patch" in
-          *.patch) patch -p1 < ${patches_dir}/$patch ;;
+          *.patch) patch -p1 --no-backup-if-mismatch < ${patches_dir}/$patch ;;
           *.sh)    . ${patches_dir}/$patch ;;
           *)       log "unknown patch type for ${patch}. skipping" ;;
       esac
