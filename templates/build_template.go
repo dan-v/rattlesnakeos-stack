@@ -572,7 +572,7 @@ patch_custom() {
     retry git clone <% $r.Repo %> ${patches_dir}/<% $i %>
     <% range $r.Patches %>
       log "Applying patch <% . %>"
-      patch -p1 -no-backup-if-mismatch < ${patches_dir}/<% $i %>/<% . %>
+      patch -p1 --no-backup-if-mismatch < ${patches_dir}/<% $i %>/<% . %>
     <% end %>
     <% range $r.Scripts %>
       log "Applying shell script <% . %>"
