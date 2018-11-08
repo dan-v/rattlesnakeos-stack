@@ -83,7 +83,7 @@ fastboot flash avb_custom_key avb_pkmd.bin
 
 If you used `--encrypted-keys`, you will need to download the key from `s3://<rattlesnakeos-stackname>-keys-encrypted` and decrypt it manually.
 
-To confirm that the key is set, verify that `avb_user_settable_key_set` is yes:
+To confirm that the key is set (at the moment this is only possible to verify on the Pixel 2/Pixel 2 XL), verify that `avb_user_settable_key_set` is yes:
 ```
 fastboot getvar avb_user_settable_key_set
 ```

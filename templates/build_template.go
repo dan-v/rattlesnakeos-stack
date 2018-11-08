@@ -129,9 +129,7 @@ get_latest_versions() {
   fi
   
   # check for latest stable chromium version
-  #LATEST_CHROMIUM=$(curl --fail -s "$CHROME_URL_LATEST" | jq -r '.[] | select(.os == "android") | .versions[] | select(.channel == "'$CHROME_CHANNEL'") | .current_version')
-  # TODO: Unpin Chromium version
-  LATEST_CHROMIUM="69.0.3497.100"
+  LATEST_CHROMIUM=$(curl --fail -s "$CHROME_URL_LATEST" | jq -r '.[] | select(.os == "android") | .versions[] | select(.channel == "'$CHROME_CHANNEL'") | .current_version')
   if [ -z "$LATEST_CHROMIUM" ]; then
     aws_notify_simple "ERROR: Unable to get latest Chromium version details. Stopping build."
     exit 1
@@ -485,15 +483,6 @@ aosp_repo_modifications() {
     sed -i '/packages\/apps\/Browser2/d' .repo/manifest.xml
     sed -i '/packages\/apps\/Calendar/d' .repo/manifest.xml
     sed -i '/packages\/apps\/QuickSearchBox/d' .repo/manifest.xml
-
-    # temporary workaround for AOSP build issue in android-9.0.0_r16 (https://issuetracker.google.com/issues/119158513)
-    # build/make/core/base_rules.mk:260: error: hardware/qcom/display/msm8998/include: MODULE.TARGET.HEADER_LIBRARIES.display_headers already defined by hardware/qcom/sdm845/display.
-    # 00:59:12 ckati failed with: exit status 1
-    if [ "${DEVICE}" == "marlin" ] || [ "${DEVICE}" == "sailfish" ] || [ "${DEVICE}" == "walleye" ] || [ "${DEVICE}" == "taimen" ]; then
-      sed -i '/sdm845\/display/d' .repo/manifest.xml
-    else
-      sed -i '/msm8998/d' .repo/manifest.xml
-    fi
   else
     log "Skipping modification of .repo/manifest.xml as they have already been made"
   fi

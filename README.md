@@ -1,17 +1,22 @@
-RattlesnakeOS is privacy focused Android OS for Google Pixel phones.
+RattlesnakeOS is a privacy and security focused Android OS for Google Pixel phones.
 
 ## Features
-* Based on latest AOSP 9.0 (Android P)
-* Support for Google <b>Pixel, Pixel XL, Pixel 2, Pixel 2 XL</b>. 
-* Experimental support for <b>Pixel 3, Pixel 3 XL</b> \*<small>there are known issues at the moment</small>\*.
+* Based on latest [AOSP](https://source.android.com/) 9.0 (Android P)
+* Support for Google <b>Pixel, Pixel XL, Pixel 2, Pixel 2 XL</b>. Experimental support for <b>Pixel 3, Pixel 3 XL</b> \*<small>there are known issues at the moment</small>\*.
 * Monthly software and firmware security fixes delivered through built in OTA updater
-* Maintain [verified boot](https://source.android.com/security/verifiedboot/) with a locked bootloader just like official Android but with your own personal signing keys
-* Latest Chromium [browser](https://www.chromium.org) and [webview](https://www.chromium.org/developers/how-tos/build-instructions-android-webview)
-* Latest [F-Droid](https://f-droid.org/) client and [privileged extension](https://gitlab.com/fdroid/privileged-extension)
+* Maintains [verified boot](https://source.android.com/security/verifiedboot/) with a locked bootloader just like official Android but with your own personal signing keys
+* Latest stable Chromium [browser](https://www.chromium.org) and [webview](https://www.chromium.org/developers/how-tos/build-instructions-android-webview)
+* Latest stable [F-Droid](https://f-droid.org/) app store and [privileged extension](https://gitlab.com/fdroid/privileged-extension)
 * Free of Google’s apps and services
+* Advanced build customization options
 
-## What is rattlesnakeos-stack
-Rather than providing random binaries of RattlesnakeOS to install on your phone, I've gone the route of creating a cross platform tool, `rattlesnakeos-stack`, that provisions all of the [AWS](https://aws.amazon.com/) infrastructure needed to continuously build your own personal RattlesnakeOS, with your own signing keys, and your own OTA updates. It uses [AWS Lambda](https://aws.amazon.com/lambda/features/) to provision [EC2 spot instances](https://aws.amazon.com/ec2/spot/) that build RattlesnakeOS and upload artifacts to [S3](https://aws.amazon.com/s3/). Resulting OS builds are configured to receive over the air updates from this environment. It only costs a few dollars a month to run (see FAQ for detailed cost breakdown).
+## Background
+RattlesnakeOS was created initially as an alternative to [CopperheadOS](https://en.wikipedia.org/wiki/CopperheadOS), a security hardened Android OS created by [Daniel Micay](https://twitter.com/DanielMicay), after it stopped being properly maintained back in June 2018. To be clear, this project is not attempting to add or recreate any of the security hardening features that were present in CopperheadOS. Instead, it is looking to fill a gap now that CopperheadOS is no longer available as there are no real alternatives that provide the same level of privacy and security.
+
+RattlesnakeOS is truly just stock AOSP and has all of the baseline privacy and security features from there. Unlike other alternative Android OSes, it aims to keep security on par with stock Android by keeping critical security features like [verified boot](https://source.android.com/security/verifiedboot/) enabled, ensuring monthly OTA security updates not only update the OS but also the device specific drivers and firmware, and by not adding additional features or software that will needlessly increase attack surface. By not deviating from stock AOSP, updating to new major Android releases doesn't require any major porting effort and this means devices running RattlesnakeOS continue to receive proper security updates without delay.
+
+## What is rattlesnakeos-stack?
+Rather than providing random binaries of RattlesnakeOS to install on your phone, I've gone the route of creating a cross platform tool, `rattlesnakeos-stack`, that provisions a "stack", which is just all of the [AWS](https://aws.amazon.com/) cloud infrastructure needed to continuously build your own personal RattlesnakeOS, with your own signing keys, and your own OTA updates. It uses [AWS Lambda](https://aws.amazon.com/lambda/features/) to provision [EC2 spot instances](https://aws.amazon.com/ec2/spot/) that build RattlesnakeOS and upload artifacts to [S3](https://aws.amazon.com/s3/). Resulting OS builds are configured to receive over the air updates from this environment. It only costs a few dollars a month to run (see FAQ for detailed cost breakdown).
 
 ![](/images/overview.png?raw=true)
 
@@ -26,6 +31,7 @@ Rather than providing random binaries of RattlesnakeOS to install on your phone,
    * [First Time Setup After Deployment](#first-time-setup-after-deployment)
    * [FAQ](#faq)
      * [General](#general)
+     * [Costs](#costs)
      * [Builds](#builds)
      * [Customizations](#customizations)
      * [Security](#security)
@@ -33,22 +39,22 @@ Rather than providing random binaries of RattlesnakeOS to install on your phone,
 
 
 ## Prerequisites
-* An AWS account. You'll need to [create an AWS account](https://portal.aws.amazon.com/billing/signup) if you don't have one. <b>If this is a new AWS account, make sure you launch at least once paid instance before running through these steps.</b>  To do this you can navigate to the [EC2 console](https://us-west-2.console.aws.amazon.com/ec2/), click `Launch instance`, select any OS, pick a `c5.4xlarge`, and click `Review and launch`. After it launches successfully you can terminate the instance through the console.
+* An AWS account. You'll need to [create an AWS account](https://portal.aws.amazon.com/billing/signup) if you don't have one. <b>If this is a new AWS account, make sure you launch at least one paid instance before running through these steps.</b>  To do this you can navigate to the [EC2 console](https://us-west-2.console.aws.amazon.com/ec2/), click `Launch instance`, select any OS, pick a `c5.4xlarge`, and click `Review and launch`. After it launches successfully you can terminate the instance through the console.
 * In the AWS web console, you'll need to setup AWS credentials with `AdministratorAccess` access. If you're not sure how to do that, you can follow [this step by step guide](https://serverless-stack.com/chapters/create-an-iam-user.html). You'll need the generated AWS Access Key and Secret Key for the next step.
 * On your local computer, install the [AWS CLI](https://docs.aws.amazon.com/cli/latest/userguide/installing.html) for your platform and [configure](https://docs.aws.amazon.com/cli/latest/userguide/cli-chap-getting-started.html) it to use the credentials from previous step.
-* In the AWS web console, [setup an SSH keypair](https://docs.aws.amazon.com/AWSEC2/latest/UserGuide/ec2-key-pairs.html) and download the key to your local computer. You'll use this keypair name when deploying your stack and you'll use this key if you want to SSH into the launched EC2 spot instances.
+* In the AWS web console, [setup an SSH keypair](https://docs.aws.amazon.com/AWSEC2/latest/UserGuide/ec2-key-pairs.html) and download the key to your local computer. You'll use this keypair name when deploying your stack and you'll use this key if you ever want to SSH into the launched EC2 spot instances.
 
 ## Installation
-The rattlesnakeos-stack tool needs to be installed on your local computer. The easiest way is to download a pre-built binary from the [Github Releases](https://github.com/dan-v/rattlesnakeos-stack/releases) page. The other option is to [build from source](#build-from-source).
+The `rattlesnakeos-stack` tool needs to be installed on your local computer. The easiest way is to download a pre-built binary from the [Github Releases](https://github.com/dan-v/rattlesnakeos-stack/releases) page. The other option is to [build from source](#build-from-source).
 
 ## Configuration
-The rattlesnakeos-stack `config` subcommand will ask you a few questions and create the initial config file stored in `$HOME/.rattlesnakeos.toml`. Make sure to pick a unique name to replace `rattlesnakeos-<yourstackname>` and provide the SSH keypair name that you created in the prerequisite steps to replace `<yourkeyname>`.
+The rattlesnakeos-stack `config` subcommand should be run first to initialize a config file which will be stored in `$HOME/.rattlesnakeos.toml`. Make sure to pick a unique name to replace `<rattlesnakeos-stackname>` and provide the SSH keypair name that you created in the prerequisite steps to replace `<yourkeyname>`.
 
-```
+```none
 ./rattlesnakeos-stack config
 
 Stack name is used as an identifier for all the AWS components that get deployed. This name must be unique or stack deployment will fail.
-Stack name: rattlesnakeos-<yourstackname>
+Stack name: <rattlesnakeos-stackname>
 
 Stack region is the AWS region where you would like to deploy your stack. Valid options: us-west-2, us-east-1, us-east-2, us-west-1, eu-west-1, eu-west-2, eu-west-3, ap-northeast-3, ap-northeast-2, ap-northeast-1, sa-east-1, ap-southeast-1, ca-central-1, ap-southeast-2, ap-south-1, eu-central-1, cn-north-1, cn-northwest-1
 Stack region: us-west-2
@@ -66,11 +72,11 @@ INFO[0005] rattlesnakeos-stack config file has been written to /Users/username/.
 ```
 
 ## Deployment
-The rattlesnakeos-stack `deploy` subcommand will handle deploying (and updating) your "stack" - which is just all the required AWS infrastructure needed to run ongoing builds of RattlesnakeOS. After initial deployment, your first build will automatically start; by default it is configured to build every 2 weeks after this (see the FAQ for details on how to modify build schedule). 
+The rattlesnakeos-stack `deploy` subcommand handles deploying (and updating) your stack. After initial deployment, your first build will automatically start; by default it is configured to build every 2 weeks after this (see the FAQ for details on how to modify build schedule). 
 
 #### Default Examples
 Deploy stack using default generated config file:
-```sh 
+```none 
 ./rattlesnakeos-stack deploy
 
 INFO[0000] Using config file: /Users/user/.rattlesnakeos.toml
@@ -84,36 +90,36 @@ hosts-file: ""
 instance-regions: us-west-2,us-west-1,us-east-1,us-east-2
 instance-type: c5.4xlarge
 max-price: "1.00"
-name: rattlesnakeos-<yourstackname>
+name: <rattlesnakeos-stackname>
 region: us-west-2
 schedule: rate(14 days)
 skip-price: "0.68"
 ssh-key: <yourkeyname>
 
-? Do you want to continue ? [y/N]
+Do you want to continue? [y/N]
 ```
 
 You can override values in the config file with CLI flags:
-```sh 
+```none 
 ./rattlesnakeos-stack deploy --region "us-west-2"
 ...
 ```
 
 You can also persist values you override to the config file if desired:
-```sh 
+```none 
 ./rattlesnakeos-stack deploy --region "us-west-2" --save-config
 ...
 ```
 
 Or you can specify a different config file to use
-```sh 
+```none 
 ./rattlesnakeos-stack deploy --config-file foo.toml
 ...
 ```
 
 #### Advanced Examples
 Here is an example of a more advanced config file that: locks to a specific version of Chromium, specifies a hosts file to install, uses a larger EC2 instance type, builds every 2 days, and pulls in custom patches from the [community patches repo](https://github.com/RattlesnakeOS/community_patches). You can read more about [advanced customization options in FAQ](#customizations).
-```sh 
+```toml 
 chromium-version = "70.0.3538.80"
 device = "marlin"
 encrypted-keys = "false"
@@ -122,7 +128,7 @@ hosts-file = "https://raw.githubusercontent.com/StevenBlack/hosts/master/hosts"
 instance-regions = "us-west-2,us-west-1,us-east-1,us-east-2"
 instance-type = "c5.18xlarge"
 max-price = "1.00"
-name = "rattlesnakeos-<yourstackname>"
+name = "<rattlesnakeos-stackname>"
 region = "us-west-2"
 schedule = "rate(2 days)"
 skip-price = "1.00"
@@ -180,7 +186,7 @@ Global Flags:
 * After the build finishes, a factory image should be uploaded to the S3 release bucket that you can download. Be sure to replace the command below with your stack name and your device name (e.g. taimen).
    
     ```sh 
-    aws s3 cp s3://rattlesnakeos-<yourstackname>-release/<device>-factory-latest.tar.xz .
+    aws s3 cp s3://<rattlesnakeos-stackname>-release/<device>-factory-latest.tar.xz .
     ```
 
 * Use this factory image and [follow the instructions on flashing your device carefully](FLASHING.md).
@@ -200,16 +206,22 @@ Use this at your own risk.
 #### Where can I get help, ask questions, keep up to date on development?
 * For general questions and keeping up to date, use subreddit [/r/RattlesnakeOS](https://www.reddit.com/r/RattlesnakeOS/)
 * If you run into any issues with rattlesnakeos-stack, please [file an issue or feature request on Github](https://github.com/dan-v/rattlesnakeos-stack/issues) and provide all of the requested information in the issue template.
-#### How much does this cost to run?
-The costs are going to be variable by AWS region and by day and time you are running your builds as spot instances have a variable price depending on market demand. Below is an example scenario that should give you a rough estimate of costs:
-   * The majority of the cost will come from builds on EC2. It currently launches spot instances of type c5.4xlarge which average maybe $.30 an hour in us-west-2 (will vary by region) but can get up over $1 an hour depending on the day and time. You can modify the default `max-price` config value to set the max price you are willing to pay and if market price exceeds that then your instance will be terminated. Builds can take anywhere from 2-6 hours depending on if Chromium needs to be built. So let's say you're doing a build every two weeks at $0.50 an hour and it is taking on average 4 hours - you'd pay ~$4 in EC2 costs per month. You could reduce this to a monthly build (see section how to change build frequency) and then you'd be looking at ~$2 in EC2 costs per month.
-   * The other very minimal cost would be S3. Storage costs are almost non existent as a stack will only store about 3GB worth of files (factory image, ota file, target file) and at $0.023 per GB you're looking at $0.07 per month in S3 storage costs. The other S3 cost would be for data transfer out for OTA updates - let's say you are just downloading an update per week (~500MB file) at $0.09 per GB you're looking at $0.20 per month in S3 network costs.
 #### How do I update rattlesnakeos-stack?
 Just download the new version of rattlesnakeos-stack and run deploy again (e.g. ./rattlesnakeos-stack deploy)
 #### How do OTA updates work?
 If you go to `Settings->System update settings` you'll see the updater app settings. The updater app will check S3 to see if there are updates and if it finds one will download and apply it your device. There is no progress indicator unfortunately - you'll just got a notification when it's done and it will ask you to reboot. If you want to force a check for OTA updates, you can toggle the `Require battery above warning level` setting and it will check for a new build in your S3 bucket.
 #### What network carriers are supported?
 I only have access to a single device and carrier to test this on, so I can't make any promises about it working with your specific carrier. Confirmed working: T-Mobile, Rogers, Cricket, Ting. Likely not to work: Sprint (has requirements about specific carrier app being on phone to work), Project Fi.
+#### Why is this project so closely tied to AWS?
+Building AOSP and Chromium requires a fairly powerful server, which is not something everyone readily has access to. Using a cloud provider allows you to spin up compute resources capable of building these projects and only paying for the time you use them. It could really be any cloud provider, but just happened to choose AWS. There are pros and cons to building AOSP in the cloud. On the positive side, cloud providers allow you to easily write automation that can spin up and down resources as needed which allows rattlesnakeos-stack to automate the entire process of building an Android OS and distributing OTA updates. On the downsides, for those that are very security conscious, they may be wary of building an OS on shared cloud resources. You can checkout the [security section of the FAQ](#security) for more details on this.
+
+### Costs
+#### How much does this cost to run?
+The costs are going to be variable by AWS region and by day and time you are running your builds as spot instances have a variable price depending on market demand. Below is an example scenario that should give you a rough estimate of costs:
+   * The majority of the cost will come from builds on EC2. It currently launches spot instances of type c5.4xlarge which average maybe $.30 an hour in us-west-2 (will vary by region) but can get up over $1 an hour depending on the day and time. You can modify the default `max-price` config value to set the max price you are willing to pay and if market price exceeds that then your instance will be terminated. Builds can take anywhere from 2-6 hours depending on if Chromium needs to be built. So let's say you're doing a build every two weeks at $0.50 an hour and it is taking on average 4 hours - you'd pay ~$4 in EC2 costs per month. You could reduce this to a monthly build (see section how to change build frequency) and then you'd be looking at ~$2 in EC2 costs per month.
+   * The other very minimal cost would be S3. Storage costs are almost non existent as a stack will only store about 3GB worth of files (factory image, ota file, target file) and at $0.023 per GB you're looking at $0.07 per month in S3 storage costs. The other S3 cost would be for data transfer out for OTA updates - let's say you are just downloading an update per week (~500MB file) at $0.09 per GB you're looking at $0.20 per month in S3 network costs.
+#### How can I reduce costs?
+The best way to reduce AWS costs is to search for AWS credit codes on a site like Ebay. You can typically find deals like $150 of credit for $20. If you go this route, make sure the credit code includes EC2 in the list of services it covers.
 
 ### Builds
 #### How do I change build frequency?
@@ -221,7 +233,7 @@ You can manually kick off a build with the CLI. Note that this shouldn't normall
 ./rattlesnakeos-stack build start
 ```
 #### Where do I find logs for a build?
-On build failure/success, the instance should terminate and upload its logs to S3 bucket called `<rattlesnakeos-<yourstackname>-logs` and it's in a file called `<device>/<timestamp>`.
+On build failure/success, the instance should terminate and upload its logs to S3 bucket called `<rattlesnakeos-stackname>-logs` and it's in a file called `<device>/<timestamp>`.
 #### How can I see live build status?
 There are a few steps required to be able to do this:
    * In the [default security group](https://docs.aws.amazon.com/AmazonVPC/latest/UserGuide/VPC_SecurityGroups.html#DefaultSecurityGroup), you'll need to [open up SSH access](https://docs.aws.amazon.com/AWSEC2/latest/UserGuide/authorizing-access-to-an-instance.html).
@@ -240,7 +252,7 @@ There are some advanced options that allow you to customize RattlesnakeOS builds
 
 There is an option to execute patches and shell scripts against the AOSP build tree using `[[custom-patches]]` in the config file. This requires you provide a Git repo and a list of patches you want to apply during the build process. [There is a repo of useful patches that have been contributed by the community](https://github.com/RattlesnakeOS/community_patches) that are trusted and can be used here - or you could use your own if you wanted.
 
-```
+```toml
 [[custom-patches]]
   repo = "https://github.com/RattlesnakeOS/community_patches"
   patches = [
@@ -253,11 +265,15 @@ There is an option to execute patches and shell scripts against the AOSP build t
 ```
 
 There is also an option to add prebuilt applications to the AOSP build tree using `[[custom-prebuilts]]` in the config file. This requires you provide a git repo and a list of module names defined in Android.mk files within this repository that you want to have included in the build.
-```
+```toml
 [[custom-prebuilts]]
   modules = ["app1", "app2"]
   repo = "https://github.com/RattlesnakeOS/example_prebuilts"
 ```
+#### Can I change the boot animation?
+It is possible to change the boot animation using patches, there is an example repo [here](https://github.com/RattlesnakeOS/example_patch_shellscript).
+#### Can I add microG to the build?
+I don't recommend installing microG as it requires you to enable signature spoofing. By enabling signature spoofing, this is a global change to the OS even though it has to be requested by each application as a permission. Just having the possibility for an application to request this ability reduces security of your OS. Having said all that, if you are fine with the security implications of doing so - it is possible to install microG using the custom patches and prebuilts features.
 
 ### Security
 #### What are security best practices for builds in AWS?
@@ -274,16 +290,15 @@ When using the encrypted signing keys option - the workflow is not fully automat
 #### How do I migrate to using the encrypted signing key option?
 If you have an existing stack and want to move to encrypted signing keys you'll need to migrate your keys. Note: if you don't do this migration process new signing keys will be generated during the build process and you'll need to flash a new factory image (losing all data) to be able to use these builds.
 * First you'll need to update your stack config file to use `encrypted-keys = true` and then run `rattlesnakeos-stack deploy` to update your stack. 
-* Next you'll need to copy your existing signing keys from S3 (`s3://<rattlesnakeos-stackname>-keys/)`, encrypt them with GPG using a strong passphrase, and then copy over encrypted keys to S3 bucket for encrypted keys (`s3://<rattlesnakeos-stackname>-keys-encrypted/`).
+* Next you'll need to copy your existing signing keys from S3 bucket `<rattlesnakeos-stackname>-keys`, encrypt them with GPG using a strong passphrase, and then copy over encrypted keys to S3 encrypted keys bucket `<rattlesnakeos-stackname>-keys-encrypted`.
     ```sh
-    mkdir -p key-migration
-    cd key-migration
+    mkdir -p key-migration && cd key-migration
     aws s3 sync s3://<rattlesnakeos-stackname>-keys/ .
     echo -n "Encryption passphrase: "
     read -s key
     echo
     for f in $(find . -type f); do 
-    gpg --symmetric --batch --passphrase "${key}" --cipher-algo AES256 $f
+        gpg --symmetric --batch --passphrase "${key}" --cipher-algo AES256 $f
     done
     aws s3 sync . s3://<rattlesnakeos-stackname>-keys-encrypted/ --exclude "*" --include "*.gpg"
     ```
@@ -294,7 +309,7 @@ If you have an existing stack and want to move to encrypted signing keys you'll 
 If you decide this isn't for you and you want to remove all the provisioned AWS resources, there's a command for that. 
 
 ```sh
-./rattlesnakeos-stack remove --name rattlesnakeos-<yourstackname> --region us-west-2
+./rattlesnakeos-stack remove --name <rattlesnakeos-stackname> --region us-west-2
 ```
 
 <b>Important note</b>: this will not terminate any running EC2 instances that may have launched and these will need to be terminated manually.
