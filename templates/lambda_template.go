@@ -4,6 +4,7 @@ const LambdaTemplate = `
 #!/usr/bin/env python3
 import boto3
 import base64
+import json
 from urllib.request import urlopen
 from urllib.request import HTTPError
 from datetime import datetime, timedelta
@@ -53,6 +54,10 @@ def send_sns_message(subject, message):
 def lambda_handler(event, context):
     # get account id to fill in fleet role and ec2 profile
     account_id = boto3.client('sts').get_caller_identity().get('Account')
+
+    force_build = False
+    if "ForceBuild" in event:
+        force_build = event['ForceBuild']
 
     try: 
         cheapest_price = 0
@@ -118,8 +123,8 @@ packages:
 
 runcmd:
 - [ bash, -c, "sudo -u ubuntu aws s3 --region <% .Region %> cp {0} /home/ubuntu/build.sh" ]
-- [ bash, -c, "sudo -u ubuntu bash /home/ubuntu/build.sh {1}" ]
-    """.format(SRC_PATH, DEVICE).encode('ascii')).decode('ascii')
+- [ bash, -c, "sudo -u ubuntu bash /home/ubuntu/build.sh {1} {2}" ]
+    """.format(SRC_PATH, DEVICE, str(force_build).lower()).encode('ascii')).decode('ascii')
 
     # make spot fleet request config
     now_utc = datetime.utcnow().replace(microsecond=0)
@@ -172,7 +177,7 @@ runcmd:
         raise
 
     subject = "RattlesnakeOS Spot Instance SUCCESS"
-    message = "Successfully requested a spot instance.\n\n Stack Name: {}\n Device: {}\n Instance Type: {}\n Cheapest Region: {}\n Cheapest Hourly Price: ${} ".format(NAME, DEVICE, INSTANCE_TYPE, cheapest_region, cheapest_price)
+    message = "Successfully requested a spot instance.\n\n Stack Name: {}\n Device: {}\n Force Build: {}\n Instance Type: {}\n Cheapest Region: {}\n Cheapest Hourly Price: ${} ".format(NAME, DEVICE, force_build, INSTANCE_TYPE, cheapest_region, cheapest_price)
     send_sns_message(subject, message)
     return message.replace('\n', ' ')
 

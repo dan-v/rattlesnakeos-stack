@@ -1,6 +1,7 @@
 package cli
 
 import (
+	"encoding/json"
 	"errors"
 	"fmt"
 	"strings"
@@ -17,7 +18,7 @@ import (
 
 // TODO: this command is very happy path at the moment
 
-var listBuilds, startBuild bool
+var listBuilds, startBuild, forceBuild bool
 var terminateInstanceID, terminateRegion, listName, buildName string
 
 func init() {
@@ -28,10 +29,14 @@ func init() {
 
 	buildCmd.AddCommand(buildStartCmd)
 	buildStartCmd.Flags().StringVar(&name, "name", "", "name for stack")
+	buildStartCmd.Flags().BoolVar(&forceBuild, "force-build", false, "force build even if there are no changes in "+
+		"available version of AOSP, Chromium, or F-Droid. this will override stack setting ignore-version-checks.")
 
 	buildCmd.AddCommand(buildTerminateCmd)
-	buildTerminateCmd.Flags().StringVarP(&terminateInstanceID, "instance-id", "i", "", "EC2 instance id you want to terminate (e.g. i-07ff0f2ed84ff2e8d)")
-	buildTerminateCmd.Flags().StringVarP(&terminateRegion, "region", "r", "", "Region of instance you want to terminate")
+	buildTerminateCmd.Flags().StringVarP(&terminateInstanceID, "instance-id", "i", "", "EC2 instance id "+
+		"you want to terminate (e.g. i-07ff0f2ed84ff2e8d)")
+	buildTerminateCmd.Flags().StringVarP(&terminateRegion, "region", "r", "", "Region of instance you "+
+		"want to terminate")
 }
 
 var buildCmd = &cobra.Command{
@@ -71,10 +76,21 @@ var buildStartCmd = &cobra.Command{
 			log.Fatalf("Failed to setup AWS session: %v", err)
 		}
 
+		lambdaPayload := struct {
+			ForceBuild bool
+		}{
+			ForceBuild: forceBuild,
+		}
+		payload, err := json.Marshal(lambdaPayload)
+		if err != nil {
+			log.Fatalf("Failed to create payload for Lambda function: %v", err)
+		}
+
 		lambdaClient := lambda.New(sess, &aws.Config{Region: &region})
 		_, err = lambdaClient.Invoke(&lambda.InvokeInput{
 			FunctionName:   aws.String(name + "-build"),
 			InvocationType: aws.String("RequestResponse"),
+			Payload:        payload,
 		})
 		if err != nil {
 			log.Fatalf("Failed to start manual build: %v", err)

@@ -18,9 +18,12 @@ const defaultInstanceRegions = "us-west-2,us-west-1,us-east-1,us-east-2"
 
 var name, region, email, device, sshKey, maxPrice, skipPrice, schedule string
 var instanceType, instanceRegions, hostsFile, chromiumVersion string
-var preventShutdown, forceBuild, encryptedKeys, saveConfig bool
-var patches = &stack.RepoPatches{}
-var prebuilts = &stack.RepoPrebuilts{}
+var preventShutdown, ignoreVersionChecks, encryptedKeys, saveConfig bool
+var patches = &stack.CustomPatches{}
+var scripts = &stack.CustomScripts{}
+var prebuilts = &stack.CustomPrebuilts{}
+var manifestRemotes = &stack.CustomManifestRemotes{}
+var manifestProjects = &stack.CustomManifestProjects{}
 var trustedRepoBase = "https://github.com/rattlesnakeos/"
 var supportedRegions = []string{"us-west-2", "us-east-1", "us-east-2", "us-west-1", "eu-west-1", "eu-west-2", "eu-west-3",
 	"ap-northeast-3", "ap-northeast-2", "ap-northeast-1", "sa-east-1", "ap-southeast-1", "ca-central-1",
@@ -75,9 +78,10 @@ func init() {
 		"possible regions to launch spot instance. the region with cheapest spot instance price will be used.")
 	viper.BindPFlag("instance-regions", flags.Lookup("instance-regions"))
 
-	flags.StringVar(&schedule, "schedule", "rate(14 days)",
-		"cron expression that defines when to kick off builds. note: if you give invalid expression it will fail to deploy stack. "+
-			"see: https://docs.aws.amazon.com/AmazonCloudWatch/latest/events/ScheduledEvents.html#CronExpressions")
+	flags.StringVar(&schedule, "schedule", "cron(0 0 10 * ? *)",
+		"cron expression that defines when to kick off builds. by default this is set to build on the 10th of every month. "+
+			"note: if you give an invalid expression it will fail to deploy the stack. "+
+			"see this for cron format details: https://docs.aws.amazon.com/AmazonCloudWatch/latest/events/ScheduledEvents.html#CronExpressions")
 	viper.BindPFlag("schedule", flags.Lookup("schedule"))
 
 	flags.StringVar(&hostsFile, "hosts-file", "",
@@ -98,9 +102,9 @@ func init() {
 		"migrate your keys")
 	viper.BindPFlag("encrypted-keys", flags.Lookup("encrypted-keys"))
 
-	flags.BoolVar(&forceBuild, "force-build", false,
-		"build even if there are no changes in available version of AOSP, Chromium, or F-Droid.")
-	viper.BindPFlag("force-build", flags.Lookup("force-build"))
+	flags.BoolVar(&ignoreVersionChecks, "ignore-version-checks", false,
+		"ignore the versions checks for stack, AOSP, Chromium, and F-Droid and always do a build.")
+	viper.BindPFlag("ignore-version-checks", flags.Lookup("ignore-version-checks"))
 
 	flags.BoolVar(&saveConfig, "save-config", false, "allows you to save all passed CLI flags to config file")
 
@@ -127,6 +131,9 @@ var deployCmd = &cobra.Command{
 		if viper.GetString("device") == "" {
 			return errors.New("must specify device type")
 		}
+		if viper.GetString("force-build") != "" {
+			log.Warnf("The force-build setting has been deprecated and can be removed from your config file. it has been replaced with ignore-version-checks.")
+		}
 		if device == "list" {
 			fmt.Printf("Valid devices are: %v\n", supportDevicesOutput)
 			os.Exit(0)
@@ -140,7 +147,10 @@ var deployCmd = &cobra.Command{
 	},
 	Run: func(cmd *cobra.Command, args []string) {
 		viper.UnmarshalKey("custom-patches", patches)
+		viper.UnmarshalKey("custom-scripts", scripts)
 		viper.UnmarshalKey("custom-prebuilts", prebuilts)
+		viper.UnmarshalKey("custom-manifest-remotes", manifestRemotes)
+		viper.UnmarshalKey("custom-manifest-projects", manifestProjects)
 
 		c := viper.AllSettings()
 		bs, err := yaml.Marshal(c)
@@ -156,13 +166,19 @@ var deployCmd = &cobra.Command{
 
 		for _, r := range *patches {
 			if !strings.Contains(strings.ToLower(r.Repo), trustedRepoBase) {
-				log.Warnf("You are using untrusted repositories (%v) for patches - this is risky unless you own the repository", r.Repo)
+				log.Warnf("You are using an untrusted repository (%v) for patches - this is risky unless you own the repository", r.Repo)
+			}
+		}
+
+		for _, r := range *scripts {
+			if !strings.Contains(strings.ToLower(r.Repo), trustedRepoBase) {
+				log.Warnf("You are using an untrusted repository (%v) for scripts - this is risky unless you own the repository", r.Repo)
 			}
 		}
 
 		for _, r := range *prebuilts {
 			if !strings.Contains(strings.ToLower(r.Repo), trustedRepoBase) {
-				log.Warnf("You are using untrusted repository (%v) for prebuilts - this is risky unless you own the repository", r.Repo)
+				log.Warnf("You are using an untrusted repository (%v) for prebuilts - this is risky unless you own the repository", r.Repo)
 			}
 		}
 
@@ -176,24 +192,27 @@ var deployCmd = &cobra.Command{
 		}
 
 		s, err := stack.NewAWSStack(&stack.AWSStackConfig{
-			Name:            viper.GetString("name"),
-			Region:          viper.GetString("region"),
-			Device:          viper.GetString("device"),
-			Email:           viper.GetString("email"),
-			InstanceType:    viper.GetString("instance-type"),
-			InstanceRegions: viper.GetString("instance-regions"),
-			SSHKey:          viper.GetString("ssh-key"),
-			SkipPrice:       viper.GetString("skip-price"),
-			MaxPrice:        viper.GetString("max-price"),
-			Schedule:        viper.GetString("schedule"),
-			ChromiumVersion: viper.GetString("chromium-version"),
-			HostsFile:       viper.GetString("hosts-file"),
-			EncryptedKeys:   viper.GetBool("encrypted-keys"),
-			Force:           viper.GetBool("force-build"),
-			RepoPatches:     patches,
-			RepoPrebuilts:   prebuilts,
-			PreventShutdown: preventShutdown,
-			Version:         version,
+			Name:                   viper.GetString("name"),
+			Region:                 viper.GetString("region"),
+			Device:                 viper.GetString("device"),
+			Email:                  viper.GetString("email"),
+			InstanceType:           viper.GetString("instance-type"),
+			InstanceRegions:        viper.GetString("instance-regions"),
+			SSHKey:                 viper.GetString("ssh-key"),
+			SkipPrice:              viper.GetString("skip-price"),
+			MaxPrice:               viper.GetString("max-price"),
+			Schedule:               viper.GetString("schedule"),
+			ChromiumVersion:        viper.GetString("chromium-version"),
+			HostsFile:              viper.GetString("hosts-file"),
+			EncryptedKeys:          viper.GetBool("encrypted-keys"),
+			IgnoreVersionChecks:    viper.GetBool("ignore-version-checks"),
+			CustomPatches:          patches,
+			CustomScripts:          scripts,
+			CustomPrebuilts:        prebuilts,
+			CustomManifestRemotes:  manifestRemotes,
+			CustomManifestProjects: manifestProjects,
+			PreventShutdown:        preventShutdown,
+			Version:                version,
 		})
 		if err != nil {
 			log.Fatal(err)

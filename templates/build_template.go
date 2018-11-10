@@ -3,7 +3,7 @@ package templates
 const BuildTemplate = `
 #!/bin/bash
 
-if [ $# -ne 1 ]; then
+if [ $# -lt 1 ]; then
   echo "Need to specify device name as argument"
   exit 1
 fi
@@ -34,6 +34,13 @@ case "$DEVICE" in
     ;;
 esac
 
+# this is a build time option to override stack setting IGNORE_VERSION_CHECKS
+FORCE_BUILD=false
+if [ "$2" = true ]; then
+  echo "Setting FORCE_BUILD=true"
+  FORCE_BUILD=true
+fi
+
 # set region
 REGION=<% .Region %>
 export AWS_DEFAULT_REGION=${REGION}
@@ -47,8 +54,8 @@ STACK_VERSION=<% .Version %>
 # prevent default action of shutting down on exit
 PREVENT_SHUTDOWN=<% .PreventShutdown %>
 
-# force build even if no new versions exist of components
-FORCE_BUILD=<% .Force %>
+# whether version checks should be ignored
+IGNORE_VERSION_CHECKS=<% .IgnoreVersionChecks %>
 
 # version of chromium to pin to if requested
 CHROMIUM_PINNED_VERSION=<% .ChromiumVersion %>
@@ -93,6 +100,7 @@ KEYS_DIR="${BUILD_DIR}/keys"
 CERTIFICATE_SUBJECT='/CN=RattlesnakeOS'
 OFFICIAL_FDROID_KEY="43238d512c1e5eb2d6569f4a3afbf5523418b82e0a3ed1552770abb9a9c9ccab"
 MARLIN_KERNEL_SOURCE_DIR="${HOME}/kernel/google/marlin"
+BUILD_REASON=""
 
 # urls
 ANDROID_SDK_URL="https://dl.google.com/android/repository/sdk-tools-linux-4333796.zip"
@@ -171,8 +179,9 @@ check_for_new_versions() {
   if [ "$existing_stack_version" == "$STACK_VERSION" ]; then
     echo "Stack version ($existing_stack_version) is up to date"
   else
-    echo "Last successful build (if there was one) is not with latest stack version ${STACK_VERSION}"
+    echo "Last successful build (if there was one) is not with current stack version ${STACK_VERSION}"
     needs_update=true
+    BUILD_REASON="'Stack version $existing_stack_version != $STACK_VERSION'"
   fi
 
   # check aosp
@@ -182,8 +191,8 @@ check_for_new_versions() {
   else
     echo "AOSP needs to be updated to ${AOSP_BUILD}"
     needs_update=true
+    BUILD_REASON="$BUILD_REASON 'AOSP build $existing_aosp_build != $AOSP_BUILD'"
   fi
-
 
   # check chromium
   if [ ! -z "$CHROMIUM_PINNED_VERSION" ]; then
@@ -196,6 +205,7 @@ check_for_new_versions() {
   else
     echo "Chromium needs to be updated to ${LATEST_CHROMIUM}"
     needs_update=true
+    BUILD_REASON="$BUILD_REASON 'Chromium version $existing_chromium != $LATEST_CHROMIUM'"
   fi
   
   # check fdroid
@@ -205,26 +215,38 @@ check_for_new_versions() {
   else
     echo "F-Droid needs to be updated to ${FDROID_CLIENT_VERSION}"
     needs_update=true
+    BUILD_REASON="$BUILD_REASON 'F-Droid version $existing_fdroid_client != $FDROID_CLIENT_VERSION'"
   fi
 
   # check fdroid priv extension
   existing_fdroid_priv_version=$(aws s3 cp "s3://${AWS_RELEASE_BUCKET}/fdroid-priv/revision" - || true)
   if [ "$existing_fdroid_priv_version" == "$FDROID_PRIV_EXT_VERSION" ]; then
-    echo "F-Droid privilege extension build ($existing_fdroid_priv_version) is up to date"
+    echo "F-Droid privileged extension build ($existing_fdroid_priv_version) is up to date"
   else
-    echo "F-Droid privilege extensions needs to be updated to ${FDROID_PRIV_EXT_VERSION}"
+    echo "F-Droid privileged extension needs to be updated to ${FDROID_PRIV_EXT_VERSION}"
     needs_update=true
+    BUILD_REASON="$BUILD_REASON 'F-Droid privileged extension $existing_fdroid_priv_version != $FDROID_PRIV_EXT_VERSION'"
   fi
 
   if [ "$needs_update" = true ]; then
     echo "New build is required"
   else 
     if [ "$FORCE_BUILD" = true ]; then
-      echo "No build is required, but FORCE_BUILD=true"
+      message="No build is required, but FORCE_BUILD=true"
+      echo "$message"
+      BUILD_REASON="$message"
+    elif [ "$IGNORE_VERSION_CHECKS" = true ]; then
+      message="No build is required, but IGNORE_VERSION_CHECKS=true"
+      echo "$message"
+      BUILD_REASON="$message"
     else
       aws_notify "RattlesnakeOS build not required as all components are already up to date."
       exit 0
     fi
+  fi
+
+  if [ -z "$existing_stack_version" ]; then
+    BUILD_REASON="Initial build"
   fi
 }
 
@@ -471,13 +493,22 @@ aosp_repo_modifications() {
       print "  <remote name=\"github\" fetch=\"https://github.com/RattlesnakeOS/\" revision=\"" ANDROID_VERSION "\" />";
       print "  <remote name=\"fdroid\" fetch=\"https://gitlab.com/fdroid/\" />";
       print "  <remote name=\"prepare-vendor\" fetch=\"https://github.com/RattlesnakeOS/\" revision=\"master\" />";
+      <% if .CustomManifestRemotes %>
+      <% range $i, $r := .CustomManifestRemotes %>
+      print "  <remote name=\"<% .Name %>\" fetch=\"<% .Fetch %>\" revision=\"<% .Revision %>\" />";
+      <% end %>
+      <% end %>
       print "  ";
+      <% if .CustomManifestProjects %><% range $i, $r := .CustomManifestProjects %>
+      print "  <project path=\"<% .Path %>\" name=\"<% .Name %>\" remote=\"<% .Remote %>\" />";
+      <% end %>
+      <% end %>
       print "  <project path=\"external/chromium\" name=\"platform_external_chromium\" remote=\"github\" />";
       print "  <project path=\"packages/apps/Updater\" name=\"platform_packages_apps_Updater\" remote=\"github\" />";
       print "  <project path=\"packages/apps/F-Droid\" name=\"fdroidclient\" remote=\"fdroid\" revision=\"refs/tags/" FDROID_CLIENT_VERSION "\" />";
       print "  <project path=\"packages/apps/F-DroidPrivilegedExtension\" name=\"privileged-extension\" remote=\"fdroid\" revision=\"refs/tags/" FDROID_PRIV_EXT_VERSION "\" />";
       print "  <project path=\"vendor/android-prepare-vendor\" name=\"android-prepare-vendor\" remote=\"prepare-vendor\" />"}' .repo/manifest.xml
-  
+
     # remove things from manifest
     sed -i '/chromium-webview/d' .repo/manifest.xml
     sed -i '/packages\/apps\/Browser2/d' .repo/manifest.xml
@@ -502,7 +533,7 @@ setup_vendor() {
   log_header ${FUNCNAME}
 
   # get vendor files (with timeout)
-  timeout 30m "${BUILD_DIR}/vendor/android-prepare-vendor/execute-all.sh" --debugfs --yes --device "${DEVICE}" --buildID "${AOSP_BUILD}" --output "${BUILD_DIR}/vendor/android-prepare-vendor"
+  timeout 30m "${BUILD_DIR}/vendor/android-prepare-vendor/execute-all.sh" --debugfs --keep --yes --device "${DEVICE}" --buildID "${AOSP_BUILD}" --output "${BUILD_DIR}/vendor/android-prepare-vendor"
   aws s3 cp - "s3://${AWS_RELEASE_BUCKET}/${DEVICE}-vendor" --acl public-read <<< "${AOSP_BUILD}" || true
 
   # copy vendor files to build tree
@@ -556,26 +587,34 @@ patch_custom() {
   
   cd $BUILD_DIR
 
-  # allow custom patches and shell scripts to be applied
+  # allow custom patches to be applied
   patches_dir="$HOME/patches"
-  <% if .RepoPatches %>
-  <% range $i, $r := .RepoPatches %>
+  <% if .CustomPatches %>
+  <% range $i, $r := .CustomPatches %>
     retry git clone <% $r.Repo %> ${patches_dir}/<% $i %>
     <% range $r.Patches %>
       log "Applying patch <% . %>"
       patch -p1 --no-backup-if-mismatch < ${patches_dir}/<% $i %>/<% . %>
     <% end %>
+  <% end %>
+  <% end %>
+
+  # allow custom scripts to be applied
+  scripts_dir="$HOME/scripts"
+  <% if .CustomScripts %>
+  <% range $i, $r := .CustomScripts %>
+    retry git clone <% $r.Repo %> ${scripts_dir}/<% $i %>
     <% range $r.Scripts %>
       log "Applying shell script <% . %>"
-      . ${patches_dir}/<% $i %>/<% . %>
+      . ${scripts_dir}/<% $i %>/<% . %>
     <% end %>
   <% end %>
   <% end %>
 
   # allow prebuilt applications to be added to build tree
   prebuilt_dir="$BUILD_DIR/packages/apps/Custom"
-  <% if .RepoPrebuilts %>
-  <% range $i, $r := .RepoPrebuilts %>
+  <% if .CustomPrebuilts %>
+  <% range $i, $r := .CustomPrebuilts %>
     log "Putting custom prebuilts from <% $r.Repo %> in build tree location ${prebuilt_dir}/<% $i %>"
     retry git clone <% $r.Repo %> ${prebuilt_dir}/<% $i %>
     <% range .Modules %>
@@ -646,6 +685,14 @@ patch_add_apps() {
   sed -i "\$aPRODUCT_PACKAGES += F-DroidPrivilegedExtension" ${BUILD_DIR}/build/make/target/product/core.mk
   sed -i "\$aPRODUCT_PACKAGES += F-Droid" ${BUILD_DIR}/build/make/target/product/core.mk
   sed -i "\$aPRODUCT_PACKAGES += chromium" ${BUILD_DIR}/build/make/target/product/core.mk
+
+  # add any modules defined in custom manifest projects
+  <% if .CustomManifestProjects %><% range $i, $r := .CustomManifestProjects %><% range $j, $q := .Modules %>
+  log "Adding custom PRODUCT_PACKAGES += <% $q %> to ${BUILD_DIR}/build/make/target/product/core.mk"
+  sed -i "\$aPRODUCT_PACKAGES += <% $q %>" ${BUILD_DIR}/build/make/target/product/core.mk
+  <% end %>
+  <% end %>
+  <% end %>
 }
 
 patch_updater() {
@@ -880,8 +927,8 @@ aws_notify() {
   fi
   ELAPSED="$(($SECONDS / 3600))hrs $((($SECONDS / 60) % 60))min $(($SECONDS % 60))sec"
   aws sns publish --region ${REGION} --topic-arn "$AWS_SNS_ARN" \
-    --message="$(printf "$1\n  Device: %s\n  Stack Name: %s\n  Stack Version: %s %s\n  Stack Region: %s\n  Release Channel: %s\n  Instance Type: %s\n  Instance Region: %s\n  Instance IP: %s\n  Build Date: %s\n  Elapsed Time: %s\n  AOSP Build: %s\n  AOSP Branch: %s\n  Chromium Version: %s\n  F-Droid Version: %s\n  F-Droid Priv Extension Version: %s\n%s" \
-      "${DEVICE}" "${STACK_NAME}" "${STACK_VERSION}" "${STACK_UPDATE_MESSAGE}" "${REGION}" "${RELEASE_CHANNEL}" "${INSTANCE_TYPE}" "${INSTANCE_REGION}" "${INSTANCE_IP}" "${BUILD_DATE}" "${ELAPSED}" "${AOSP_BUILD}" "${AOSP_BRANCH}" "${LATEST_CHROMIUM}" "${FDROID_CLIENT_VERSION}" "${FDROID_PRIV_EXT_VERSION}" "${LOGOUTPUT}")" || true
+    --message="$(printf "$1\n  Device: %s\n  Stack Name: %s\n  Stack Version: %s %s\n  Stack Region: %s\n  Release Channel: %s\n  Instance Type: %s\n  Instance Region: %s\n  Instance IP: %s\n  Build Date: %s\n  Elapsed Time: %s\n  AOSP Build: %s\n  AOSP Branch: %s\n  Chromium Version: %s\n  F-Droid Version: %s\n  F-Droid Priv Extension Version: %s\n  Build Reason: %s\n%s" \
+      "${DEVICE}" "${STACK_NAME}" "${STACK_VERSION}" "${STACK_UPDATE_MESSAGE}" "${REGION}" "${RELEASE_CHANNEL}" "${INSTANCE_TYPE}" "${INSTANCE_REGION}" "${INSTANCE_IP}" "${BUILD_DATE}" "${ELAPSED}" "${AOSP_BUILD}" "${AOSP_BRANCH}" "${LATEST_CHROMIUM}" "${FDROID_CLIENT_VERSION}" "${FDROID_PRIV_EXT_VERSION}" "${BUILD_REASON}" "${LOGOUTPUT}")" || true
 }
 
 aws_logging() {

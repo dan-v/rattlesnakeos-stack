@@ -2,7 +2,7 @@ RattlesnakeOS is a privacy and security focused Android OS for Google Pixel phon
 
 ## Features
 * Based on latest [AOSP](https://source.android.com/) 9.0 (Android P)
-* Support for Google <b>Pixel, Pixel XL, Pixel 2, Pixel 2 XL</b>. Experimental support for <b>Pixel 3, Pixel 3 XL</b> \*<small>there are known issues at the moment</small>\*.
+* Support for Google <b>Pixel, Pixel XL, Pixel 2, Pixel 2 XL, Pixel 3, Pixel 3 XL</b>
 * Monthly software and firmware security fixes delivered through built in OTA updater
 * Maintains [verified boot](https://source.android.com/security/verifiedboot/) with a locked bootloader just like official Android but with your own personal signing keys
 * Latest stable Chromium [browser](https://www.chromium.org) and [webview](https://www.chromium.org/developers/how-tos/build-instructions-android-webview)
@@ -72,7 +72,7 @@ INFO[0005] rattlesnakeos-stack config file has been written to /Users/username/.
 ```
 
 ## Deployment
-The rattlesnakeos-stack `deploy` subcommand handles deploying (and updating) your stack. After initial deployment, your first build will automatically start; by default it is configured to build every 2 weeks after this (see the FAQ for details on how to modify build schedule). 
+The rattlesnakeos-stack `deploy` subcommand handles deploying (and updating) your stack. After stack deployment, you will need to manually start a build. By default it is configured to automatically build once a month on the 10th of the month so that monthly security updates can be picked up and built without the need for manual builds.
 
 #### Default Examples
 Deploy stack using default generated config file:
@@ -85,7 +85,7 @@ chromium-version: ""
 device: taimen
 email: user@domain.com
 encrypted-keys: false
-force-build: false
+ignore-version-checks: false
 hosts-file: ""
 instance-regions: us-west-2,us-west-1,us-east-1,us-east-2
 instance-type: c5.4xlarge
@@ -122,8 +122,9 @@ Here is an example of a more advanced config file that: locks to a specific vers
 ```toml 
 chromium-version = "70.0.3538.80"
 device = "marlin"
+email: user@domain.com
 encrypted-keys = "false"
-force-build = false
+ignore-version-checks = false
 hosts-file = "https://raw.githubusercontent.com/StevenBlack/hosts/master/hosts"
 instance-regions = "us-west-2,us-west-1,us-east-1,us-east-2"
 instance-type = "c5.18xlarge"
@@ -154,10 +155,11 @@ Usage:
 Flags:
       --chromium-version string   specify the version of Chromium you want (e.g. 69.0.3497.100) to pin to. if not specified, the latest stable version of Chromium is used.
   -d, --device string             device you want to build for (e.g. marlin): to list supported devices use '-d list'
+  -e, --email string              email address you want to use for build notifications
       --encrypted-keys            an advanced option that allows signing keys to be stored with symmetric gpg encryption and decrypted into memory during the build process. this option requires manual intervention during builds where you will be sent a notification and need to provide the key required for decryption over SSH to continue the build process. important: if you have an existing stack - please see the FAQ for how to migrate your keys
-      --force-build               build even if there are no changes in available version of AOSP, Chromium, or F-Droid.
   -h, --help                      help for deploy
       --hosts-file string         an advanced option that allows you to specify a replacement /etc/hosts file to enable global dns adblocking (e.g. https://raw.githubusercontent.com/StevenBlack/hosts/master/hosts). note: be careful with this, as you 1) won't get any sort of notification on blocking 2) if you need to unblock something you'll have to rebuild the OS
+      --ignore-version-checks     ignore the versions checks for stack, AOSP, Chromium, and F-Droid and always do a build.
       --instance-regions string   possible regions to launch spot instance. the region with cheapest spot instance price will be used. (default "us-west-2,us-west-1,us-east-1,us-east-2")
       --instance-type string      EC2 instance type (e.g. c4.4xlarge) to use for the build. (default "c5.4xlarge")
       --max-price string          max ec2 spot instance bid. if this value is too low, you may not obtain an instance or it may terminate during a build. (default "1.00")
@@ -165,7 +167,7 @@ Flags:
       --prevent-shutdown          for debugging purposes only - will prevent ec2 instance from shutting down after build.
   -r, --region string             aws region for stack deployment (e.g. us-west-2)
       --save-config               allows you to save all passed CLI flags to config file
-      --schedule string           cron expression that defines when to kick off builds. note: if you give invalid expression it will fail to deploy stack. see: https://docs.aws.amazon.com/AmazonCloudWatch/latest/events/ScheduledEvents.html#CronExpressions (default "rate(14 days)")
+      --schedule string           cron expression that defines when to kick off builds. by default this is set to build on the 10th of every month. note: if you give an invalid expression it will fail to deploy the stack. see this for cron format details: https://docs.aws.amazon.com/AmazonCloudWatch/latest/events/ScheduledEvents.html#CronExpressions (default "cron(0 0 10 * ? *)")
       --skip-price string         skip requesting ec2 spot instance if price is above this value to begin with. (default "0.68")
       --ssh-key string            aws ssh key to add to ec2 spot instances. this is optional but is useful for debugging build issues on the instance.
 
@@ -174,15 +176,20 @@ Global Flags:
 ```
 
 ## First Time Setup After Deployment
-* Click on the email confirmation link in order to start getting build notifications.
-    > Note: you may miss some of the initial notifications as a build should start after setting up the initial stack and it may send notifications before you are subscribed to them depending on how quick you are to click the confirmation link. If you chose to encrypt your signing keys, the launched EC2 instance may timeout waiting for an encryption key and terminate - you'll just need to kick off a manual build in this case (see FAQ).
-* After initial deploy with `rattlesnakeos-stack` tool, an EC2 spot instance should have been launched for running the initial build. If you didn't get an email notification with the details of where it launched, you can use the CLI to list active builds. If an EC2 instances still hasn't started, check out the FAQ for how to manually start a build.
+* Click on the email confirmation link sent to your email in order to start getting build notifications.
+* You'll need to manually start your first build using `rattlesnakeos-stack` tool. Future builds will happen automatically based on the schedule defined in your configuration.
+
+    ```sh 
+    ./rattlesnakeos-stack build start
+    ```
+
+* You should get email notifications that your build has started. If you didn't get an email notification with the details of where it launched, you can use the CLI to list active builds. 
 
     ```sh 
     ./rattlesnakeos-stack build list
     ```
 
-* The <b>initial build will likely take 5+ hours to complete</b>. Looking at the EC2 instance metrics like CPU, etc is NOT a good way to determine if the build is progressing. See the FAQ for details on how to monitor build live build progress.
+* The <b>initial build will likely take 5+ hours to complete</b>. Looking at the EC2 instance metrics like CPU, etc is NOT a good way to determine if the build is progressing. See the FAQ for details on how to monitor live build progress.
 * After the build finishes, a factory image should be uploaded to the S3 release bucket that you can download. Be sure to replace the command below with your stack name and your device name (e.g. taimen).
    
     ```sh 
@@ -218,17 +225,16 @@ Building AOSP and Chromium requires a fairly powerful server, which is not somet
 ### Costs
 #### How much does this cost to run?
 The costs are going to be variable by AWS region and by day and time you are running your builds as spot instances have a variable price depending on market demand. Below is an example scenario that should give you a rough estimate of costs:
-   * The majority of the cost will come from builds on EC2. It currently launches spot instances of type c5.4xlarge which average maybe $.30 an hour in us-west-2 (will vary by region) but can get up over $1 an hour depending on the day and time. You can modify the default `max-price` config value to set the max price you are willing to pay and if market price exceeds that then your instance will be terminated. Builds can take anywhere from 2-6 hours depending on if Chromium needs to be built. So let's say you're doing a build every two weeks at $0.50 an hour and it is taking on average 4 hours - you'd pay ~$4 in EC2 costs per month. You could reduce this to a monthly build (see section how to change build frequency) and then you'd be looking at ~$2 in EC2 costs per month.
-   * The other very minimal cost would be S3. Storage costs are almost non existent as a stack will only store about 3GB worth of files (factory image, ota file, target file) and at $0.023 per GB you're looking at $0.07 per month in S3 storage costs. The other S3 cost would be for data transfer out for OTA updates - let's say you are just downloading an update per week (~500MB file) at $0.09 per GB you're looking at $0.20 per month in S3 network costs.
+   * The majority of the cost will come from builds on EC2. It currently launches spot instances of type c5.4xlarge which average maybe $.30 an hour in us-west-2 (will vary by region) but can get up over $1 an hour depending on the day and time. You can modify the default `max-price` config value to set the max price you are willing to pay and if market price exceeds that then your instance will be terminated. Builds can take anywhere from 2-6 hours depending on if Chromium needs to be built. So let's say you're doing a build every month at $0.50 an hour and it is taking on average 4 hours - you'd pay ~$2 in EC2 costs per month. 
+   * The other very minimal cost would be S3. Storage costs are almost non existent as a stack will only store about 3GB worth of files (factory image, ota file, target file) and at $0.023 per GB you're looking at $0.07 per month in S3 storage costs. The other S3 cost would be for data transfer out for OTA updates - let's say you are just downloading an update per month (~500MB file) at $0.09 per GB you're looking at $0.05 per month in S3 network costs.
 #### How can I reduce costs?
 The best way to reduce AWS costs is to search for AWS credit codes on a site like Ebay. You can typically find deals like $150 of credit for $20. If you go this route, make sure the credit code includes EC2 in the list of services it covers.
 
 ### Builds
 #### How do I change build frequency?
-The current default is to do builds every 2 weeks. There is a config option to specify how frequently builds are kicked off automatically. For example you could set `schedule = "rate(30 days)"` in the config file to only build every 30 days. Also note, the default behavior is to only run a build if there have been version updates in AOSP build, Chromium version, or F-Droid versions.
+By default it is configured to automatically build once a month on the 10th of the month so that monthly security updates can be picked up and built without the need for manual builds. There is a config option to specify how frequently builds are kicked off automatically. For example you could set `schedule = "rate(14 days)"` in the config file to build every 14 days. Also note, the default behavior is to only run a build if there have been version updates in stack, AOSP, Chromium, or F-Droid versions.
 #### How do I manually start a build?
 You can manually kick off a build with the CLI. Note that this shouldn't normally be necessary as builds are set to happen automatically on a cron schedule.
-
 ```sh 
 ./rattlesnakeos-stack build start
 ```
@@ -250,6 +256,7 @@ There are some advanced options that allow you to customize RattlesnakeOS builds
 
 <b>Important: using any Git repo here that is not in your control is a security risk, as you are giving control of your build process to the owner of the repo. They could steal your signing keys, inject malicious code, etc just by updating a patch file.</b>
 
+##### Patches and Scripts
 There is an option to execute patches and shell scripts against the AOSP build tree using `[[custom-patches]]` in the config file. This requires you provide a Git repo and a list of patches you want to apply during the build process. [There is a repo of useful patches that have been contributed by the community](https://github.com/RattlesnakeOS/community_patches) that are trusted and can be used here - or you could use your own if you wanted.
 
 ```toml
@@ -259,17 +266,38 @@ There is an option to execute patches and shell scripts against the AOSP build t
       "00001-global-internet-permission-toggle.patch", "00002-global-sensors-permission-toggle.patch",
   ]
 
-[[custom-patches]]
+[[custom-scripts]]
   repo = "https://github.com/RattlesnakeOS/example_patch_shellscript"
-  scripts = ["00002-custom-boot-animation.sh"]
+  scripts = [ "00002-custom-boot-animation.sh" ]
 ```
 
+##### Prebuilts
 There is also an option to add prebuilt applications to the AOSP build tree using `[[custom-prebuilts]]` in the config file. This requires you provide a git repo and a list of module names defined in Android.mk files within this repository that you want to have included in the build.
 ```toml
 [[custom-prebuilts]]
   modules = ["app1", "app2"]
   repo = "https://github.com/RattlesnakeOS/example_prebuilts"
 ```
+
+##### Manifest Customizations
+It's also possible to add remotes and projects to the AOSP build manifest file. These will get added to the manifest and get pulled into the AOSP build tree as part of normal build process.
+
+```toml
+# to add a remote line to manifest like this: <remote name="customremote" fetch="https://gitlab.com/repobasename/" revision="master" />
+[[custom-manifest-remotes]]
+  name = "customremote"
+  fetch = "https://gitlab.com/repobasename/"
+  revision = "master"
+
+# to add a project line to manifest like this: <project path="packages/apps/CustomProject" name="CustomProject" remote="customremote" />
+# you can also add modules here that you want to include into the build process
+[[custom-manifest-projects]]
+  path = "packages/apps/CustomProject"
+  name = "CustomProject"
+  remote = "customremote"
+  modules = [ "ModuleName" ]
+```
+
 #### Can I change the boot animation?
 It is possible to change the boot animation using patches, there is an example repo [here](https://github.com/RattlesnakeOS/example_patch_shellscript).
 #### Can I add microG to the build?

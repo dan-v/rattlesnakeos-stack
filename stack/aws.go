@@ -19,37 +19,57 @@ const (
 	awsErrCodeNotFound     = "NotFound"
 )
 
-type RepoPatches []struct {
+type CustomPatches []struct {
 	Repo    string
 	Patches []string
+}
+
+type CustomScripts []struct {
+	Repo    string
 	Scripts []string
 }
 
-type RepoPrebuilts []struct {
+type CustomPrebuilts []struct {
 	Repo    string
 	Modules []string
 }
 
+type CustomManifestRemotes []struct {
+	Name     string
+	Fetch    string
+	Revision string
+}
+
+type CustomManifestProjects []struct {
+	Path    string
+	Name    string
+	Remote  string
+	Modules []string
+}
+
 type AWSStackConfig struct {
-	Name            string
-	Region          string
-	Device          string
-	Email           string
-	InstanceType    string
-	InstanceRegions string
-	SkipPrice       string
-	MaxPrice        string
-	SSHKey          string
-	PreventShutdown bool
-	Version         string
-	Schedule        string
-	Force           bool
-	ChromiumVersion string
-	RepoPatches     *RepoPatches
-	RepoPrebuilts   *RepoPrebuilts
-	HostsFile       string
-	EncryptedKeys   bool
-	AMI             string
+	Name                   string
+	Region                 string
+	Device                 string
+	Email                  string
+	InstanceType           string
+	InstanceRegions        string
+	SkipPrice              string
+	MaxPrice               string
+	SSHKey                 string
+	PreventShutdown        bool
+	Version                string
+	Schedule               string
+	IgnoreVersionChecks    bool
+	ChromiumVersion        string
+	CustomPatches          *CustomPatches
+	CustomScripts          *CustomScripts
+	CustomPrebuilts        *CustomPrebuilts
+	CustomManifestRemotes  *CustomManifestRemotes
+	CustomManifestProjects *CustomManifestProjects
+	HostsFile              string
+	EncryptedKeys          bool
+	AMI                    string
 }
 
 type AWSStack struct {
