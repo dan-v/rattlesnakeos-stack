@@ -122,7 +122,7 @@ Here is an example of a more advanced config file that: locks to a specific vers
 ```toml 
 chromium-version = "70.0.3538.80"
 device = "marlin"
-email: user@domain.com
+email = "user@domain.com"
 encrypted-keys = "false"
 ignore-version-checks = false
 hosts-file = "https://raw.githubusercontent.com/StevenBlack/hosts/master/hosts"
