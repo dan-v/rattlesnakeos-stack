@@ -562,7 +562,6 @@ apply_patches() {
   patch_custom
   patch_aosp_removals
   patch_add_apps
-  patch_tethering
   patch_base_config
   patch_device_config
   patch_chromium_webview
@@ -704,6 +703,7 @@ patch_add_apps() {
   <% end %>
 }
 
+# TODO: get working
 patch_tethering() {
   sed -i "\$aPRODUCT_PROPERTY_OVERRIDES += net.tethering.noprovisioning=true" ${BUILD_DIR}/build/make/target/product/core.mk
 }
