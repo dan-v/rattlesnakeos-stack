@@ -163,8 +163,16 @@ get_latest_versions() {
   fi
   AOSP_BRANCH=$(curl --fail -s ${AOSP_URL_BRANCH} | grep -A1 "${AOSP_BUILD}" | tail -1 | cut -f2 -d">"|cut -f1 -d"<")
   if [ -z "$AOSP_BRANCH" ]; then
-    aws_notify_simple "ERROR: Unable to get latest AOSP branch information. Stopping build. This can happen if ${AOSP_URL_BRANCH} hasn't been updated yet with newly released factory images."
-    exit 1
+    #aws_notify_simple "ERROR: Unable to get latest AOSP branch information. Stopping build. This can happen if ${AOSP_URL_BRANCH} hasn't been updated yet with newly released factory images."
+    #exit 1
+    # TODO: temporary workaround until build-numbers are updated on website
+    if [ "$AOSP_BUILD" == "PPR2.181005.003.A1" ]; then
+      AOSP_BRANCH="android-9.0.0_r18"
+    fi
+    if [ -z "$AOSP_BRANCH" ]; then
+      aws_notify_simple "ERROR: Unable to get latest AOSP branch information. Stopping build. This can happen if https://source.android.com/setup/start/build-numbers hasn't been updated yet with newly released factory images."
+      exit 1
+    fi
   fi
 }
 
@@ -554,6 +562,7 @@ apply_patches() {
   patch_custom
   patch_aosp_removals
   patch_add_apps
+  patch_tethering
   patch_base_config
   patch_device_config
   patch_chromium_webview
@@ -693,6 +702,10 @@ patch_add_apps() {
   <% end %>
   <% end %>
   <% end %>
+}
+
+patch_tethering() {
+  sed -i "\$aPRODUCT_PROPERTY_OVERRIDES += net.tethering.noprovisioning=true" ${BUILD_DIR}/build/make/target/product/core.mk
 }
 
 patch_updater() {
