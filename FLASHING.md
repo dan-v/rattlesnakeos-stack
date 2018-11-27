@@ -75,13 +75,20 @@ On the <b>Pixel 1 and Pixel 1 XL</b>, a locked bootloader will blindly accept wh
 
 On newer Pixel devices, a locked bootloader will verify the signing key to make sure it matches the same key set by the user (or Google's master key).  If the image was signed using the avb\_custom\_key, a yellow warning screen will be displayed. If the image was signed with Google's key, no warning will be shown.  If the image was signed with an unrecognized key, the device will refuse to boot.
 
-Therefore, the public key needs to be set before locking the bootloader again.  The procedure for doing so is:
+Therefore, the public key needs to be set before locking the bootloader again. First get the generated public key from S3:
 ```
 aws s3 cp s3://<rattlesnakeos-stackname>-keys/taimen/avb_pkmd.bin .
-fastboot flash avb_custom_key avb_pkmd.bin
+```
+Or if you used the `encrypted-keys` option, you will need to download the encrypted key and decrypt it.
+```
+aws s3 cp s3://<rattlesnakeos-stackname>-keys-encrypted/taimen/avb_pkmd.bin.gpg .
+gpg -d avb_pkmd.bin.gpg > avb_pkmd.bin
 ```
 
-If you used `--encrypted-keys`, you will need to download the key from `s3://<rattlesnakeos-stackname>-keys-encrypted` and decrypt it manually.
+Now use fastboot to flash the avb_custom_key
+```
+fastboot flash avb_custom_key avb_pkmd.bin
+```
 
 To confirm that the key is set (at the moment this is only possible to verify on the Pixel 2/Pixel 2 XL), verify that `avb_user_settable_key_set` is yes:
 ```
@@ -113,4 +120,4 @@ Enable the developer settings menu by going to `Settings -> About device` and pr
 
 Next, go to `Settings -> Developer` settings and toggle off the `Enable OEM unlocking` setting.
 
-<b>Note: I think it's important to mention that disabling OEM unlocking does significantly increase the security of your device, but it also increases potential for bricking your phone. If you somehow manage to get the device into a non booting state while OEM unlocking is disabled AND you lose the generated signing keys, you wouldn't be able to generate a new valid image to get your phone booting and it would essentially be bricked.</b>
+<b>IMPORTANT: disabling OEM unlocking does significantly increase the security of your device by not allowing someone with physical access to unlock your bootloader and reset your device, but it also increases potential for bricking your phone. So it is up to you to determine if the extra security is worth the risk. In the locked state, your bootloader will only accept OTA updates signed by your custom key. This means if your device ever got into a non booting state with your bootloader locked and OEM unlocking disabled, the only way to fix it would be generating a booting OTA update signed with your keys and applied in recovery mode. So for example, if you lost your signing keys or just weren't able to generate a new booting OTA update for some reason, your device would be bricked.</b>

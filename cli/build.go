@@ -87,13 +87,19 @@ var buildStartCmd = &cobra.Command{
 		}
 
 		lambdaClient := lambda.New(sess, &aws.Config{Region: &region})
-		_, err = lambdaClient.Invoke(&lambda.InvokeInput{
+		out, err := lambdaClient.Invoke(&lambda.InvokeInput{
 			FunctionName:   aws.String(name + "-build"),
 			InvocationType: aws.String("RequestResponse"),
 			Payload:        payload,
 		})
 		if err != nil {
 			log.Fatalf("Failed to start manual build: %v", err)
+		}
+		if out.FunctionError != nil {
+			log.Fatalf("Failed to start manual build. Function error: %v. Output: %v", *out.FunctionError, string(out.Payload))
+		}
+		if *out.StatusCode != 200 {
+			log.Fatalf("Failed to start manual build. Status code calling Lambda function %v != 200", *out.StatusCode)
 		}
 		log.Infof("Successfully started manual build for stack %v", name)
 	},

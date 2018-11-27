@@ -163,16 +163,8 @@ get_latest_versions() {
   fi
   AOSP_BRANCH=$(curl --fail -s ${AOSP_URL_BRANCH} | grep -A1 "${AOSP_BUILD}" | tail -1 | cut -f2 -d">"|cut -f1 -d"<")
   if [ -z "$AOSP_BRANCH" ]; then
-    #aws_notify_simple "ERROR: Unable to get latest AOSP branch information. Stopping build. This can happen if ${AOSP_URL_BRANCH} hasn't been updated yet with newly released factory images."
-    #exit 1
-    # TODO: temporary workaround until build-numbers are updated on website
-    if [ "$AOSP_BUILD" == "PPR2.181005.003.A1" ]; then
-      AOSP_BRANCH="android-9.0.0_r18"
-    fi
-    if [ -z "$AOSP_BRANCH" ]; then
-      aws_notify_simple "ERROR: Unable to get latest AOSP branch information. Stopping build. This can happen if https://source.android.com/setup/start/build-numbers hasn't been updated yet with newly released factory images."
-      exit 1
-    fi
+    aws_notify_simple "ERROR: Unable to get latest AOSP branch information. Stopping build. This can happen if ${AOSP_URL_BRANCH} hasn't been updated yet with newly released factory images."
+    exit 1
   fi
 }
 
@@ -287,37 +279,37 @@ full_run() {
 get_encryption_key() {
   additional_message=""
   if [ "$(aws s3 ls "s3://${AWS_ENCRYPTED_KEYS_BUCKET}/${DEVICE}" | wc -l)" == '0' ]; then
-    additional_message="Since you have no encrypted signing keys in s3://${AWS_ENCRYPTED_KEYS_BUCKET}/${DEVICE} yet - new signing keys will be generated and encrypted with provided key."
+    additional_message="Since you have no encrypted signing keys in s3://${AWS_ENCRYPTED_KEYS_BUCKET}/${DEVICE} yet - new signing keys will be generated and encrypted with provided passphrase."
   fi
 
   wait_time="10m"
   error_message=""
   while [ 1 ]; do 
     aws sns publish --region ${REGION} --topic-arn "$AWS_SNS_ARN" \
-      --message="$(printf "%s Need to login to the EC2 instance and provide the encryption key (5 minute timeout before shutdown). %s\n\nssh ubuntu@%s 'printf \"Enter encryption key: \" && read k && echo \"\$k\" > %s'" "$error_message" "$additional_message" "${INSTANCE_IP}" "${ENCRYPTION_PIPE}")"
+      --message="$(printf "%s Need to login to the EC2 instance and provide the encryption passphrase (${wait_time} timeout before shutdown). You may need to open up SSH in the default security group, see the FAQ for details. %s\n\nssh ubuntu@%s 'printf \"Enter encryption passphrase: \" && read k && echo \"\$k\" > %s'" "$error_message" "$additional_message" "${INSTANCE_IP}" "${ENCRYPTION_PIPE}")"
     error_message=""
 
-    log "Waiting for encryption key (with $wait_time timeout) to be provided over named pipe $ENCRYPTION_PIPE"
+    log "Waiting for encryption passphrase (with $wait_time timeout) to be provided over named pipe $ENCRYPTION_PIPE"
     set +e
     ENCRYPTION_KEY=$(timeout $wait_time cat $ENCRYPTION_PIPE)
     if [ $? -ne 0 ]; then
       set -e
-      log "Timeout ($wait_time) waiting for encryption key"
-      aws_notify_simple "Timeout ($wait_time) waiting for encryption key. Terminating build process."
+      log "Timeout ($wait_time) waiting for encryption passphrase"
+      aws_notify_simple "Timeout ($wait_time) waiting for encryption passphrase. Terminating build process."
       exit 1
     fi
     set -e
     if [ -z "$ENCRYPTION_KEY" ]; then
-      error_message="ERROR: Empty encryption key received - try again."
+      error_message="ERROR: Empty encryption passphrase received - try again."
       log "$error_message"
       continue
     fi
-    log "Received encryption key over named pipe $ENCRYPTION_PIPE"
+    log "Received encryption passphrase over named pipe $ENCRYPTION_PIPE"
 
     if [ "$(aws s3 ls "s3://${AWS_ENCRYPTED_KEYS_BUCKET}/${DEVICE}" | wc -l)" == '0' ]; then
       log "No existing encrypting keys - new keys will be generated later in build process."
     else
-      log "Verifying encryption key is valid by syncing encrypted signing keys from S3 and decrypting"
+      log "Verifying encryption passphrase is valid by syncing encrypted signing keys from S3 and decrypting"
       aws s3 sync "s3://${AWS_ENCRYPTED_KEYS_BUCKET}" "${KEYS_DIR}"
       
       decryption_error=false
@@ -334,7 +326,7 @@ get_encryption_key() {
       set -e
       if [ "$decryption_error" = true ]; then
         log 
-        error_message="ERROR: Failed to decrypt signing keys with provided key - try again."
+        error_message="ERROR: Failed to decrypt signing keys with provided passphrase - try again."
         log "$error_message"
         continue
       fi
@@ -562,6 +554,7 @@ apply_patches() {
   patch_custom
   patch_aosp_removals
   patch_add_apps
+  patch_tethering
   patch_base_config
   patch_device_config
   patch_chromium_webview
@@ -703,9 +696,11 @@ patch_add_apps() {
   <% end %>
 }
 
-# TODO: get working
 patch_tethering() {
+  # TODO: probably could do these edits in a cleaner way
   sed -i "\$aPRODUCT_PROPERTY_OVERRIDES += net.tethering.noprovisioning=true" ${BUILD_DIR}/build/make/target/product/core.mk
+  awk -i inplace '1;/def_vibrate_when_ringing/{print "    <integer name=\"def_tether_dun_required\">0</integer>";}' ${BUILD_DIR}/frameworks/base/packages/SettingsProvider/res/values/defaults.xml
+  awk -i inplace '1;/loadSetting\(stmt, Settings.Global.PREFERRED_NETWORK_MODE/{print "            loadSetting(stmt, Settings.Global.TETHER_DUN_REQUIRED, R.integer.def_tether_dun_required);";}' ${BUILD_DIR}/frameworks/base/packages/SettingsProvider/src/com/android/providers/settings/DatabaseHelper.java
 }
 
 patch_updater() {

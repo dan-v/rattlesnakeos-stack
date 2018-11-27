@@ -59,6 +59,10 @@ func newTerraformClient(config *AWSStack, stdout, stderr io.Writer) (*terraformC
 	if err != nil {
 		return nil, err
 	}
+	// handle potential issue with non default umask as lambda function must have at least 444 permissions to run
+	if err = os.Chmod(tempDir.Path(lambdaFunctionFilename), 0644); err != nil {
+		return nil, err
+	}
 	files := []string{tempDir.Path(lambdaFunctionFilename)}
 	output := tempDir.Path(lambdaZipFilename)
 	err = zipFiles(output, files)

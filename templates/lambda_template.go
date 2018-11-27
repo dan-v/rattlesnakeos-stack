@@ -44,6 +44,7 @@ MAX_PRICE = '<% .MaxPrice %>'
 SKIP_PRICE = '<% .SkipPrice %>'
 REGIONS = '<% .InstanceRegions %>'
 AMI_OVERRIDE = '<% .AMI %>'
+ENCRYPTED_KEYS = '<% .EncryptedKeys %>' 
 
 def send_sns_message(subject, message):
     account_id = boto3.client('sts').get_caller_identity().get('Account')
@@ -166,7 +167,12 @@ runcmd:
         client.describe_key_pairs(KeyNames=[SSH_KEY_NAME])
         spot_fleet_request_config['LaunchSpecifications'][0]['KeyName'] = SSH_KEY_NAME
     except Exception as e:
-        print("Not including SSH key in spot request as couldn't find a key in region {} with name {}: {}".format(cheapest_region, SSH_KEY_NAME, e))
+        if ENCRYPTED_KEYS == "true":
+            message = "Encrypted keys is enabled, so properly configured SSH keys are mandatory. Unable to find an EC2 Key Pair named '{}' in region {}.".format(SSH_KEY_NAME, cheapest_region)
+            send_sns_message("RattlesnakeOS Spot Instance CONFIGURATION ERROR", message)
+            return message
+        else:
+            print("Not including SSH key in spot request as couldn't find a key in region {} with name {}: {}".format(cheapest_region, SSH_KEY_NAME, e))
 
     try:
         print("Requesting spot instance in AZ {} with current price of {}".format(cheapest_az, cheapest_price))
