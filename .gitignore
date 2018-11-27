@@ -34,3 +34,4 @@ artifacts
 rattlesnakeos-stack
 .vscode/
 *.toml
+.DS_Store
