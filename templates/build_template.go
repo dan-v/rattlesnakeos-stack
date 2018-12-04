@@ -503,9 +503,6 @@ aosp_repo_modifications() {
       print "  <project path=\"<% .Path %>\" name=\"<% .Name %>\" remote=\"<% .Remote %>\" />";
       <% end %>
       <% end %>
-      print "  <project path=\"device/google/crosshatch\" name=\"device/google/crosshatch\" groups=\"device,crosshatch\" />";
-      print "  <project path=\"device/google/crosshatch-kernel\" name=\"device/google/crosshatch-kernel\" groups=\"device,crosshatch\" clone-depth=\"1\" />";
-      print "  <project path=\"device/google/crosshatch-sepolicy\" name=\"device/google/crosshatch-sepolicy\" groups=\"device,crosshatch\" />";
       print "  <project path=\"external/chromium\" name=\"platform_external_chromium\" remote=\"github\" />";
       print "  <project path=\"packages/apps/Updater\" name=\"platform_packages_apps_Updater\" remote=\"github\" />";
       print "  <project path=\"packages/apps/F-Droid\" name=\"fdroidclient\" remote=\"fdroid\" revision=\"refs/tags/" FDROID_CLIENT_VERSION "\" />";
