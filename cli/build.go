@@ -19,13 +19,14 @@ import (
 // TODO: this command is very happy path at the moment
 
 var listBuilds, startBuild, forceBuild bool
-var terminateInstanceID, terminateRegion, listName, buildName string
+var terminateInstanceID, terminateRegion, listRegions, listName, buildName string
 
 func init() {
 	rootCmd.AddCommand(buildCmd)
 
 	buildCmd.AddCommand(buildListCmd)
 	buildListCmd.Flags().StringVar(&name, "name", "", "name for stack")
+	buildListCmd.Flags().StringVar(&listRegions, "instance-regions", "", "regions to look for running builds")
 
 	buildCmd.AddCommand(buildStartCmd)
 	buildStartCmd.Flags().StringVar(&name, "name", "", "name for stack")
@@ -140,7 +141,7 @@ var buildListCmd = &cobra.Command{
 		if viper.GetString("name") == "" && name == "" {
 			return fmt.Errorf("must provide a stack name")
 		}
-		if viper.GetString("instance-regions") == "" && instanceRegions == "" {
+		if viper.GetString("instance-regions") == "" && listRegions == "" {
 			return fmt.Errorf("must provide instance regions")
 		}
 		return nil
@@ -149,8 +150,8 @@ var buildListCmd = &cobra.Command{
 		if name == "" {
 			name = viper.GetString("name")
 		}
-		if instanceRegions == "" {
-			instanceRegions = viper.GetString("instance-regions")
+		if listRegions == "" {
+			listRegions = viper.GetString("instance-regions")
 		}
 
 		sess, err := session.NewSession(aws.NewConfig().WithCredentialsChainVerboseErrors(true))
@@ -160,7 +161,7 @@ var buildListCmd = &cobra.Command{
 
 		log.Infof("Looking for builds for stack %v in the following regions: %v", name, instanceRegions)
 		runningInstances := 0
-		for _, region := range strings.Split(instanceRegions, ",") {
+		for _, region := range strings.Split(listRegions, ",") {
 			ec2Client := ec2.New(sess, &aws.Config{Region: &region})
 			resp, err := ec2Client.DescribeInstances(&ec2.DescribeInstancesInput{
 				Filters: []*ec2.Filter{

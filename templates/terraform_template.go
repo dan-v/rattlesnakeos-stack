@@ -256,6 +256,7 @@ resource "aws_iam_policy" "rattlesnake_spot_fleet_policy" {
 				"ec2:DescribeImages",
 				"ec2:DescribeSubnets",
 				"ec2:RequestSpotInstances",
+				"iam:CreateServiceLinkedRole",
 				"ec2:TerminateInstances",
 				"ec2:DescribeInstanceStatus",
 				"iam:PassRole"
