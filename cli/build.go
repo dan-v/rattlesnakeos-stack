@@ -178,6 +178,10 @@ var buildListCmd = &cobra.Command{
 
 			for _, reservation := range resp.Reservations {
 				for _, instance := range reservation.Instances {
+					if instance.IamInstanceProfile == nil || instance.IamInstanceProfile.Arn == nil {
+						continue
+					}
+
 					instanceIamProfileName := strings.Split(*instance.IamInstanceProfile.Arn, "/")[1]
 					if instanceIamProfileName == name+"-ec2" {
 						log.Printf("Instance '%v': ip='%v' region='%v' launched='%v'", *instance.InstanceId, *instance.PublicIpAddress, region, *instance.LaunchTime)
