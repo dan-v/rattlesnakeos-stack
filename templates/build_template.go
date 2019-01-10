@@ -677,6 +677,11 @@ patch_fdroid() {
   echo "sdk.dir=${HOME}/sdk" > ${BUILD_DIR}/packages/apps/F-Droid/app/local.properties
   sed -i 's/gradle assembleRelease/..\/gradlew assembleRelease/' ${BUILD_DIR}/packages/apps/F-Droid/Android.mk
   sed -i 's@fdroid_apk   := build/outputs/apk/$(fdroid_dir)-release-unsigned.apk@fdroid_apk   := build/outputs/apk/full/release/app-full-release-unsigned.apk@'  ${BUILD_DIR}/packages/apps/F-Droid/Android.mk
+
+  # sometimes gradle dependencies fail to download, so gradle build with retry before the AOSP build as workaround
+  pushd ${BUILD_DIR}/packages/apps/F-Droid
+  retry ./gradlew assembleRelease
+  popd
 }
 
 patch_add_apps() {
@@ -716,6 +721,9 @@ fdpe_hash() {
 
 patch_priv_ext() {
   log_header ${FUNCNAME}
+
+  # 0.2.9 added whitelabel support, so BuildConfig.APPLICATION_ID needs to be set now
+  sed -i 's@BuildConfig.APPLICATION_ID@"org.fdroid.fdroid.privileged"@' ${BUILD_DIR}/packages/apps/F-DroidPrivilegedExtension/app/src/main/java/org/fdroid/fdroid/privileged/PrivilegedService.java
 
   unofficial_releasekey_hash=$(fdpe_hash "${KEYS_DIR}/${DEVICE}/releasekey.x509.pem")
   unofficial_platform_hash=$(fdpe_hash "${KEYS_DIR}/${DEVICE}/platform.x509.pem")
