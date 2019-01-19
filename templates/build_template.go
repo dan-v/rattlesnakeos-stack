@@ -380,6 +380,8 @@ setup_env() {
     unzip sdk-tools.zip
     yes | ./tools/bin/sdkmanager --licenses
     ./tools/android update sdk -u --use-sdk-wrapper
+    # workaround for license issue with f-droid using older sdk (didn't spend time to debug issue further)
+    yes | ./tools/bin/sdkmanager "build-tools;27.0.3" "platforms;android-27"
   fi
 
   # setup git
@@ -566,20 +568,26 @@ apply_patches() {
 
 patch_aosp_removals() {
   log_header ${FUNCNAME}
-  cd "${BUILD_DIR}"
 
-  # remove aosp webview
-  rm -rf platform/external/chromium-webview
-  sed -i '/webview \\/d' build/make/target/product/core_minimal.mk
+  # remove aosp chromium webview directory
+  rm -rf ${BUILD_DIR}/platform/external/chromium-webview
 
-  # remove Browser2
-  sed -i '/Browser2/d' build/make/target/product/core.mk
+  # loop over all make files as these keep changing and remove components
+  for mk_file in ${BUILD_DIR}/build/make/target/product/*.mk; do
+    # remove aosp webview
+    sed -i '/webview \\/d' ${mk_file}
 
-  # remove Calendar
-  sed -i '/Calendar \\/d' build/make/target/product/core.mk
+    # remove Browser2
+    sed -i '/Browser2/d' ${mk_file}
 
-  # remove QuickSearchBox
-  sed -i '/QuickSearchBox/d' build/make/target/product/core.mk
+    # remove Calendar
+    sed -i '/Calendar \\/d' ${mk_file}
+    sed -i '/Calendar.apk/d' ${mk_file}
+
+    # remove QuickSearchBox
+    sed -i '/QuickSearchBox/d' ${mk_file}
+  done
+
 }
 
 # TODO: most of this is fragile and unforgiving
@@ -619,8 +627,8 @@ patch_custom() {
     log "Putting custom prebuilts from <% $r.Repo %> in build tree location ${prebuilt_dir}/<% $i %>"
     retry git clone <% $r.Repo %> ${prebuilt_dir}/<% $i %>
     <% range .Modules %>
-      log "Adding custom PRODUCT_PACKAGES += <% . %> to ${BUILD_DIR}/build/make/target/product/core.mk"
-      sed -i "\$aPRODUCT_PACKAGES += <% . %>" ${BUILD_DIR}/build/make/target/product/core.mk
+      log "Adding custom PRODUCT_PACKAGES += <% . %> to ${get_package_mk_file}"
+      sed -i "\$aPRODUCT_PACKAGES += <% . %>" ${get_package_mk_file}
     <% end %>
   <% end %>
   <% end %>
@@ -684,18 +692,33 @@ patch_fdroid() {
   popd
 }
 
+get_package_mk_file() {
+  # this is newer location in master
+  mk_file=${BUILD_DIR}/build/make/target/product/handheld_system.mk
+  if [ ! -f ${mk_file} ]; then
+    # this is older location
+    mk_file=${BUILD_DIR}/build/make/target/product/core.mk
+    if [ ! -f ${mk_file} ]; then
+      log "Expected handheld_system.mk or core.mk do not exist"
+      exit 1
+    fi
+  fi
+  echo ${mk_file}
+}
+
 patch_add_apps() {
   log_header ${FUNCNAME}
 
-  sed -i "\$aPRODUCT_PACKAGES += Updater" ${BUILD_DIR}/build/make/target/product/core.mk
-  sed -i "\$aPRODUCT_PACKAGES += F-DroidPrivilegedExtension" ${BUILD_DIR}/build/make/target/product/core.mk
-  sed -i "\$aPRODUCT_PACKAGES += F-Droid" ${BUILD_DIR}/build/make/target/product/core.mk
-  sed -i "\$aPRODUCT_PACKAGES += chromium" ${BUILD_DIR}/build/make/target/product/core.mk
+  mk_file=$(get_package_mk_file)
+  sed -i "\$aPRODUCT_PACKAGES += Updater" ${mk_file}
+  sed -i "\$aPRODUCT_PACKAGES += F-DroidPrivilegedExtension" ${mk_file}
+  sed -i "\$aPRODUCT_PACKAGES += F-Droid" ${mk_file}
+  sed -i "\$aPRODUCT_PACKAGES += chromium" ${mk_file}
 
   # add any modules defined in custom manifest projects
   <% if .CustomManifestProjects %><% range $i, $r := .CustomManifestProjects %><% range $j, $q := .Modules %>
-  log "Adding custom PRODUCT_PACKAGES += <% $q %> to ${BUILD_DIR}/build/make/target/product/core.mk"
-  sed -i "\$aPRODUCT_PACKAGES += <% $q %>" ${BUILD_DIR}/build/make/target/product/core.mk
+  log "Adding custom PRODUCT_PACKAGES += <% $q %> to ${mk_file}"
+  sed -i "\$aPRODUCT_PACKAGES += <% $q %>" ${mk_file}
   <% end %>
   <% end %>
   <% end %>
@@ -703,7 +726,7 @@ patch_add_apps() {
 
 patch_tethering() {
   # TODO: probably could do these edits in a cleaner way
-  sed -i "\$aPRODUCT_PROPERTY_OVERRIDES += net.tethering.noprovisioning=true" ${BUILD_DIR}/build/make/target/product/core.mk
+  sed -i "\$aPRODUCT_PROPERTY_OVERRIDES += net.tethering.noprovisioning=true" $(get_package_mk_file)
   awk -i inplace '1;/def_vibrate_when_ringing/{print "    <integer name=\"def_tether_dun_required\">0</integer>";}' ${BUILD_DIR}/frameworks/base/packages/SettingsProvider/res/values/defaults.xml
   awk -i inplace '1;/loadSetting\(stmt, Settings.Global.PREFERRED_NETWORK_MODE/{print "            loadSetting(stmt, Settings.Global.TETHER_DUN_REQUIRED, R.integer.def_tether_dun_required);";}' ${BUILD_DIR}/frameworks/base/packages/SettingsProvider/src/com/android/providers/settings/DatabaseHelper.java
 }
