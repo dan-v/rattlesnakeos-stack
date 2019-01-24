@@ -627,8 +627,8 @@ patch_custom() {
     log "Putting custom prebuilts from <% $r.Repo %> in build tree location ${prebuilt_dir}/<% $i %>"
     retry git clone <% $r.Repo %> ${prebuilt_dir}/<% $i %>
     <% range .Modules %>
-      log "Adding custom PRODUCT_PACKAGES += <% . %> to ${get_package_mk_file}"
-      sed -i "\$aPRODUCT_PACKAGES += <% . %>" ${get_package_mk_file}
+      log "Adding custom PRODUCT_PACKAGES += <% . %> to $(get_package_mk_file)"
+      sed -i "\$aPRODUCT_PACKAGES += <% . %>" $(get_package_mk_file)
     <% end %>
   <% end %>
   <% end %>
