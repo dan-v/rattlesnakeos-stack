@@ -124,7 +124,7 @@ get_latest_versions() {
   log_header ${FUNCNAME}
 
   sudo apt-get -y install jq
-  
+
   # check if running latest stack
   LATEST_STACK_VERSION=$(curl --fail -s "$STACK_URL_LATEST" | jq -r '.name')
   if [ -z "$LATEST_STACK_VERSION" ]; then
@@ -135,14 +135,14 @@ get_latest_versions() {
   else
     STACK_UPDATE_MESSAGE="WARNING: you should upgrade to the latest version: ${LATEST_STACK_VERSION}"
   fi
-  
+
   # check for latest stable chromium version
   LATEST_CHROMIUM=$(curl --fail -s "$CHROME_URL_LATEST" | jq -r '.[] | select(.os == "android") | .versions[] | select(.channel == "'$CHROME_CHANNEL'") | .current_version')
   if [ -z "$LATEST_CHROMIUM" ]; then
     aws_notify_simple "ERROR: Unable to get latest Chromium version details. Stopping build."
     exit 1
   fi
-  
+
   # fdroid - get latest non alpha tags from gitlab
   FDROID_CLIENT_VERSION=$(curl --fail -s "$FDROID_CLIENT_URL_LATEST" | jq -r '[.[] | select(.name | test("^[0-9]+\\.[0-9]+")) | select(.name | contains("alpha") | not) | select(.name | contains("ota") | not)][0] | .name')
   if [ -z "$FDROID_CLIENT_VERSION" ]; then
@@ -154,7 +154,7 @@ get_latest_versions() {
     aws_notify_simple "ERROR: Unable to get latest F-Droid privilege extension version details. Stopping build."
     exit 1
   fi
-  
+
   # attempt to automatically pick latest build version and branch. note this is likely to break with any page redesign. should also add some validation here.
   AOSP_BUILD=$(curl --fail -s ${AOSP_URL_BUILD} | grep -A1 "${DEVICE}" | egrep '[a-zA-Z]+ [0-9]{4}\)' | grep "${ANDROID_VERSION}" | tail -1 | cut -d"(" -f2 | cut -d"," -f1)
   if [ -z "$AOSP_BUILD" ]; then
@@ -207,7 +207,7 @@ check_for_new_versions() {
     needs_update=true
     BUILD_REASON="$BUILD_REASON 'Chromium version $existing_chromium != $LATEST_CHROMIUM'"
   fi
-  
+
   # check fdroid
   existing_fdroid_client=$(aws s3 cp "s3://${AWS_RELEASE_BUCKET}/fdroid/revision" - || true)
   if [ "$existing_fdroid_client" == "$FDROID_CLIENT_VERSION" ]; then
@@ -230,7 +230,7 @@ check_for_new_versions() {
 
   if [ "$needs_update" = true ]; then
     echo "New build is required"
-  else 
+  else
     if [ "$FORCE_BUILD" = true ]; then
       message="No build is required, but FORCE_BUILD=true"
       echo "$message"
@@ -284,7 +284,7 @@ get_encryption_key() {
 
   wait_time="10m"
   error_message=""
-  while [ 1 ]; do 
+  while [ 1 ]; do
     aws sns publish --region ${REGION} --topic-arn "$AWS_SNS_ARN" \
       --message="$(printf "%s Need to login to the EC2 instance and provide the encryption passphrase (${wait_time} timeout before shutdown). You may need to open up SSH in the default security group, see the FAQ for details. %s\n\nssh ubuntu@%s 'printf \"Enter encryption passphrase: \" && read k && echo \"\$k\" > %s'" "$error_message" "$additional_message" "${INSTANCE_IP}" "${ENCRYPTION_PIPE}")"
     error_message=""
@@ -311,10 +311,10 @@ get_encryption_key() {
     else
       log "Verifying encryption passphrase is valid by syncing encrypted signing keys from S3 and decrypting"
       aws s3 sync "s3://${AWS_ENCRYPTED_KEYS_BUCKET}" "${KEYS_DIR}"
-      
+
       decryption_error=false
       set +e
-      for f in $(find "${KEYS_DIR}" -type f -name '*.gpg'); do 
+      for f in $(find "${KEYS_DIR}" -type f -name '*.gpg'); do
         output_file=$(echo $f | awk -F".gpg" '{print $1}')
         log "Decrypting $f to ${output_file}..."
         gpg -d --batch --passphrase "${ENCRYPTION_KEY}" $f > $output_file
@@ -325,7 +325,7 @@ get_encryption_key() {
       done
       set -e
       if [ "$decryption_error" = true ]; then
-        log 
+        log
         error_message="ERROR: Failed to decrypt signing keys with provided passphrase - try again."
         log "$error_message"
         continue
@@ -419,7 +419,7 @@ build_chromium() {
   fi
   export PATH="$PATH:$HOME/depot_tools"
 
-  # fetch chromium 
+  # fetch chromium
   mkdir -p $HOME/chromium
   cd $HOME/chromium
   fetch --nohooks android
@@ -593,7 +593,7 @@ patch_aosp_removals() {
 # TODO: most of this is fragile and unforgiving
 patch_custom() {
   log_header ${FUNCNAME}
-  
+
   cd $BUILD_DIR
 
   # allow custom patches to be applied
@@ -627,8 +627,8 @@ patch_custom() {
     log "Putting custom prebuilts from <% $r.Repo %> in build tree location ${prebuilt_dir}/<% $i %>"
     retry git clone <% $r.Repo %> ${prebuilt_dir}/<% $i %>
     <% range .Modules %>
-      log "Adding custom PRODUCT_PACKAGES += <% . %> to ${get_package_mk_file}"
-      sed -i "\$aPRODUCT_PACKAGES += <% . %>" ${get_package_mk_file}
+      log "Adding custom PRODUCT_PACKAGES += <% . %> to $(get_package_mk_file)"
+      sed -i "\$aPRODUCT_PACKAGES += <% . %>" $(get_package_mk_file)
     <% end %>
   <% end %>
   <% end %>
@@ -752,7 +752,7 @@ patch_priv_ext() {
   unofficial_platform_hash=$(fdpe_hash "${KEYS_DIR}/${DEVICE}/platform.x509.pem")
   sed -i 's/'${OFFICIAL_FDROID_KEY}'")/'${unofficial_releasekey_hash}'"),\n            new Pair<>("org.fdroid.fdroid", "'${unofficial_platform_hash}'")/' \
       "${BUILD_DIR}/packages/apps/F-DroidPrivilegedExtension/app/src/main/java/org/fdroid/fdroid/privileged/ClientWhitelist.java"
-} 
+}
 
 patch_launcher() {
   log_header ${FUNCNAME}
@@ -878,15 +878,15 @@ release() {
   build/tools/releasetools/sign_target_files_apks -o -d "$KEY_DIR" "${AVB_SWITCHES[@]}" \
     out/target/product/$DEVICE/obj/PACKAGING/target_files_intermediates/$PREFIX$DEVICE-target_files-$BUILD_NUMBER.zip \
     $OUT/$TARGET_FILES
-  
+
   log "Running ota_from_target_files"
   build/tools/releasetools/ota_from_target_files --block -k "$KEY_DIR/releasekey" "${EXTRA_OTA[@]}" $OUT/$TARGET_FILES \
       $OUT/$DEVICE-ota_update-$BUILD.zip
-  
+
   log "Running img_from_target_files"
   sed -i 's/zipfile\.ZIP_DEFLATED/zipfile\.ZIP_STORED/' build/tools/releasetools/img_from_target_files.py
   build/tools/releasetools/img_from_target_files $OUT/$TARGET_FILES $OUT/$DEVICE-img-$BUILD.zip
-  
+
   log "Running generate-factory-images"
   cd $OUT
   sed -i 's/zip -r/tar cvf/' ../../device/common/generate-factory-images-common.sh
@@ -986,14 +986,14 @@ aws_import_keys() {
     if [ "$(aws s3 ls "s3://${AWS_ENCRYPTED_KEYS_BUCKET}/${DEVICE}" | wc -l)" == '0' ]; then
       log "No encrypted keys were found - generating encrypted keys"
       gen_keys
-      for f in $(find "${KEYS_DIR}" -type f); do 
+      for f in $(find "${KEYS_DIR}" -type f); do
         log "Encrypting file ${f} to ${f}.gpg"
         gpg --symmetric --batch --passphrase "$ENCRYPTION_KEY" --cipher-algo AES256 $f
       done
       log "Syncing encrypted keys to S3 s3://${AWS_ENCRYPTED_KEYS_BUCKET}"
       aws s3 sync "${KEYS_DIR}" "s3://${AWS_ENCRYPTED_KEYS_BUCKET}" --exclude "*" --include "*.gpg"
     fi
-  else 
+  else
     if [ "$(aws s3 ls "s3://${AWS_KEYS_BUCKET}/${DEVICE}" | wc -l)" == '0' ]; then
       log "No keys were found - generating keys"
       gen_keys
@@ -1002,7 +1002,7 @@ aws_import_keys() {
     else
       log "Keys already exist for ${DEVICE} - syncing them from S3"
       aws s3 sync "s3://${AWS_KEYS_BUCKET}" "${KEYS_DIR}"
-    fi 
+    fi
   fi
 }
 
