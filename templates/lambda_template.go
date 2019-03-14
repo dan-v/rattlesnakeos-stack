@@ -9,27 +9,30 @@ from urllib.request import urlopen
 from urllib.request import HTTPError
 from datetime import datetime, timedelta
 
+# curl -s https://cloud-images.ubuntu.com/locator/ec2/releasesTable | grep '18.04' | grep 'amd64' | grep 'hvm:ebs-ssd' | awk -F'"' '{print $2, $15}'  | awk -F"launchAmi=" '{print $1,$2}' | awk '{print $1,$3}' | awk -F'\' '{print $1}' | awk '{printf "\"%s\": \"%s\",\n",$1,$2 }'
 # ubuntu 18.04 AMI hvm:ebs-ssd: https://cloud-images.ubuntu.com/locator/ec2/
 REGION_AMIS = {
-    "us-east-1": "ami-0ac019f4fcb7cb7e6",
-    "us-west-1": "ami-063aa838bd7631e0b",
-    "ap-northeast-3": "ami-05e896b95030bd37c",
-    "ap-northeast-2": "ami-06e7b9c5e0c4dd014",
-    "ap-northeast-1": "ami-07ad4b1c3af1ea214",
-    "sa-east-1": "ami-03c6239555bb12112",
-    "ap-southeast-1": "ami-0c5199d385b432989",
-    "ca-central-1": "ami-0427e8367e3770df1",
-    "ap-southeast-2": "ami-07a3bd4944eb120a0",
-    "us-west-2": "ami-0bbe6b35405ecebdb",
-    "us-east-2": "ami-0f65671a86f061fcd",
-    "ap-south-1": "ami-0d773a3b7bb2bb1c1",
-    "eu-central-1": "ami-0bdf93799014acdc4",
-    "eu-west-1": "ami-00035f41c82244dab",
-    "eu-west-2": "ami-0b0a60c0a2bd40612",
-    "eu-west-3": "ami-08182c55a1c188dee",
-    "cn-north-1": "ami-05596fb52c3802012",
-    "cn-northwest-1": "ami-03f7db8b059795736",
-    "us-gov-west-1": "ami-33dc4252"
+    "ap-northeast-1": "ami-0eb48a19a8d81e20b",
+    "ap-northeast-2": "ami-078e96948945fc2c9",
+    "ap-northeast-3": "ami-0babd61cf592f1c03",
+    "ap-south-1": "ami-007d5db58754fa284",
+    "ap-southeast-1": "ami-0dad20bd1b9c8c004",
+    "ap-southeast-2": "ami-0b76c3b150c6b1423",
+    "ca-central-1": "ami-01b60a3259250381b",
+    "eu-central-1": "ami-090f10efc254eaf55",
+    "eu-north-1": "ami-5e9c1520",
+    "eu-west-1": "ami-08d658f84a6d84a80",
+    "eu-west-2": "ami-07dc734dc14746eab",
+    "eu-west-3": "ami-03bca18cb3dc173c9",
+    "sa-east-1": "ami-09f4cd7c0b533b081",
+    "us-east-1": "ami-0a313d6098716f372",
+    "us-east-2": "ami-0c55b159cbfafe1f0",
+    "us-west-1": "ami-06397100adf427136",
+    "us-west-2": "ami-005bdb005fb00e791",
+    "cn-northwest-1": "ami-09b1225e9a1d84e4c",
+    "cn-north-1": "ami-09dd6088c3e46151c",
+    "us-gov-west-1": "ami-66bdd307",
+    "us-gov-east-1": "ami-7bd2340a"
 }
 
 NAME = '<% .Name %>'

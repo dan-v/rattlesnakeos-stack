@@ -143,13 +143,13 @@ get_latest_versions() {
     exit 1
   fi
 
-  # fdroid - get latest non alpha tags from gitlab
-  FDROID_CLIENT_VERSION=$(curl --fail -s "$FDROID_CLIENT_URL_LATEST" | jq -r '[.[] | select(.name | test("^[0-9]+\\.[0-9]+")) | select(.name | contains("alpha") | not) | select(.name | contains("ota") | not)][0] | .name')
+  # fdroid - get latest non alpha tags from gitlab (sorted)
+  FDROID_CLIENT_VERSION=$(curl --fail -s "$FDROID_CLIENT_URL_LATEST" | jq -r 'sort_by(.name) | reverse | [.[] | select(.name | test("^[0-9]+\\.[0-9]+")) | select(.name | contains("alpha") | not) | select(.name | contains("ota") | not)][0] | .name')
   if [ -z "$FDROID_CLIENT_VERSION" ]; then
     aws_notify_simple "ERROR: Unable to get latest F-Droid version details. Stopping build."
     exit 1
   fi
-  FDROID_PRIV_EXT_VERSION=$(curl --fail -s "$FDROID_PRIV_EXT_URL_LATEST" | jq -r '[.[] | select(.name | test("^[0-9]+\\.[0-9]+")) | select(.name | contains("alpha") | not) | select(.name | contains("ota") | not)][0] | .name')
+  FDROID_PRIV_EXT_VERSION=$(curl --fail -s "$FDROID_PRIV_EXT_URL_LATEST" | jq -r 'sort_by(.name) | reverse | [.[] | select(.name | test("^[0-9]+\\.[0-9]+")) | select(.name | contains("alpha") | not) | select(.name | contains("ota") | not)][0] | .name')
   if [ -z "$FDROID_PRIV_EXT_VERSION" ]; then
     aws_notify_simple "ERROR: Unable to get latest F-Droid privilege extension version details. Stopping build."
     exit 1
@@ -435,7 +435,9 @@ build_chromium() {
 
   # run gclient sync (runhooks will run as part of this)
   log "Running gclient sync (this takes a while)"
-  yes | gclient sync --with_branch_heads --jobs 32 -RDf
+  for i in {1..5}; do
+    yes | gclient sync --with_branch_heads --jobs 32 -RDf && break
+  done
 
   # cleanup any files in tree not part of this revision
   git clean -dff
@@ -556,7 +558,6 @@ apply_patches() {
   patch_custom
   patch_aosp_removals
   patch_add_apps
-  patch_tethering
   patch_base_config
   patch_device_config
   patch_chromium_webview
@@ -722,13 +723,6 @@ patch_add_apps() {
   <% end %>
   <% end %>
   <% end %>
-}
-
-patch_tethering() {
-  # TODO: probably could do these edits in a cleaner way
-  sed -i "\$aPRODUCT_PROPERTY_OVERRIDES += net.tethering.noprovisioning=true" $(get_package_mk_file)
-  awk -i inplace '1;/def_vibrate_when_ringing/{print "    <integer name=\"def_tether_dun_required\">0</integer>";}' ${BUILD_DIR}/frameworks/base/packages/SettingsProvider/res/values/defaults.xml
-  awk -i inplace '1;/loadSetting\(stmt, Settings.Global.PREFERRED_NETWORK_MODE/{print "            loadSetting(stmt, Settings.Global.TETHER_DUN_REQUIRED, R.integer.def_tether_dun_required);";}' ${BUILD_DIR}/frameworks/base/packages/SettingsProvider/src/com/android/providers/settings/DatabaseHelper.java
 }
 
 patch_updater() {

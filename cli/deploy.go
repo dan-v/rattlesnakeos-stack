@@ -25,9 +25,9 @@ var prebuilts = &stack.CustomPrebuilts{}
 var manifestRemotes = &stack.CustomManifestRemotes{}
 var manifestProjects = &stack.CustomManifestProjects{}
 var trustedRepoBase = "https://github.com/rattlesnakeos/"
-var supportedRegions = []string{"us-west-2", "us-east-1", "us-east-2", "us-west-1", "eu-west-1", "eu-west-2", "eu-west-3",
-	"ap-northeast-3", "ap-northeast-2", "ap-northeast-1", "sa-east-1", "ap-southeast-1", "ca-central-1",
-	"ap-southeast-2", "ap-south-1", "eu-central-1", "cn-north-1", "cn-northwest-1"}
+var supportedRegions = []string{"ap-northeast-1", "ap-northeast-2", "ap-northeast-3", "ap-south-1", "ap-southeast-1",
+	"ap-southeast-2", "ca-central-1", "eu-central-1", "eu-north-1", "eu-west-1", "eu-west-2", "eu-west-3", "sa-east-1",
+	"us-east-1", "us-east-2", "us-west-1", "us-west-2", "cn-northwest-1", "cn-north-1"}
 var supportedDevicesFriendly = []string{"Pixel", "Pixel XL", "Pixel 2", "Pixel 2 XL", "Pixel 3", "Pixel 3 XL"}
 var supportedDevicesCodename = []string{"sailfish", "marlin", "walleye", "taimen", "blueline", "crosshatch"}
 var supportDevicesOutput string
