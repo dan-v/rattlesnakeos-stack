@@ -4,7 +4,7 @@ jobs:
     docker:
       - image: circleci/golang:1.10
 
-    working_directory: /go/src/github.com/dan-v/rattlesnakeos-stack
+    working_directory: /go/src/github.com/PieDelivery/rattlesnakeos-stack
 
     steps:
       - checkout
