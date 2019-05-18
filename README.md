@@ -4,16 +4,15 @@ RattlesnakeOS is a privacy and security focused Android OS for Google Pixel phon
 * Based on latest [AOSP](https://source.android.com/) 9.0 (Android P)
 * Support for Google <b>Pixel, Pixel XL, Pixel 2, Pixel 2 XL, Pixel 3, Pixel 3 XL</b>
 * Monthly software and firmware security fixes delivered through built in OTA updater
-* Maintains [verified boot](https://source.android.com/security/verifiedboot/) with a locked bootloader just like official Android but with your own personal signing keys
+* [Verified boot](https://source.android.com/security/verifiedboot/) with a locked bootloader just like official Android but with your own personal signing keys
+* Optional support for [remote attestation](#how-does-the-remote-attestation-feature-work) using [Auditor](https://github.com/GrapheneOS/Auditor) and [AttestationServer](https://github.com/GrapheneOS/AttestationServer)
 * Latest stable Chromium [browser](https://www.chromium.org) and [webview](https://www.chromium.org/developers/how-tos/build-instructions-android-webview)
 * Latest stable [F-Droid](https://f-droid.org/) app store and [privileged extension](https://gitlab.com/fdroid/privileged-extension)
 * Free of Google’s apps and services
 * Advanced build customization options
 
 ## Background
-RattlesnakeOS was created initially as an alternative to [CopperheadOS](https://en.wikipedia.org/wiki/CopperheadOS), a security hardened Android OS created by [Daniel Micay](https://twitter.com/DanielMicay), after it stopped being properly maintained back in June 2018. To be clear, this project is not attempting to add or recreate any of the security hardening features that were present in CopperheadOS. Instead, it is looking to fill a gap now that CopperheadOS is no longer available in its previous form, as there are no real alternatives that provide the same level of privacy and security.
-
-RattlesnakeOS is truly just stock AOSP and has all of the baseline privacy and security features from there. Unlike other alternative Android OSes, it aims to keep security on par with stock Android by keeping critical security features like [verified boot](https://source.android.com/security/verifiedboot/) enabled, ensuring monthly OTA security updates not only update the OS but also the device specific drivers and firmware, and by not adding additional features or software that will needlessly increase attack surface. By not deviating from stock AOSP, updating to new major Android releases doesn't require any major porting effort and this means devices running RattlesnakeOS continue to receive proper security updates without delay.
+RattlesnakeOS is truly just stock AOSP and has all of the baseline privacy and security features from there. Unlike other alternative Android OSes, it aims to keep security on par with stock Android by keeping critical security features like verified boot enabled, ensuring monthly OTA security updates not only update the OS but also the device specific drivers and firmware, and by not adding additional features or software that will needlessly increase attack surface. By not deviating from stock AOSP, updating to new major Android releases doesn't require any major porting effort and this means devices running RattlesnakeOS continue to receive proper security updates without delay.
 
 ## What is rattlesnakeos-stack?
 Rather than providing random binaries of RattlesnakeOS to install on your phone, I've gone the route of creating a cross platform tool, `rattlesnakeos-stack`, that provisions a "stack", which is just all of the [AWS](https://aws.amazon.com/) cloud infrastructure needed to continuously build your own personal RattlesnakeOS, with your own signing keys, and your own OTA updates. It uses [AWS Lambda](https://aws.amazon.com/lambda/features/) to provision [EC2 spot instances](https://aws.amazon.com/ec2/spot/) that build RattlesnakeOS and upload artifacts to [S3](https://aws.amazon.com/s3/). Resulting OS builds are configured to receive over the air updates from this environment. It only costs a few dollars a month to run (see FAQ for detailed cost breakdown).
@@ -33,6 +32,7 @@ Rather than providing random binaries of RattlesnakeOS to install on your phone,
      * [General](#general)
      * [Costs](#costs)
      * [Builds](#builds)
+     * [Remote Attestation](#remote-attestation)
      * [Customizations](#customizations)
      * [Security](#security)
    * [Uninstalling](#uninstalling)
@@ -126,10 +126,11 @@ Or you can specify a different config file to use
 ```
 
 #### Advanced Examples
-Here is an example of a more advanced config file that: locks to a specific version of Chromium, specifies a hosts file to install, uses a larger EC2 instance type, builds every 2 days, and pulls in custom patches from the [community patches repo](https://github.com/RattlesnakeOS/community_patches). You can read more about [advanced customization options in FAQ](#customizations).
+Here is an example of a more advanced config file that: enables deployment of a personal attestation server, locks to a specific version of Chromium, specifies a hosts file to install, uses a larger EC2 instance type, builds every 2 days, and pulls in custom patches from the [community patches repo](https://github.com/RattlesnakeOS/community_patches). You can read more about [advanced customization options in FAQ](#customizations).
 ```toml 
+attestation-server = true
 chromium-version = "70.0.3538.80"
-device = "marlin"
+device = "crosshatch"
 email = "user@domain.com"
 encrypted-keys = "false"
 ignore-version-checks = false
@@ -161,23 +162,26 @@ Usage:
   rattlesnakeos-stack deploy [flags]
 
 Flags:
-      --chromium-version string   specify the version of Chromium you want (e.g. 69.0.3497.100) to pin to. if not specified, the latest stable version of Chromium is used.
-  -d, --device string             device you want to build for (e.g. marlin): to list supported devices use '-d list'
-  -e, --email string              email address you want to use for build notifications
-      --encrypted-keys            an advanced option that allows signing keys to be stored with symmetric gpg encryption and decrypted into memory during the build process. this option requires manual intervention during builds where you will be sent a notification and need to provide the key required for decryption over SSH to continue the build process. important: if you have an existing stack - please see the FAQ for how to migrate your keys
-  -h, --help                      help for deploy
-      --hosts-file string         an advanced option that allows you to specify a replacement /etc/hosts file to enable global dns adblocking (e.g. https://raw.githubusercontent.com/StevenBlack/hosts/master/hosts). note: be careful with this, as you 1) won't get any sort of notification on blocking 2) if you need to unblock something you'll have to rebuild the OS
-      --ignore-version-checks     ignore the versions checks for stack, AOSP, Chromium, and F-Droid and always do a build.
-      --instance-regions string   possible regions to launch spot instance. the region with cheapest spot instance price will be used. (default "us-west-2,us-west-1,us-east-1,us-east-2")
-      --instance-type string      EC2 instance type (e.g. c4.4xlarge) to use for the build. (default "c5.4xlarge")
-      --max-price string          max ec2 spot instance bid. if this value is too low, you may not obtain an instance or it may terminate during a build. (default "1.00")
-  -n, --name string               name for stack. note: this must be a valid/unique S3 bucket name.
-      --prevent-shutdown          for debugging purposes only - will prevent ec2 instance from shutting down after build.
-  -r, --region string             aws region for stack deployment (e.g. us-west-2)
-      --save-config               allows you to save all passed CLI flags to config file
-      --schedule string           cron expression that defines when to kick off builds. by default this is set to build on the 10th of every month. note: if you give an invalid expression it will fail to deploy the stack. see this for cron format details: https://docs.aws.amazon.com/AmazonCloudWatch/latest/events/ScheduledEvents.html#CronExpressions (default "cron(0 0 10 * ? *)")
-      --skip-price string         skip requesting ec2 spot instance if price is above this value to begin with. (default "0.68")
-      --ssh-key string            aws ssh key to add to ec2 spot instances. this is optional but is useful for debugging build issues on the instance.
+      --attestation-instance-type string   instance type to use for attestation server. (default "t3.nano")
+      --attestation-max-price string       max ec2 spot instance bid for attestation server. if this value is too low, you may not launch an instance. (default ".005")
+      --attestation-server                 deploys and configures a personal attestation server
+      --chromium-version string            specify the version of Chromium you want (e.g. 69.0.3497.100) to pin to. if not specified, the latest stable version of Chromium is used.
+  -d, --device string                      device you want to build for (e.g. marlin): to list supported devices use '-d list'
+  -e, --email string                       email address you want to use for build notifications
+      --encrypted-keys                     an advanced option that allows signing keys to be stored with symmetric gpg encryption and decrypted into memory during the build process. this option requires manual intervention during builds where you will be sent a notification and need to provide the key required for decryption over SSH to continue the build process. important: if you have an existing stack - please see the FAQ for how to migrate your keys
+  -h, --help                               help for deploy
+      --hosts-file string                  an advanced option that allows you to specify a replacement /etc/hosts file to enable global dns adblocking (e.g. https://raw.githubusercontent.com/StevenBlack/hosts/master/hosts). note: be careful with this, as you 1) won't get any sort of notification on blocking 2) if you need to unblock something you'll have to rebuild the OS
+      --ignore-version-checks              ignore the versions checks for stack, AOSP, Chromium, and F-Droid and always do a build.
+      --instance-regions string            possible regions to launch spot instance. the region with cheapest spot instance price will be used. (default "us-west-2,us-west-1,us-east-1,us-east-2")
+      --instance-type string               EC2 instance type (e.g. c4.4xlarge) to use for the build. (default "c5.4xlarge")
+      --max-price string                   max ec2 spot instance bid. if this value is too low, you may not obtain an instance or it may terminate during a build. (default "1.00")
+  -n, --name string                        name for stack. note: this must be a valid/unique S3 bucket name.
+      --prevent-shutdown                   for debugging purposes only - will prevent ec2 instance from shutting down after build.
+  -r, --region string                      aws region for stack deployment (e.g. us-west-2)
+      --save-config                        allows you to save all passed CLI flags to config file
+      --schedule string                    cron expression that defines when to kick off builds. by default this is set to build on the 10th of every month. note: if you give an invalid expression it will fail to deploy the stack. see this for cron format details: https://docs.aws.amazon.com/AmazonCloudWatch/latest/events/ScheduledEvents.html#CronExpressions (default "cron(0 0 10 * ? *)")
+      --skip-price string                  skip requesting ec2 spot instance if price is above this value to begin with. (default "0.68")
+      --ssh-key string                     aws ssh key to add to ec2 spot instances. this is optional but is useful for debugging build issues on the instance.
 
 Global Flags:
       --config-file string   config file (default location to look for config is $HOME/.rattlesnakeos.toml)
@@ -235,12 +239,17 @@ It's not likely that other devices will be supported beyond the Pixel line. Here
 * Being able to get monthly AOSP security updates for a device is a requirement for this project. Google provides proper AOSP releases every month for Pixel devices which makes it very simple to build and stay up to date with monthly security updates - most vendors don't provide this.
 * Being able to get monthly firmware and driver updates is a requirement for this project. Google provides updated firmware and drivers for Pixel devices every month (although incomplete - the vendor specific code ends up being extracted from monthly updated factory images) - regardless most vendors don't provide this.
 * Even if there is another device that meets these requirements, the build process would likely differ enough that supporting it would be too much overhead. The current build differences between each Pixel device is relatively minor.
+#### Is this a fork of CopperheadOS?
+No. RattlesnakeOS was created initially as an alternative to [CopperheadOS](https://en.wikipedia.org/wiki/CopperheadOS), a security hardened Android OS created by [Daniel Micay](https://twitter.com/DanielMicay), after it stopped being properly maintained back in June 2018. To be clear, this project is not attempting to add or recreate any of the security hardening features that were present in CopperheadOS. If you are interested in the continuation of the CopperheadOS project you can check out [GrapheneOS](https://grapheneos.org/).
+#### Why is my webview not working?
+* If you are using work profiles, it is a known issue and it has a [workaround](https://support.google.com/work/android/answer/7506908?hl=en).
 
 ### Costs
 #### How much does this cost to run?
 The costs are going to be variable by AWS region and by day and time you are running your builds as spot instances have a variable price depending on market demand. Below is an example scenario that should give you a rough estimate of costs:
    * The majority of the cost will come from builds on EC2. It currently launches spot instances of type c5.4xlarge which average maybe $.30 an hour in us-west-2 (will vary by region) but can get up over $1 an hour depending on the day and time. You can modify the default `max-price` config value to set the max price you are willing to pay and if market price exceeds that then your instance will be terminated. Builds can take anywhere from 2-6 hours depending on if Chromium needs to be built. So let's say you're doing a build every month at $0.50 an hour and it is taking on average 4 hours - you'd pay ~$2 in EC2 costs per month. 
    * The other very minimal cost would be S3. Storage costs are almost non existent as a stack will only store about 3GB worth of files (factory image, ota file, target file) and at $0.023 per GB you're looking at $0.07 per month in S3 storage costs. The other S3 cost would be for data transfer out for OTA updates - let's say you are just downloading an update per month (~500MB file) at $0.09 per GB you're looking at $0.05 per month in S3 network costs.
+   * If you are running the optional attestation server, the costs will be around $3-$5/month. This cost comes from an EC2 spot instance and EBS volumes it uses. You can modify the default `attestation-max-price` to a lower value if you want to try to reduce costs further, but if you go to low you may never launch an instance.
 
 ### Builds
 #### How do I change build frequency?
@@ -260,7 +269,23 @@ There are a few steps required to be able to do this:
 #### How can I debug build issues?
 There is a flag you can pass `rattlesnakeos-stack` called `--prevent-shutdown` that will prevent the EC2 instance from terminating so that you can SSH into the instance and debug. Note that this will keep the instance online for 12 hours or until you manually terminate it.
 #### Why did my EC2 instance randomly terminate?
-If there wasn't an error notification, this is likely because the [Spot Instance](https://aws.amazon.com/ec2/spot/) bid was not high enough at this specific time. You can see historical spot instance pricing in the [EC2 console](https://console.aws.amazon.com/ec2sp/v1/spot/home). Click `Pricing History`, select c5.4xlarge for `Instance Type` and pick a date range. If you want to avoid having your instance terminated, you can can increase your max spot instance bid by adjusting `max-price` in the config file (e.g. `max-price = "1.50"`)
+If there wasn't an error notification, this is likely because the [Spot Instance](https://aws.amazon.com/ec2/spot/) max price was not high enough or EC2 is low on capacity and needs to reclaim instances. You can see historical spot instance pricing in the [EC2 console](https://console.aws.amazon.com/ec2sp/v1/spot/home). Click `Pricing History`, select c5.4xlarge for `Instance Type` and pick a date range. I would recommend not setting your `max-price` beyond the on demand price.
+
+### Remote Attestation
+#### What is remote attestation?
+You can read more about remote attestation [here](https://attestation.app/about). 
+
+#### How does the remote attestation feature work?
+There are two primary pieces involved:
+* [AttestationServer](https://github.com/GrapheneOS/AttestationServer) - this is the server component used for remote attestation and it is deployed as an [Elastic Beanstalk](https://aws.amazon.com/elasticbeanstalk/) Docker application running on a spot instance to keep costs to a minimum. A number of things are automated here like: SSL certificate generation with Letsencrypt, backups of sqlite database to S3, customization of app to use your personal keys, etc.
+* [Auditor](https://github.com/GrapheneOS/Auditor) - this app is built with your keys and updated to point at your personal AttestationServer.
+
+Steps to setup:
+* On your computer, set `attestation-server = true` option in your config and `deploy`. This will setup all of the AWS infrastructure for running AttestationServer, but AttestationServer code isn't deployed yet. Note: you should get a few emails about the app being setup and an instance launching.
+* On your computer, start a RattlesnakeOS build with the `build` command. As part of the build process AttestationServer is deployed (should get more emails) and the Auditor app will be built and included into your resulting RattlesnakeOS build.
+* Install the resulting OS build on your phone.
+* In emails (or within the Auditor app) you should have seen a URL that looks like https://attestation.azmgdmnqbn.us-west-2.elasticbeanstalk.com; visit this in your computer browser, create an account and don't lose the username/password as this has been locked down to only a single user registration.
+* On your phone, in the Auditor app click the button in the top right, 'Enable remote verification', and then scan the barcode.
 
 ### Customizations
 #### How do I customize RattlesnakeOS builds?
@@ -295,19 +320,20 @@ There is also an option to add prebuilt applications to the AOSP build tree usin
 It's also possible to add remotes and projects to the AOSP build manifest file. These will get added to the manifest and get pulled into the AOSP build tree as part of normal build process.
 
 ```toml
-# to add a remote line to manifest like this: <remote name="customremote" fetch="https://gitlab.com/repobasename/" revision="master" />
+# to add a remote line to manifest like this: <remote name="rattlesnakeos" fetch="https://github.com/RattlesnakeOS/" revision="master" />
 [[custom-manifest-remotes]]
-  name = "customremote"
-  fetch = "https://gitlab.com/repobasename/"
+  name = "rattlesnakeos"
+  fetch = "https://github.com/RattlesnakeOS/"
   revision = "master"
 
-# to add a project line to manifest like this: <project path="packages/apps/CustomProject" name="CustomProject" remote="customremote" />
+# to add a project line to manifest like this: <project path="packages/apps/Backup" name="backup" remote="rattlesnakeos" />
 # you can also add modules here that you want to include into the build process
+# in this example it is adding a really great backup app (https://github.com/stevesoltys/backup)
 [[custom-manifest-projects]]
-  path = "packages/apps/CustomProject"
-  name = "CustomProject"
-  remote = "customremote"
-  modules = [ "ModuleName" ]
+  path = "packages/apps/Backup"
+  name = "backup"
+  remote = "rattlesnakeos"
+  modules = [ "Backup" ]
 ```
 
 #### Can I change the boot animation?
@@ -367,10 +393,15 @@ For newer devices, you'll need to clear the configured AVB public key after unlo
 fastboot erase avb_custom_key
 ```
 
+## Donations
+* [Liberapay](https://liberapay.com/rattlesnakeos/)
+* [Bitcoin](https://www.blockchain.com/btc/address/17GHmnK3fyw9TBngvaM8Veh37UR65rmvZS)
+
 ## Powered by
+* [android-prepare-vendor](https://github.com/anestisb/android-prepare-vendor)
+* [GrapheneOS](https://github.com/GrapheneOS)
+* [Terraform](https://www.terraform.io/)
 * Huimin Zhang - author of the original underlying build script that was written for CopperheadOS.
-* [anestisb/android-prepare-vendor](https://github.com/anestisb/android-prepare-vendor)
-* [terraform](https://www.terraform.io/)
 
 ## Build from Source
  * To compile from source you'll need to install Go (https://golang.org/) for your platform

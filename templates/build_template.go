@@ -77,7 +77,12 @@ BUILD_CHANNEL="stable"
 # user customizable things
 HOSTS_FILE=<% .HostsFile %>
 
+# attestion server
+ENABLE_ATTESTATION=<% .EnableAttestation %>
+ATTESTATION_MAX_SPOT_PRICE=<% .AttestationMaxSpotPrice %>
+
 # aws settings
+AWS_ATTESTATION_BUCKET="${STACK_NAME}-attestation"
 AWS_KEYS_BUCKET="${STACK_NAME}-keys"
 AWS_ENCRYPTED_KEYS_BUCKET="${STACK_NAME}-keys-encrypted"
 AWS_RELEASE_BUCKET="${STACK_NAME}-release"
@@ -263,6 +268,9 @@ full_run() {
   aosp_repo_modifications
   aosp_repo_sync
   aws_import_keys
+  if [ "${ENABLE_ATTESTATION}" == "true" ]; then
+    attestation_setup
+  fi
   setup_vendor
   apply_patches
   # only marlin and sailfish need kernel rebuilt so that verity_key is included
@@ -274,6 +282,106 @@ full_run() {
   aws_upload
   checkpoint_versions
   aws_notify "RattlesnakeOS Build SUCCESS"
+}
+
+attestation_setup() {
+  sudo apt-get -y install libffi-dev
+
+  cd $HOME
+  echo "cloning beanstalk cli"
+  git clone https://github.com/aws/aws-elastic-beanstalk-cli-setup.git
+  retry ./aws-elastic-beanstalk-cli-setup/scripts/bundled_installer
+
+  PLATFORM_CERT_SHA256=$(openssl x509 -noout -fingerprint -sha256 -inform pem -in ${KEYS_DIR}/${DEVICE}/platform.x509.pem | awk -F"=" '{print $2}' | sed 's/://g')
+  ATTESTATION_DOMAIN=$(aws --region ${REGION} elasticbeanstalk describe-environments | jq -r '.Environments[] | select(.EnvironmentName=="attestation" and .Status!="Terminated") | .CNAME')
+  echo "ATTESTATION_DOMAIN: ${ATTESTATION_DOMAIN}"
+  echo "PLATFORM_CERT_SHA256: ${PLATFORM_CERT_SHA256}"
+
+  OG_PIXEL3_FINGERPRINT="0F9A9CC8ADE73064A54A35C5509E77994E3AA37B6FB889DD53AF82C3C570C5CF"
+  OG_PIXEL3_XL_FINGERPRINT="06DD526EE9B1CB92AA19D9835B68B4FF1A48A3AD31D813F27C9A7D6C271E9451"
+
+  PIXEL3_FINGERPRINT=${OG_PIXEL3_FINGERPRINT}
+  PIXEL3_XL_FINGERPRINT=${OG_PIXEL3_XL_FINGERPRINT}
+  if [ "${DEVICE}" == "blueline" ]; then
+    PIXEL3_FINGERPRINT=$(cat ${KEYS_DIR}/${DEVICE}/avb_pkmd.bin | sha256sum | awk '{print $1}' | awk '{ print toupper($0) }')
+  fi
+  if [ "${DEVICE}" == "crosshatch" ]; then
+    PIXEL3_XL_FINGERPRINT=$(cat ${KEYS_DIR}/${DEVICE}/avb_pkmd.bin | sha256sum | awk '{print $1}' | awk '{ print toupper($0) }')
+  fi
+
+  cd $HOME
+  echo "cloning and building auditor"
+  git clone https://github.com/RattlesnakeOS/Auditor.git
+  cd Auditor
+  sed -i "s/DOMAIN_NAME/${ATTESTATION_DOMAIN}/g" app/src/main/res/values/strings.xml
+  sed -i "s/attestation.app/${ATTESTATION_DOMAIN}/" app/src/main/java/app/attestation/auditor/RemoteVerifyJob.java
+  if [ "${DEVICE}" == "blueline" ]; then
+    sed -i "s/${OG_PIXEL3_FINGERPRINT}/${PIXEL3_FINGERPRINT}/g" app/src/main/java/app/attestation/auditor/AttestationProtocol.java
+  fi
+  if [ "${DEVICE}" == "crosshatch" ]; then
+    sed -i "s/${OG_PIXEL3_XL_FINGERPRINT}/${PIXEL3_XL_FINGERPRINT}/g" app/src/main/java/app/attestation/auditor/AttestationProtocol.java
+  fi
+  sed -i "s/990E04F0864B19F14F84E0E432F7A393F297AB105A22C1E1B10B442A4A62C42C/${PLATFORM_CERT_SHA256}/" app/src/main/java/app/attestation/auditor/AttestationProtocol.java
+  echo "sdk.dir=${HOME}/sdk" > local.properties
+  echo "sdk.dir=${HOME}/sdk" > app/local.properties
+  ./gradlew build && ./gradlew assembleRelease
+  mkdir -p ${BUILD_DIR}/external/Auditor/prebuilt
+  cp app/build/outputs/apk/release/app-release-unsigned.apk ${BUILD_DIR}/external/Auditor/prebuilt/Auditor.apk
+
+  cd $HOME
+  echo "cloning attestationserver"
+  git clone https://github.com/RattlesnakeOS/AttestationServer.git
+  cd AttestationServer
+  cat <<EOF > .ebextensions/.config
+option_settings:
+- option_name: DOMAIN_NAME
+  value: ${ATTESTATION_DOMAIN}
+- option_name: FINGERPRINT_PIXEL3
+  value: ${PIXEL3_FINGERPRINT}
+- option_name: FINGERPRINT_PIXEL3_XL
+  value: ${PIXEL3_XL_FINGERPRINT}
+- option_name: SNS_ARN
+  value: ${AWS_SNS_ARN}
+- option_name: REGION
+  value: ${REGION}
+- option_name: EC2_SPOT_PRICE
+  value: ${ATTESTATION_MAX_SPOT_PRICE}
+- option_name: S3_BACKUP_BUCKET
+  value: s3://${AWS_ATTESTATION_BUCKET}
+- option_name: ATTESTATION_APP_SIGNATURE_DIGEST_RELEASE
+  value: ${PLATFORM_CERT_SHA256}
+EOF
+  sed -i "s/STACK_NAME/${STACK_NAME}/g" .ebextensions/01-setup.config
+  sed -i "s/STACK_NAME/${STACK_NAME}/g" .ebextensions/sqlite-backup-restore.sh
+
+  mkdir -p .elasticbeanstalk
+  cat <<EOF > .elasticbeanstalk/config.yml
+branch-defaults:
+  master:
+    environment: attestation
+    group_suffix: null
+environment-defaults:
+  attestation:
+    branch: null
+    repository: null
+global:
+  application_name: ${AWS_ATTESTATION_BUCKET}
+  branch: null
+  default_ec2_keyname: null
+  default_platform: docker
+  default_region: ${REGION}
+  include_git_submodules: true
+  instance_profile: null
+  platform_name: null
+  platform_version: null
+  profile: null
+  repository: null
+  sc: git
+  workspace_type: Application
+EOF
+
+  echo "deploying eb environment"
+  $HOME/.ebcli-virtual-env/executables/eb deploy attestation -nh
 }
 
 get_encryption_key() {
@@ -507,6 +615,9 @@ aosp_repo_modifications() {
       print "  <project path=\"<% .Path %>\" name=\"<% .Name %>\" remote=\"<% .Remote %>\" />";
       <% end %>
       <% end %>
+      <% if .EnableAttestation %>
+      print "  <project path=\"external/Auditor\" name=\"platform_external_Auditor\" remote=\"github\" />";
+      <% end %>
       print "  <project path=\"external/chromium\" name=\"platform_external_chromium\" remote=\"github\" />";
       print "  <project path=\"packages/apps/Updater\" name=\"platform_packages_apps_Updater\" remote=\"github\" />";
       print "  <project path=\"packages/apps/F-Droid\" name=\"fdroidclient\" remote=\"fdroid\" revision=\"refs/tags/" FDROID_CLIENT_VERSION "\" />";
@@ -565,6 +676,7 @@ apply_patches() {
   patch_fdroid
   patch_priv_ext
   patch_launcher
+  patch_vendor_security_level
 }
 
 patch_aosp_removals() {
@@ -651,6 +763,14 @@ patch_base_config() {
   sed -i 's@<bool name="config_swipe_up_gesture_setting_available">false</bool>@<bool name="config_swipe_up_gesture_setting_available">true</bool>@' ${BUILD_DIR}/frameworks/base/core/res/res/values/config.xml
 }
 
+patch_vendor_security_level() {
+  log_header ${FUNCNAME}
+
+  f=$(echo "${AOSP_BUILD}" | awk -F"." '{print $2}')
+  VENDOR_SECURITY_PATCH_LEVEL="20${f::2}-${f:2:2}-${f:4:2}"
+  sed -i 's@2018-09-05@'${VENDOR_SECURITY_PATCH_LEVEL}'@' ${BUILD_DIR}/device/google/crosshatch/device-common.mk || true
+}
+
 patch_device_config() {
   log_header ${FUNCNAME}
 
@@ -715,6 +835,9 @@ patch_add_apps() {
   sed -i "\$aPRODUCT_PACKAGES += F-DroidPrivilegedExtension" ${mk_file}
   sed -i "\$aPRODUCT_PACKAGES += F-Droid" ${mk_file}
   sed -i "\$aPRODUCT_PACKAGES += chromium" ${mk_file}
+  if [ "${ENABLE_ATTESTATION}" == "true" ]; then
+    sed -i "\$aPRODUCT_PACKAGES += Auditor" ${mk_file}
+  fi
 
   # add any modules defined in custom manifest projects
   <% if .CustomManifestProjects %><% range $i, $r := .CustomManifestProjects %><% range $j, $q := .Modules %>
