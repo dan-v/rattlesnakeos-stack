@@ -10,7 +10,7 @@ import (
 	"github.com/aws/aws-sdk-go/aws/session"
 	"github.com/aws/aws-sdk-go/service/s3"
 	"github.com/aws/aws-sdk-go/service/sns"
-	"github.com/PieDelivery/rattlesnakeos-stack/templates"
+	"github.com/dan-v/rattlesnakeos-stack/templates"
 	log "github.com/sirupsen/logrus"
 )
 

@@ -608,7 +608,7 @@ aosp_repo_modifications() {
       print "  ";
       print "  <remote name=\"github\" fetch=\"https://github.com/RattlesnakeOS/\" revision=\"" ANDROID_VERSION "\" />";
       print "  <remote name=\"fdroid\" fetch=\"https://gitlab.com/fdroid/\" />";
-      print "  <remote name=\"prepare-vendor\" fetch=\"https://github.com/PieDelivery/\" revision=\"master\" />";
+      print "  <remote name=\"prepare-vendor\" fetch=\"https://github.com/dan-v/\" revision=\"master\" />";
       <% if .CustomManifestRemotes %>
       <% range $i, $r := .CustomManifestRemotes %>
       print "  <remote name=\"<% .Name %>\" fetch=\"<% .Fetch %>\" revision=\"<% .Revision %>\" />";
