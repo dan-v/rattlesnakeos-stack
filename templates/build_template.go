@@ -303,14 +303,19 @@ attestation_setup() {
 
   OG_PIXEL3_FINGERPRINT="0F9A9CC8ADE73064A54A35C5509E77994E3AA37B6FB889DD53AF82C3C570C5CF"
   OG_PIXEL3_XL_FINGERPRINT="06DD526EE9B1CB92AA19D9835B68B4FF1A48A3AD31D813F27C9A7D6C271E9451"
+  OG_PIXEL3A_FINGERPRINT="3ADD526EE9B1CB92AA19D9835B68B4FF1A48A3AD31D813F27C9A7D6C271E9451"
 
   PIXEL3_FINGERPRINT=${OG_PIXEL3_FINGERPRINT}
   PIXEL3_XL_FINGERPRINT=${OG_PIXEL3_XL_FINGERPRINT}
+  PIXEL3A_FINGERPRINT=${OG_PIXEL3A_FINGERPRINT}
   if [ "${DEVICE}" == "blueline" ]; then
     PIXEL3_FINGERPRINT=$(cat ${KEYS_DIR}/${DEVICE}/avb_pkmd.bin | sha256sum | awk '{print $1}' | awk '{ print toupper($0) }')
   fi
   if [ "${DEVICE}" == "crosshatch" ]; then
     PIXEL3_XL_FINGERPRINT=$(cat ${KEYS_DIR}/${DEVICE}/avb_pkmd.bin | sha256sum | awk '{print $1}' | awk '{ print toupper($0) }')
+  fi
+  if [ "${DEVICE}" == "sargo" ] || [ "${DEVICE}" == "bonito" ]; then
+    PIXEL3A_FINGERPRINT=$(cat ${KEYS_DIR}/${DEVICE}/avb_pkmd.bin | sha256sum | awk '{print $1}' | awk '{ print toupper($0) }')
   fi
 
   cd $HOME
@@ -324,6 +329,9 @@ attestation_setup() {
   fi
   if [ "${DEVICE}" == "crosshatch" ]; then
     sed -i "s/${OG_PIXEL3_XL_FINGERPRINT}/${PIXEL3_XL_FINGERPRINT}/g" app/src/main/java/app/attestation/auditor/AttestationProtocol.java
+  fi
+  if [ "${DEVICE}" == "sargo" ] || [ "${DEVICE}" == "bonito" ]; then
+    sed -i "s/${OG_PIXEL3A_FINGERPRINT}/${PIXEL3A_FINGERPRINT}/g" app/src/main/java/app/attestation/auditor/AttestationProtocol.java
   fi
   sed -i "s/990E04F0864B19F14F84E0E432F7A393F297AB105A22C1E1B10B442A4A62C42C/${PLATFORM_CERT_SHA256}/" app/src/main/java/app/attestation/auditor/AttestationProtocol.java
   echo "sdk.dir=${HOME}/sdk" > local.properties
@@ -344,6 +352,8 @@ option_settings:
   value: ${PIXEL3_FINGERPRINT}
 - option_name: FINGERPRINT_PIXEL3_XL
   value: ${PIXEL3_XL_FINGERPRINT}
+- option_name: FINGERPRINT_PIXEL3A
+  value: ${PIXEL3A_FINGERPRINT}
 - option_name: SNS_ARN
   value: ${AWS_SNS_ARN}
 - option_name: REGION

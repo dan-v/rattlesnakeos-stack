@@ -144,8 +144,9 @@ var deployCmd = &cobra.Command{
 			return errors.New("must specify device type")
 		}
 		if viper.GetBool("attestation-server") {
-			if viper.GetString("device") != "crosshatch" && viper.GetString("device") != "blueline" {
-				return errors.New("attestation-server is only supported for crosshatch and blueline devices")
+			if viper.GetString("device") != "crosshatch" && viper.GetString("device") != "blueline" &&
+				viper.GetString("device") != "sargo" && viper.GetString("device") != "bonito" {
+				return errors.New("attestation-server is only supported for pixel 3 devices")
 			}
 		}
 		if viper.GetString("force-build") != "" {
