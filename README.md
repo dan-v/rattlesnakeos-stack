@@ -2,7 +2,7 @@ RattlesnakeOS is a privacy and security focused Android OS for Google Pixel phon
 
 ## Features
 * Based on latest [AOSP](https://source.android.com/) 9.0 (Android P)
-* Support for Google <b>Pixel, Pixel XL, Pixel 2, Pixel 2 XL, Pixel 3, Pixel 3 XL</b>
+* Support for Google <b>Pixel, Pixel XL, Pixel 2, Pixel 2 XL, Pixel 3, Pixel 3 XL, Pixel 3a, Pixel 3a XL</b>
 * Monthly software and firmware security fixes delivered through built in OTA updater
 * [Verified boot](https://source.android.com/security/verifiedboot/) with a locked bootloader just like official Android but with your own personal signing keys
 * Optional support for [remote attestation](#how-does-the-remote-attestation-feature-work) using [Auditor](https://github.com/GrapheneOS/Auditor) and [AttestationServer](https://github.com/GrapheneOS/AttestationServer)
