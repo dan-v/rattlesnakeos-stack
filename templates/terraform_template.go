@@ -276,6 +276,7 @@ resource "aws_iam_role_policy" "rattlesnake_lambda_policy" {
             "ec2:RequestSpotFleet",
             "ec2:DescribeSpotPriceHistory",
             "iam:CreateServiceLinkedRole",
+            "iam:PassRole",
             "sts:GetCallerIdentity",
             "sns:Publish",
             "ec2:DescribeKeyPairs"
