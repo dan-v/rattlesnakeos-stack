@@ -45,6 +45,10 @@ if [ "$2" = true ]; then
   FORCE_BUILD=true
 fi
 
+# allow build and branch to be specified
+AOSP_BUILD=$3
+AOSP_BRANCH=$4
+
 # set region
 REGION=<% .Region %>
 export AWS_DEFAULT_REGION=${REGION}
@@ -127,8 +131,6 @@ LATEST_STACK_VERSION=
 LATEST_CHROMIUM=
 FDROID_CLIENT_VERSION=
 FDROID_PRIV_EXT_VERSION=
-AOSP_BUILD=
-AOSP_BRANCH=
 get_latest_versions() {
   log_header ${FUNCNAME}
 
@@ -165,15 +167,19 @@ get_latest_versions() {
   fi
 
   # attempt to automatically pick latest build version and branch. note this is likely to break with any page redesign. should also add some validation here.
-  AOSP_BUILD=$(curl --fail -s ${AOSP_URL_BUILD} | grep -A1 "${DEVICE}" | egrep '[a-zA-Z]+ [0-9]{4}\)' | grep "${ANDROID_VERSION}" | tail -1 | cut -d"(" -f2 | cut -d"," -f1)
   if [ -z "$AOSP_BUILD" ]; then
-    aws_notify_simple "ERROR: Unable to get latest AOSP build information. Stopping build. This lookup is pretty fragile and can break on any page redesign of ${AOSP_URL_BUILD}"
-    exit 1
+    AOSP_BUILD=$(curl --fail -s ${AOSP_URL_BUILD} | grep -A1 "${DEVICE}" | egrep '[a-zA-Z]+ [0-9]{4}\)' | grep "${ANDROID_VERSION}" | tail -1 | cut -d"(" -f2 | cut -d"," -f1)
+    if [ -z "$AOSP_BUILD" ]; then
+      aws_notify_simple "ERROR: Unable to get latest AOSP build information. Stopping build. This lookup is pretty fragile and can break on any page redesign of ${AOSP_URL_BUILD}"
+      exit 1
+    fi
   fi
-  AOSP_BRANCH=$(curl --fail -s ${AOSP_URL_BRANCH} | grep -A1 "${AOSP_BUILD}" | tail -1 | cut -f2 -d">"|cut -f1 -d"<")
   if [ -z "$AOSP_BRANCH" ]; then
-    aws_notify_simple "ERROR: Unable to get latest AOSP branch information. Stopping build. This can happen if ${AOSP_URL_BRANCH} hasn't been updated yet with newly released factory images."
-    exit 1
+    AOSP_BRANCH=$(curl --fail -s ${AOSP_URL_BRANCH} | grep -A1 "${AOSP_BUILD}" | tail -1 | cut -f2 -d">"|cut -f1 -d"<")
+    if [ -z "$AOSP_BRANCH" ]; then
+      aws_notify_simple "ERROR: Unable to get latest AOSP branch information. Stopping build. This can happen if ${AOSP_URL_BRANCH} hasn't been updated yet with newly released factory images."
+      exit 1
+    fi
   fi
 }
 
