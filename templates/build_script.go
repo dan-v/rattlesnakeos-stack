@@ -687,5 +687,8 @@ trap cleanup 0
 
 set -e
 
-full_run
-`
+if [ "$2" == "" ] ; then
+  full_run
+else
+  "$2"
+fi
