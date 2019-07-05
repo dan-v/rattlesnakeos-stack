@@ -69,6 +69,25 @@ FDROID_CLIENT_VERSION=
 FDROID_PRIV_EXT_VERSION=
 AOSP_BUILD=
 AOSP_BRANCH=
+
+gitavoidreclone() {
+  local branch=master
+  if [ "$1" == "--branch" ] ; then
+  branch="$2"
+    shift
+    shift
+  fi
+  if test -d "$2"/.git ; then
+    pushd "$2"
+    sed -i 's|url = .*|url = '"$1"'|' .git/config
+    git fetch
+    git checkout origin/"$branch"
+    popd
+  else
+    git clone --branch "$branch" "$1" "$2"
+  fi
+}
+
 get_latest_versions() {
   sudo apt-get -y install jq
   
@@ -248,7 +267,7 @@ build_chromium() {
   DEFAULT_VERSION=$(echo $CHROMIUM_REVISION | awk -F"." '{ printf "%s%03d52\n",$3,$4}')
 
   # depot tools setup
-  git clone https://chromium.googlesource.com/chromium/tools/depot_tools.git $HOME/depot_tools || true
+  gitavoidreclone https://chromium.googlesource.com/chromium/tools/depot_tools.git $HOME/depot_tools || true
   export PATH="$PATH:$HOME/depot_tools"
 
   # fetch chromium 
@@ -271,7 +290,7 @@ build_chromium() {
     echo "Not applying any patches to Chromium as requested"
   else
     echo "Applying patches to Chromium"
-    git clone --branch ${CHROMIUM_REVISION} $BROMITE_URL $HOME/bromite
+    gitavoidreclone --branch ${CHROMIUM_REVISION} $BROMITE_URL $HOME/bromite
 
     # this patch fails to apply and needs manual fixing
     rm -f $HOME/bromite/patches/*Removed-Sync-and-Translate-menu.patch
@@ -512,7 +531,7 @@ rebuild_marlin_kernel() {
   echo "=================================="
   # checkout kernel source on proper commit
   mkdir -p "${MARLIN_KERNEL_SOURCE_DIR}"
-  git clone "${KERNEL_SOURCE_URL}" "${MARLIN_KERNEL_SOURCE_DIR}"
+  gitavoidreclone "${KERNEL_SOURCE_URL}" "${MARLIN_KERNEL_SOURCE_DIR}"
   # TODO: make this a bit more robust
   kernel_commit_id=$(lz4cat "${BUILD_DIR}/device/google/marlin-kernel/Image.lz4-dtb" | grep -a 'Linux version' | cut -d ' ' -f3 | cut -d'-' -f2 | sed 's/^g//g')
   cd "${MARLIN_KERNEL_SOURCE_DIR}"
