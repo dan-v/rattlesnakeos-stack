@@ -3,6 +3,8 @@ package templates
 const BuildTemplate = `
 #!/bin/bash
 
+export DEBIAN_FRONTEND=noninteractive
+
 if [ $# -lt 1 ]; then
   echo "Need to specify device name as argument"
   exit 1
