@@ -134,7 +134,7 @@ FDROID_PRIV_EXT_VERSION=
 get_latest_versions() {
   log_header ${FUNCNAME}
 
-  sudo apt-get -y install jq
+  sudo DEBIAN_FRONTEND=noninteractive apt-get -y install jq
 
   # check if running latest stack
   LATEST_STACK_VERSION=$(curl --fail -s "$STACK_URL_LATEST" | jq -r '.name')
@@ -295,7 +295,7 @@ full_run() {
 }
 
 attestation_setup() {
-  sudo apt-get -y install libffi-dev
+  sudo DEBIAN_FRONTEND=noninteractive apt-get -y install libffi-dev
 
   cd $HOME
   echo "cloning beanstalk cli"
@@ -480,7 +480,7 @@ initial_key_setup() {
       fi
     fi
 
-    sudo apt-get -y install gpg
+    sudo DEBIAN_FRONTEND=noninteractive apt-get -y install gpg
     if [ ! -e "$ENCRYPTION_PIPE" ]; then
       mkfifo $ENCRYPTION_PIPE
     fi
@@ -497,7 +497,7 @@ setup_env() {
 
   # install required packages
   sudo apt-get update
-  sudo apt-get -y install repo gperf jq openjdk-8-jdk git-core gnupg flex bison build-essential zip curl zlib1g-dev gcc-multilib g++-multilib libc6-dev-i386 lib32ncurses5-dev x11proto-core-dev libx11-dev lib32z-dev ccache libgl1-mesa-dev libxml2-utils xsltproc unzip python-networkx liblz4-tool pxz
+  sudo DEBIAN_FRONTEND=noninteractive apt-get -y install repo gperf jq openjdk-8-jdk git-core gnupg flex bison build-essential zip curl zlib1g-dev gcc-multilib g++-multilib libc6-dev-i386 lib32ncurses5-dev x11proto-core-dev libx11-dev lib32z-dev ccache libgl1-mesa-dev libxml2-utils xsltproc unzip python-networkx liblz4-tool pxz
   sudo DEBIAN_FRONTEND=noninteractive apt-get -y build-dep "linux-image-$(uname --kernel-release)"
 
   # setup android sdk (required for fdroid build)
