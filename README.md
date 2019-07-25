@@ -240,7 +240,7 @@ It's not likely that other devices will be supported beyond the Pixel line. Here
 * Being able to get monthly firmware and driver updates is a requirement for this project. Google provides updated firmware and drivers for Pixel devices every month (although incomplete - the vendor specific code ends up being extracted from monthly updated factory images) - regardless most vendors don't provide this.
 * Even if there is another device that meets these requirements, the build process would likely differ enough that supporting it would be too much overhead. The current build differences between each Pixel device is relatively minor.
 #### Is this a fork of CopperheadOS?
-No. RattlesnakeOS was created initially as an alternative to [CopperheadOS](https://en.wikipedia.org/wiki/CopperheadOS), a security hardened Android OS created by [Daniel Micay](https://twitter.com/DanielMicay), after it stopped being properly maintained back in June 2018. To be clear, this project is not attempting to add or recreate any of the security hardening features that were present in CopperheadOS. If you are interested in the continuation of the CopperheadOS project you can check out [GrapheneOS](https://grapheneos.org/).
+No. RattlesnakeOS was created initially as an alternative to [CopperheadOS](https://en.wikipedia.org/wiki/CopperheadOS), a security hardened Android OS created by [Copperhead Limited](https://copperhead.co). To be clear, this project is not attempting to add or recreate any of the security hardening features that are present in CopperheadOS.
 #### Why is my webview not working?
 * If you are using work profiles, it is a known issue and it has a [workaround](https://support.google.com/work/android/answer/7506908?hl=en).
 
