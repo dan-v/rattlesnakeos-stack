@@ -288,74 +288,6 @@ resource "aws_iam_role_policy" "rattlesnake_lambda_policy" {
 EOF
 }
 
-resource "aws_iam_role" "rattlesnake_spot_fleet_role" {
-    name = "${var.name}-spot-fleet-role"
-    assume_role_policy = <<EOF
-{
-"Version": "2012-10-17",
-"Statement": [
-    {
-        "Sid": "",
-        "Effect": "Allow",
-        "Principal": {
-            "Service": "spotfleet.amazonaws.com"
-        },
-        "Action": "sts:AssumeRole"
-    }
-]
-}
-EOF
-}
-
-resource "aws_iam_policy" "rattlesnake_spot_fleet_policy" {
-    name = "${var.name}-spot-fleet-policy"
-    policy = <<EOF
-{
-"Version": "2012-10-17",
-"Statement": [
-    {
-        "Effect": "Allow",
-        "Action": [
-                "ec2:DescribeImages",
-                "ec2:DescribeSubnets",
-                "ec2:RequestSpotInstances",
-                "iam:CreateServiceLinkedRole",
-                "ec2:TerminateInstances",
-                "ec2:DescribeInstanceStatus",
-                "iam:PassRole"
-        ],
-        "Resource": [
-                "*"
-        ]
-},
-{
-        "Effect": "Allow",
-        "Action": [
-                "elasticloadbalancing:RegisterInstancesWithLoadBalancer"
-        ],
-        "Resource": [
-                "arn:aws:elasticloadbalancing:*:*:loadbalancer/*"
-        ]
-},
-{
-        "Effect": "Allow",
-        "Action": [
-                "elasticloadbalancing:RegisterTargets"
-        ],
-        "Resource": [
-                "*"
-        ]
-}
-]
-}
-EOF
-}
-
-resource "aws_iam_role_policy_attachment" "rattlesnake_spot_fleet_policy_attachment" {
-    role       = "${aws_iam_role.rattlesnake_spot_fleet_role.name}"
-    policy_arn = "${aws_iam_policy.rattlesnake_spot_fleet_policy.arn}"
-}
-
 ###################
 # S3
 ###################
@@ -742,9 +674,5 @@ resource "aws_elastic_beanstalk_environment" "attestation" {
 output "sns_topic_arn" {
     description = "The SNS ARN"
     value = "${aws_sns_topic.rattlesnake.arn}"
-}
-output "iam_fleet_role_arn" {
-    description = "The Fleet Role ARN"
-    value = "${aws_iam_role.rattlesnake_spot_fleet_role.arn}"
 }
 `
