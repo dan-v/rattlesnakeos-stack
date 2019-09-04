@@ -500,6 +500,9 @@ setup_env() {
   sudo DEBIAN_FRONTEND=noninteractive apt-get -y install repo gperf jq openjdk-8-jdk git-core gnupg flex bison build-essential zip curl zlib1g-dev gcc-multilib g++-multilib libc6-dev-i386 lib32ncurses5-dev x11proto-core-dev libx11-dev lib32z-dev ccache libgl1-mesa-dev libxml2-utils xsltproc unzip python-networkx liblz4-tool pxz
   sudo DEBIAN_FRONTEND=noninteractive apt-get -y build-dep "linux-image-$(uname --kernel-release)"
 
+  # temporary workaround as java 11 is default version and not compatible with sdkmanager
+  sudo update-alternatives --set java /usr/lib/jvm/java-8-openjdk-amd64/jre/bin/java
+
   # setup android sdk (required for fdroid build)
   if [ ! -f "${HOME}/sdk/tools/bin/sdkmanager" ]; then
     mkdir -p ${HOME}/sdk
