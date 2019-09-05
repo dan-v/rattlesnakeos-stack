@@ -501,7 +501,7 @@ setup_env() {
   sudo DEBIAN_FRONTEND=noninteractive apt-get -y build-dep "linux-image-$(uname --kernel-release)"
 
   # temporary workaround as java 11 is default version and not compatible with sdkmanager
-  sudo update-alternatives --set java /usr/lib/jvm/java-8-openjdk-amd64/jre/bin/java
+  sudo update-java-alternatives --jre-headless --jre --set java-1.8.0-openjdk-amd64
 
   # setup android sdk (required for fdroid build)
   if [ ! -f "${HOME}/sdk/tools/bin/sdkmanager" ]; then
