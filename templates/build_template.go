@@ -74,7 +74,7 @@ ENCRYPTION_KEY=
 ENCRYPTION_PIPE="/tmp/key"
 
 # pin to specific version of android
-ANDROID_VERSION="9.0"
+ANDROID_VERSION="10.0"
 
 # build type (user or userdebug)
 BUILD_TYPE="user"
@@ -105,7 +105,7 @@ SECONDS=0
 BUILD_TARGET="release aosp_${DEVICE} ${BUILD_TYPE}"
 RELEASE_URL="https://${AWS_RELEASE_BUCKET}.s3.amazonaws.com"
 RELEASE_CHANNEL="${DEVICE}-${BUILD_CHANNEL}"
-CHROME_CHANNEL="stable"
+CHROME_CHANNEL="dev"
 BUILD_DATE=$(date +%Y.%m.%d.%H)
 BUILD_TIMESTAMP=$(date +%s)
 BUILD_DIR="$HOME/rattlesnake-os"
@@ -501,7 +501,8 @@ setup_env() {
   sudo DEBIAN_FRONTEND=noninteractive apt-get -y build-dep "linux-image-$(uname --kernel-release)"
 
   # temporary workaround as java 11 is default version and not compatible with sdkmanager
-  sudo update-java-alternatives --jre-headless --jre --set java-1.8.0-openjdk-amd64
+  sudo update-java-alternatives --jre-headless --jre --set java-1.8.0-openjdk-amd64 || true
+  sudo update-java-alternatives --set java-1.8.0-openjdk-amd64 || true
 
   # setup android sdk (required for fdroid build)
   if [ ! -f "${HOME}/sdk/tools/bin/sdkmanager" ]; then
@@ -530,7 +531,9 @@ check_chromium() {
   log "Chromium latest: $LATEST_CHROMIUM"
   if [ "$LATEST_CHROMIUM" == "$current" ]; then
     log "Chromium latest ($LATEST_CHROMIUM) matches current ($current) - just copying s3 chromium artifact"
-    aws s3 cp "s3://${AWS_RELEASE_BUCKET}/chromium/MonochromePublic.apk" ${BUILD_DIR}/external/chromium/prebuilt/arm64/
+    aws s3 cp "s3://${AWS_RELEASE_BUCKET}/chromium/TrichromeLibrary.apk" ${BUILD_DIR}/external/chromium/prebuilt/arm64/
+    aws s3 cp "s3://${AWS_RELEASE_BUCKET}/chromium/TrichromeWebView.apk" ${BUILD_DIR}/external/chromium/prebuilt/arm64/
+    aws s3 cp "s3://${AWS_RELEASE_BUCKET}/chromium/TrichromeChrome.apk" ${BUILD_DIR}/external/chromium/prebuilt/arm64/
   else
     log "Building chromium $LATEST_CHROMIUM"
     build_chromium $LATEST_CHROMIUM
@@ -593,15 +596,23 @@ android_default_version_code = "$DEFAULT_VERSION"
 EOF
   gn gen out/Default
 
-  log "Building chromium monochrome_public target"
-  autoninja -C out/Default/ monochrome_public_apk
+  log "Building chromium trichrome_library_apk target"
+  autoninja -C out/Default/ trichrome_library_apk
+  log "Building chromium trichrome_webview_apk target"
+  autoninja -C out/Default/ trichrome_webview_apk
+  log "Building chromium trichrome_chrome_apk target"
+  autoninja -C out/Default/ trichrome_chrome_apk
 
   # copy to build tree
   mkdir -p ${BUILD_DIR}/external/chromium/prebuilt/arm64
-  cp out/Default/apks/MonochromePublic.apk ${BUILD_DIR}/external/chromium/prebuilt/arm64/
+  cp out/Default/apks/TrichromeLibrary.apk ${BUILD_DIR}/external/chromium/prebuilt/arm64/
+  cp out/Default/apks/TrichromeWebView.apk ${BUILD_DIR}/external/chromium/prebuilt/arm64/
+  cp out/Default/apks/TrichromeChrome.apk ${BUILD_DIR}/external/chromium/prebuilt/arm64/
 
   # upload to s3 for future builds
-  aws s3 cp "${BUILD_DIR}/external/chromium/prebuilt/arm64/MonochromePublic.apk" "s3://${AWS_RELEASE_BUCKET}/chromium/MonochromePublic.apk"
+  aws s3 cp "${BUILD_DIR}/external/chromium/prebuilt/arm64/TrichromeLibrary.apk" "s3://${AWS_RELEASE_BUCKET}/chromium/TrichromeLibrary.apk"
+  aws s3 cp "${BUILD_DIR}/external/chromium/prebuilt/arm64/TrichromeWebView.apk" "s3://${AWS_RELEASE_BUCKET}/chromium/TrichromeWebView.apk"
+  aws s3 cp "${BUILD_DIR}/external/chromium/prebuilt/arm64/TrichromeChrome.apk" "s3://${AWS_RELEASE_BUCKET}/chromium/TrichromeChrome.apk"
   echo "${CHROMIUM_REVISION}" | aws s3 cp - "s3://${AWS_RELEASE_BUCKET}/chromium/revision"
 }
 
@@ -627,7 +638,6 @@ aosp_repo_modifications() {
       print "  ";
       print "  <remote name=\"github\" fetch=\"https://github.com/RattlesnakeOS/\" revision=\"" ANDROID_VERSION "\" />";
       print "  <remote name=\"fdroid\" fetch=\"https://gitlab.com/fdroid/\" />";
-      print "  <remote name=\"prepare-vendor\" fetch=\"https://github.com/RattlesnakeOS/\" revision=\"master\" />";
       <% if .CustomManifestRemotes %>
       <% range $i, $r := .CustomManifestRemotes %>
       print "  <remote name=\"<% .Name %>\" fetch=\"<% .Fetch %>\" revision=\"<% .Revision %>\" />";
@@ -645,7 +655,7 @@ aosp_repo_modifications() {
       print "  <project path=\"packages/apps/Updater\" name=\"platform_packages_apps_Updater\" remote=\"github\" />";
       print "  <project path=\"packages/apps/F-Droid\" name=\"fdroidclient\" remote=\"fdroid\" revision=\"refs/tags/" FDROID_CLIENT_VERSION "\" />";
       print "  <project path=\"packages/apps/F-DroidPrivilegedExtension\" name=\"privileged-extension\" remote=\"fdroid\" revision=\"refs/tags/" FDROID_PRIV_EXT_VERSION "\" />";
-      print "  <project path=\"vendor/android-prepare-vendor\" name=\"android-prepare-vendor\" remote=\"prepare-vendor\" />"}' .repo/manifest.xml
+      print "  <project path=\"vendor/android-prepare-vendor\" name=\"android-prepare-vendor\" remote=\"github\" />"}' .repo/manifest.xml
 
     # remove things from manifest
     sed -i '/chromium-webview/d' .repo/manifest.xml
@@ -694,19 +704,19 @@ apply_patches() {
   patch_add_apps
   patch_base_config
   patch_device_config
-  patch_chromium_webview
+  # patch_chromium_webview
   patch_updater
   patch_fdroid
   patch_priv_ext
   patch_launcher
-  patch_vendor_security_level
+  # patch_vendor_security_level
 }
 
 patch_aosp_removals() {
   log_header ${FUNCNAME}
 
   # remove aosp chromium webview directory
-  rm -rf ${BUILD_DIR}/platform/external/chromium-webview
+  rm -rf ${BUILD_DIR}/external/chromium-webview
 
   # loop over all make files as these keep changing and remove components
   for mk_file in ${BUILD_DIR}/build/make/target/product/*.mk; do
@@ -830,25 +840,41 @@ patch_fdroid() {
 
   echo "sdk.dir=${HOME}/sdk" > ${BUILD_DIR}/packages/apps/F-Droid/local.properties
   echo "sdk.dir=${HOME}/sdk" > ${BUILD_DIR}/packages/apps/F-Droid/app/local.properties
-  sed -i 's/gradle assembleRelease/..\/gradlew assembleRelease/' ${BUILD_DIR}/packages/apps/F-Droid/Android.mk
-  sed -i 's@fdroid_apk   := build/outputs/apk/$(fdroid_dir)-release-unsigned.apk@fdroid_apk   := build/outputs/apk/full/release/app-full-release-unsigned.apk@'  ${BUILD_DIR}/packages/apps/F-Droid/Android.mk
 
-  # sometimes gradle dependencies fail to download, so gradle build with retry before the AOSP build as workaround
+  cat <<EOF > ${BUILD_DIR}/packages/apps/F-Droid/Android.mk
+LOCAL_PATH:= $(call my-dir)
+
+include $(CLEAR_VARS)
+
+LOCAL_MODULE := F-Droid
+LOCAL_MODULE_TAGS := optional
+LOCAL_PACKAGE_NAME := F-Droid
+
+fdroid_root  := $(LOCAL_PATH)
+fdroid_dir   := app
+fdroid_out   := $(PWD)/$(OUT_DIR)/target/common/obj/APPS/$(LOCAL_MODULE)_intermediates
+fdroid_build := $(fdroid_root)/$(fdroid_dir)/build
+fdroid_apk   := build/outputs/apk/full/release/app-full-release-unsigned.apk
+
+LOCAL_CERTIFICATE := platform
+LOCAL_SRC_FILES := $(fdroid_dir)/$(fdroid_apk)
+LOCAL_MODULE_CLASS := APPS
+LOCAL_MODULE_SUFFIX := $(COMMON_ANDROID_PACKAGE_SUFFIX)
+
+include $(BUILD_PREBUILT)
+EOF
+
+  # build it before AOSP build because writing to source directory will now cause build erro
   pushd ${BUILD_DIR}/packages/apps/F-Droid
   retry ./gradlew assembleRelease
   popd
 }
 
 get_package_mk_file() {
-  # this is newer location in master
   mk_file=${BUILD_DIR}/build/make/target/product/handheld_system.mk
   if [ ! -f ${mk_file} ]; then
-    # this is older location
-    mk_file=${BUILD_DIR}/build/make/target/product/core.mk
-    if [ ! -f ${mk_file} ]; then
-      log "Expected handheld_system.mk or core.mk do not exist"
-      exit 1
-    fi
+    log "Expected handheld_system.mk or core.mk do not exist"
+    exit 1
   fi
   echo ${mk_file}
 }
@@ -919,19 +945,20 @@ rebuild_marlin_kernel() {
   git checkout ${kernel_commit_id}
 
   # run in another shell to avoid it mucking with environment variables for normal AOSP build
-  bash -c "\
-    set -e;
-    cd ${BUILD_DIR};
-    . build/envsetup.sh;
-    make -j$(nproc --all) dtc mkdtimg;
-    export PATH=${BUILD_DIR}/out/host/linux-x86/bin:${PATH};
-    ln --verbose --symbolic ${KEYS_DIR}/${DEVICE}/verity_user.der.x509 ${MARLIN_KERNEL_SOURCE_DIR}/verity_user.der.x509;
-    cd ${MARLIN_KERNEL_SOURCE_DIR};
-    make -j$(nproc --all) ARCH=arm64 marlin_defconfig;
-    make -j$(nproc --all) ARCH=arm64 CONFIG_COMPAT_VDSO=n CROSS_COMPILE=${BUILD_DIR}/prebuilts/gcc/linux-x86/aarch64/aarch64-linux-android-4.9/bin/aarch64-linux-android-;
-    cp -f arch/arm64/boot/Image.lz4-dtb ${BUILD_DIR}/device/google/marlin-kernel/;
-    rm -rf ${BUILD_DIR}/out/build_*;
-  "
+  (
+      set -e;
+      export PATH="${BUILD_DIR}/prebuilts/gcc/linux-x86/aarch64/aarch64-linux-android-4.9/bin:${PATH}";
+      export PATH="${BUILD_DIR}/prebuilts/gcc/linux-x86/arm/arm-linux-androideabi-4.9/bin:${PATH}";
+      export PATH="${BUILD_DIR}/prebuilts/misc/linux-x86/lz4:${PATH}";
+      export PATH="${BUILD_DIR}/prebuilts/misc/linux-x86/dtc:${PATH}";
+      export PATH="${BUILD_DIR}/prebuilts/misc/linux-x86/libufdt:${PATH}";
+      ln --verbose --symbolic ${KEYS_DIR}/${DEVICE}/verity_user.der.x509 ${MARLIN_KERNEL_SOURCE_DIR}/verity_user.der.x509;
+      cd ${MARLIN_KERNEL_SOURCE_DIR};
+      make O=out ARCH=arm64 marlin_defconfig;
+      make -j$(nproc --all) O=out ARCH=arm64 CROSS_COMPILE=aarch64-linux-android- CROSS_COMPILE_ARM32=arm-linux-androideabi-
+      cp -f out/arch/arm64/boot/Image.lz4-dtb ${BUILD_DIR}/device/google/marlin-kernel/;
+      rm -rf ${BUILD_DIR}/out/build_*;
+  )
 }
 
 build_aosp() {
@@ -989,7 +1016,7 @@ release() {
   RADIO=$(get_radio_image baseband google_devices/${DEVICE})
   PREFIX=aosp_
   BUILD=$BUILD_NUMBER
-  VERSION=$(grep -Po "export BUILD_ID=\K.+" build/core/build_id.mk | tr '[:upper:]' '[:lower:]')
+  VERSION=$(grep -Po "BUILD_ID=\K.+" build/core/build_id.mk | tr '[:upper:]' '[:lower:]')
   PRODUCT=${DEVICE}
   TARGET_FILES=$DEVICE-target_files-$BUILD.zip
 
@@ -1016,6 +1043,8 @@ release() {
                     --avb_system_algorithm SHA256_RSA2048)
       ;;
   esac
+
+  export PATH=$BUILD_DIR/prebuilts/build-tools/linux-x86/bin:$PATH
 
   log "Running sign_target_files_apks"
   build/tools/releasetools/sign_target_files_apks -o -d "$KEY_DIR" "${AVB_SWITCHES[@]}" \
