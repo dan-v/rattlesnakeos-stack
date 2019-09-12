@@ -105,7 +105,7 @@ SECONDS=0
 BUILD_TARGET="release aosp_${DEVICE} ${BUILD_TYPE}"
 RELEASE_URL="https://${AWS_RELEASE_BUCKET}.s3.amazonaws.com"
 RELEASE_CHANNEL="${DEVICE}-${BUILD_CHANNEL}"
-CHROME_CHANNEL="dev"
+CHROME_CHANNEL="stable"
 BUILD_DATE=$(date +%Y.%m.%d.%H)
 BUILD_TIMESTAMP=$(date +%s)
 BUILD_DIR="$HOME/rattlesnake-os"
@@ -531,9 +531,7 @@ check_chromium() {
   log "Chromium latest: $LATEST_CHROMIUM"
   if [ "$LATEST_CHROMIUM" == "$current" ]; then
     log "Chromium latest ($LATEST_CHROMIUM) matches current ($current) - just copying s3 chromium artifact"
-    aws s3 cp "s3://${AWS_RELEASE_BUCKET}/chromium/TrichromeLibrary.apk" ${BUILD_DIR}/external/chromium/prebuilt/arm64/
-    aws s3 cp "s3://${AWS_RELEASE_BUCKET}/chromium/TrichromeWebView.apk" ${BUILD_DIR}/external/chromium/prebuilt/arm64/
-    aws s3 cp "s3://${AWS_RELEASE_BUCKET}/chromium/TrichromeChrome.apk" ${BUILD_DIR}/external/chromium/prebuilt/arm64/
+    aws s3 cp "s3://${AWS_RELEASE_BUCKET}/chromium/MonochromePublic.apk" ${BUILD_DIR}/external/chromium/prebuilt/arm64/
   else
     log "Building chromium $LATEST_CHROMIUM"
     build_chromium $LATEST_CHROMIUM
@@ -596,23 +594,15 @@ android_default_version_code = "$DEFAULT_VERSION"
 EOF
   gn gen out/Default
 
-  log "Building chromium trichrome_library_apk target"
-  autoninja -C out/Default/ trichrome_library_apk
-  log "Building chromium trichrome_webview_apk target"
-  autoninja -C out/Default/ trichrome_webview_apk
-  log "Building chromium trichrome_chrome_apk target"
-  autoninja -C out/Default/ trichrome_chrome_apk
+  log "Building chromium monochrome_public_apk target"
+  autoninja -C out/Default/ monochrome_public_apk
 
   # copy to build tree
   mkdir -p ${BUILD_DIR}/external/chromium/prebuilt/arm64
-  cp out/Default/apks/TrichromeLibrary.apk ${BUILD_DIR}/external/chromium/prebuilt/arm64/
-  cp out/Default/apks/TrichromeWebView.apk ${BUILD_DIR}/external/chromium/prebuilt/arm64/
-  cp out/Default/apks/TrichromeChrome.apk ${BUILD_DIR}/external/chromium/prebuilt/arm64/
+  cp out/Default/apks/MonochromePublic.apk ${BUILD_DIR}/external/chromium/prebuilt/arm64/
 
   # upload to s3 for future builds
-  aws s3 cp "${BUILD_DIR}/external/chromium/prebuilt/arm64/TrichromeLibrary.apk" "s3://${AWS_RELEASE_BUCKET}/chromium/TrichromeLibrary.apk"
-  aws s3 cp "${BUILD_DIR}/external/chromium/prebuilt/arm64/TrichromeWebView.apk" "s3://${AWS_RELEASE_BUCKET}/chromium/TrichromeWebView.apk"
-  aws s3 cp "${BUILD_DIR}/external/chromium/prebuilt/arm64/TrichromeChrome.apk" "s3://${AWS_RELEASE_BUCKET}/chromium/TrichromeChrome.apk"
+  aws s3 cp "${BUILD_DIR}/external/chromium/prebuilt/arm64/MonochromePublic.apk" "s3://${AWS_RELEASE_BUCKET}/chromium/MonochromePublic.apk"
   echo "${CHROMIUM_REVISION}" | aws s3 cp - "s3://${AWS_RELEASE_BUCKET}/chromium/revision"
 }
 
@@ -658,7 +648,8 @@ aosp_repo_modifications() {
       print "  <project path=\"vendor/android-prepare-vendor\" name=\"android-prepare-vendor\" remote=\"github\" />"}' .repo/manifest.xml
 
     # remove things from manifest
-    sed -i '/chromium-webview/d' .repo/manifest.xml
+    # TODO: add this back when trichrome webview is working
+    # sed -i '/chromium-webview/d' .repo/manifest.xml
     sed -i '/packages\/apps\/Browser2/d' .repo/manifest.xml
     sed -i '/packages\/apps\/Calendar/d' .repo/manifest.xml
     sed -i '/packages\/apps\/QuickSearchBox/d' .repo/manifest.xml
@@ -704,24 +695,28 @@ apply_patches() {
   patch_add_apps
   patch_base_config
   patch_device_config
+  # TODO: add this back when trichrome webview is working
   # patch_chromium_webview
   patch_updater
   patch_fdroid
   patch_priv_ext
   patch_launcher
+  # TODO: need to add this back
   # patch_vendor_security_level
 }
 
 patch_aosp_removals() {
   log_header ${FUNCNAME}
 
+  # TODO: add this back when trichrome webview is working
   # remove aosp chromium webview directory
-  rm -rf ${BUILD_DIR}/external/chromium-webview
+  # rm -rf ${BUILD_DIR}/external/chromium-webview
 
   # loop over all make files as these keep changing and remove components
   for mk_file in ${BUILD_DIR}/build/make/target/product/*.mk; do
+    # TODO: add this back when trichrome webview is working
     # remove aosp webview
-    sed -i '/webview \\/d' ${mk_file}
+    # sed -i '/webview \\/d' ${mk_file}
 
     # remove Browser2
     sed -i '/Browser2/d' ${mk_file}

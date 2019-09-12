@@ -29,8 +29,10 @@ var trustedRepoBase = "https://github.com/rattlesnakeos/"
 var supportedRegions = []string{"ap-northeast-1", "ap-northeast-2", "ap-northeast-3", "ap-south-1", "ap-southeast-1",
 	"ap-southeast-2", "ca-central-1", "eu-central-1", "eu-north-1", "eu-west-1", "eu-west-2", "eu-west-3", "sa-east-1",
 	"us-east-1", "us-east-2", "us-west-1", "us-west-2", "cn-northwest-1", "cn-north-1"}
-var supportedDevicesFriendly = []string{"Pixel", "Pixel XL", "Pixel 2", "Pixel 2 XL", "Pixel 3", "Pixel 3 XL", "Pixel 3a", "Pixel 3a XL"}
-var supportedDevicesCodename = []string{"sailfish", "marlin", "walleye", "taimen", "blueline", "crosshatch", "sargo", "bonito"}
+
+// TODO: add back sailfish when it has an api-29 android-prepare-vendor config
+var supportedDevicesFriendly = []string{"Pixel XL", "Pixel 2", "Pixel 2 XL", "Pixel 3", "Pixel 3 XL", "Pixel 3a", "Pixel 3a XL"}
+var supportedDevicesCodename = []string{"marlin", "walleye", "taimen", "blueline", "crosshatch", "sargo", "bonito"}
 var supportDevicesOutput string
 
 func init() {
