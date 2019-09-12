@@ -282,6 +282,7 @@ full_run() {
     attestation_setup
   fi
   setup_vendor
+  build_fdroid
   apply_patches
   # only marlin and sailfish need kernel rebuilt so that verity_key is included
   if [ "${DEVICE}" == "marlin" ] || [ "${DEVICE}" == "sailfish" ]; then
@@ -292,6 +293,20 @@ full_run() {
   aws_upload
   checkpoint_versions
   aws_notify "RattlesnakeOS Build SUCCESS"
+}
+
+build_fdroid() {
+  log_header ${FUNCNAME}
+
+  # build it outside AOSP build tree or hit errors
+  git clone https://gitlab.com/fdroid/fdroidclient ${HOME}/fdroidclient
+  pushd ${HOME}/fdroidclient
+  echo "sdk.dir=${HOME}/sdk" > local.properties
+  echo "sdk.dir=${HOME}/sdk" > app/local.properties
+  git checkout $FDROID_CLIENT_VERSION
+  retry ./gradlew assembleRelease
+  cp -f app/build/outputs/apk/full/release/app-full-release-unsigned.apk ${BUILD_DIR}/packages/apps/F-Droid/F-Droid.apk
+  popd
 }
 
 attestation_setup() {
@@ -643,7 +658,7 @@ aosp_repo_modifications() {
       <% end %>
       print "  <project path=\"external/chromium\" name=\"platform_external_chromium\" remote=\"github\" />";
       print "  <project path=\"packages/apps/Updater\" name=\"platform_packages_apps_Updater\" remote=\"github\" />";
-      print "  <project path=\"packages/apps/F-Droid\" name=\"fdroidclient\" remote=\"fdroid\" revision=\"refs/tags/" FDROID_CLIENT_VERSION "\" />";
+      print "  <project path=\"packages/apps/F-Droid\" name=\"platform_external_fdroid\" remote=\"github\" />";
       print "  <project path=\"packages/apps/F-DroidPrivilegedExtension\" name=\"privileged-extension\" remote=\"fdroid\" revision=\"refs/tags/" FDROID_PRIV_EXT_VERSION "\" />";
       print "  <project path=\"vendor/android-prepare-vendor\" name=\"android-prepare-vendor\" remote=\"github\" />"}' .repo/manifest.xml
 
@@ -698,7 +713,6 @@ apply_patches() {
   # TODO: add this back when trichrome webview is working
   # patch_chromium_webview
   patch_updater
-  patch_fdroid
   patch_priv_ext
   patch_launcher
   # TODO: need to add this back
@@ -828,41 +842,6 @@ patch_chromium_webview() {
     </webviewprovider>
 </webviewproviders>
 EOF
-}
-
-patch_fdroid() {
-  log_header ${FUNCNAME}
-
-  echo "sdk.dir=${HOME}/sdk" > ${BUILD_DIR}/packages/apps/F-Droid/local.properties
-  echo "sdk.dir=${HOME}/sdk" > ${BUILD_DIR}/packages/apps/F-Droid/app/local.properties
-
-  cat <<EOF > ${BUILD_DIR}/packages/apps/F-Droid/Android.mk
-LOCAL_PATH:= $(call my-dir)
-
-include $(CLEAR_VARS)
-
-LOCAL_MODULE := F-Droid
-LOCAL_MODULE_TAGS := optional
-LOCAL_PACKAGE_NAME := F-Droid
-
-fdroid_root  := $(LOCAL_PATH)
-fdroid_dir   := app
-fdroid_out   := $(PWD)/$(OUT_DIR)/target/common/obj/APPS/$(LOCAL_MODULE)_intermediates
-fdroid_build := $(fdroid_root)/$(fdroid_dir)/build
-fdroid_apk   := build/outputs/apk/full/release/app-full-release-unsigned.apk
-
-LOCAL_CERTIFICATE := platform
-LOCAL_SRC_FILES := $(fdroid_dir)/$(fdroid_apk)
-LOCAL_MODULE_CLASS := APPS
-LOCAL_MODULE_SUFFIX := $(COMMON_ANDROID_PACKAGE_SUFFIX)
-
-include $(BUILD_PREBUILT)
-EOF
-
-  # build it before AOSP build because writing to source directory will now cause build erro
-  pushd ${BUILD_DIR}/packages/apps/F-Droid
-  retry ./gradlew assembleRelease
-  popd
 }
 
 get_package_mk_file() {
