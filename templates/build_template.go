@@ -80,7 +80,7 @@ ANDROID_VERSION="10.0"
 BUILD_TYPE="user"
 
 # build channel (stable or beta)
-BUILD_CHANNEL="stable"
+BUILD_CHANNEL="beta"
 
 # user customizable things
 HOSTS_FILE=<% .HostsFile %>
