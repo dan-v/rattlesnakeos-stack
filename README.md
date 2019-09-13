@@ -1,7 +1,7 @@
 RattlesnakeOS is a privacy and security focused Android OS for Google Pixel phones.
 
 ## Features
-* Based on latest [AOSP](https://source.android.com/) 9.0 (Android P)
+* Based on latest [AOSP](https://source.android.com/) 10.0
 * Support for Google <b>Pixel, Pixel XL, Pixel 2, Pixel 2 XL, Pixel 3, Pixel 3 XL, Pixel 3a, Pixel 3a XL</b>
 * Monthly software and firmware security fixes delivered through built in OTA updater
 * [Verified boot](https://source.android.com/security/verifiedboot/) with a locked bootloader just like official Android but with your own personal signing keys
@@ -146,8 +146,8 @@ ssh-key = "rattlesnakeos"
 
 [[custom-patches]]
   patches = [
-        "00001-global-internet-permission-toggle.patch",
-        "00002-global-sensors-permission-toggle.patch",
+        "<community patches need to be upgraded to 10.0>.patch",
+        "<community patches need to be upgraded to 10.0>.patch",
   ]
   repo = "https://github.com/RattlesnakeOS/community_patches"
 ```
@@ -228,7 +228,7 @@ Use this at your own risk.
 #### How do I update rattlesnakeos-stack?
 Just download the new version of rattlesnakeos-stack and run deploy again (e.g. ./rattlesnakeos-stack deploy)
 #### How do OTA updates work?
-If you go to `Settings->System update settings` you'll see the updater app settings. The updater app will check S3 to see if there are updates and if it finds one will download and apply it your device. There is no progress indicator unfortunately - you'll just got a notification when it's done and it will ask you to reboot. If you want to force a check for OTA updates, you can toggle the `Require battery above warning level` setting and it will check for a new build in your S3 bucket.
+If you go to `Settings -> System -> Advanced (to expand) -> System update settings`, you'll see the updater app settings. The updater app will check S3 to see if there are updates and if it finds one will download and apply it your device. There is no progress indicator unfortunately - you'll just got a notification when it's done and it will ask you to reboot. If you want to force a check for OTA updates, you can toggle the `Require battery above warning level` setting and it will check for a new build in your S3 bucket.
 #### What network carriers are supported?
 I only have access to a single device and carrier to test this on, so I can't make any promises about it working with your specific carrier. Confirmed working: T-Mobile, Rogers, Cricket, Ting. Likely not to work: Sprint (has requirements about specific carrier app being on phone to work), Project Fi.
 #### Why is this project so closely tied to AWS?
@@ -300,7 +300,7 @@ There is an option to execute patches and shell scripts against the AOSP build t
 [[custom-patches]]
   repo = "https://github.com/RattlesnakeOS/community_patches"
   patches = [
-      "00001-global-internet-permission-toggle.patch", "00002-global-sensors-permission-toggle.patch",
+      "<community patches need to be upgraded to 10.0>.patch", "<community patches need to be upgraded to 10.0>.patch",
   ]
 
 [[custom-scripts]]
