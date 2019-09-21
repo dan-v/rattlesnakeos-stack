@@ -26,10 +26,12 @@ case "$DEVICE" in
   crosshatch|blueline)
     DEVICE_FAMILY=crosshatch
     AVB_MODE=vbmeta_chained
+    EXTRA_OTA=(--retrofit_dynamic_partitions)
     ;;
   sargo|bonito)
     DEVICE_FAMILY=bonito
     AVB_MODE=vbmeta_chained
+    EXTRA_OTA=(--retrofit_dynamic_partitions)
     ;;
   *)
     echo "warning: unknown device $DEVICE, using Pixel 3 defaults"
@@ -686,6 +688,9 @@ aosp_repo_sync() {
 setup_vendor() {
   log_header ${FUNCNAME}
 
+  # new dependency to extract ota partitions
+  sudo DEBIAN_FRONTEND=noninteractive apt-get -y install python-protobuf
+
   # get vendor files (with timeout)
   timeout 30m "${BUILD_DIR}/vendor/android-prepare-vendor/execute-all.sh" --debugfs --keep --yes --device "${DEVICE}" --buildID "${AOSP_BUILD}" --output "${BUILD_DIR}/vendor/android-prepare-vendor"
   aws s3 cp - "s3://${AWS_RELEASE_BUCKET}/${DEVICE}-vendor" --acl public-read <<< "${AOSP_BUILD}" || true
@@ -715,8 +720,20 @@ apply_patches() {
   patch_updater
   patch_priv_ext
   patch_launcher
+  patch_broken_alarmclock
   # TODO: need to add this back
-  # patch_vendor_security_level
+  #patch_vendor_security_level
+}
+
+# TODO: remove once this once fix from upstream makes it into release branch
+# https://android.googlesource.com/platform/packages/apps/DeskClock/+/e6351b3b85b2f5d53d43e4797d3346ce22a5fa6f%5E%21/
+patch_broken_alarmclock() {
+  log_header ${FUNCNAME}
+
+  if ! grep -q "android.permission.FOREGROUND_SERVICE" ${BUILD_DIR}/packages/apps/DeskClock/AndroidManifest.xml; then
+    sed -i '/<uses-permission android:name="android.permission.READ_EXTERNAL_STORAGE" \/>/a <uses-permission android:name="android.permission.FOREGROUND_SERVICE" \/>' ${BUILD_DIR}/packages/apps/DeskClock/AndroidManifest.xml
+    sed -i 's@<uses-sdk android:minSdkVersion="19" android:targetSdkVersion="28" />@<uses-sdk android:minSdkVersion="19" android:targetSdkVersion="25" />@' ${BUILD_DIR}/packages/apps/DeskClock/AndroidManifest.xml
+  fi
 }
 
 patch_aosp_removals() {
@@ -808,9 +825,14 @@ patch_base_config() {
 patch_vendor_security_level() {
   log_header ${FUNCNAME}
 
-  f=$(echo "${AOSP_BUILD}" | awk -F"." '{print $2}')
-  VENDOR_SECURITY_PATCH_LEVEL="20${f::2}-${f:2:2}-${f:4:2}"
-  sed -i 's@2018-09-05@'${VENDOR_SECURITY_PATCH_LEVEL}'@' ${BUILD_DIR}/device/google/crosshatch/device-common.mk || true
+  aosp_build_lower=$(tr '[:upper:]' '[:lower:]' <<< "${AOSP_BUILD}")
+  # TODO: this is assuming android-prepare-vendor data is still around
+  PLATFORM_SECURITY_PATCH=$(grep 'ro.build.version.security_patch=' $BUILD_DIR/vendor/android-prepare-vendor/${DEVICE}/${aosp_build_lower}/factory_imgs_repaired_data/system/build.prop | cut -f2 -d=)
+  if [ -z "$PLATFORM_SECURITY_PATCH" ]; then
+    log "ERROR: Unable to parse platform security patch. Skipping.."
+  else
+    sed -i 's@PLATFORM_SECURITY_PATCH := 2019-09-05@PLATFORM_SECURITY_PATCH := '${PLATFORM_SECURITY_PATCH}'@' ${BUILD_DIR}/build/core/version_defaults.mk || true
+  fi
 }
 
 patch_device_config() {
