@@ -721,8 +721,20 @@ apply_patches() {
   patch_priv_ext
   patch_launcher
   patch_broken_alarmclock
+  patch_disable_apex
   # TODO: need to add this back
   #patch_vendor_security_level
+}
+
+# currently don't have a need for apex updates (https://source.android.com/devices/tech/ota/apex)
+patch_disable_apex() {
+  log_header ${FUNCNAME}
+
+  # pixel 1 devices do not support apex so nothing to patch
+  # pixel 2 devices opt in here
+  sed -i 's@$(call inherit-product, $(SRC_TARGET_DIR)/product/updatable_apex.mk)@@' ${BUILD_DIR}/device/google/wahoo/device.mk
+  # all other devices use mainline and opt in here
+  sed -i 's@$(call inherit-product, $(SRC_TARGET_DIR)/product/updatable_apex.mk)@@' ${BUILD_DIR}/build/make/target/product/mainline_system.mk
 }
 
 # TODO: remove once this once fix from upstream makes it into release branch
@@ -1043,7 +1055,7 @@ release() {
   export PATH=$BUILD_DIR/prebuilts/build-tools/linux-x86/bin:$PATH
 
   log "Running sign_target_files_apks"
-  build/tools/releasetools/sign_target_files_apks -o -d "$KEY_DIR" "${AVB_SWITCHES[@]}" \
+  build/tools/releasetools/sign_target_files_apks -o -d "$KEY_DIR" -k "build/target/product/security/networkstack=${KEY_DIR}/networkstack" "${AVB_SWITCHES[@]}" \
     out/target/product/$DEVICE/obj/PACKAGING/target_files_intermediates/$PREFIX$DEVICE-target_files-$BUILD_NUMBER.zip \
     $OUT/$TARGET_FILES
 
@@ -1172,6 +1184,24 @@ aws_import_keys() {
       aws s3 sync "s3://${AWS_KEYS_BUCKET}" "${KEYS_DIR}"
     fi
   fi
+
+  # handle migration with new networkstack key for 10.0
+  pushd "${KEYS_DIR}/${DEVICE}"
+  if [ ! -f "${KEYS_DIR}/${DEVICE}/networkstack.pk8" ]; then
+    log "Did not find networkstack key - generating one"
+    ! "${BUILD_DIR}/development/tools/make_key" "networkstack" "$CERTIFICATE_SUBJECT"
+
+    if [ "$ENCRYPTED_KEYS" = true ]; then
+      log "Encrypting and uploading new networkstack key to s3://${AWS_ENCRYPTED_KEYS_BUCKET}"
+      gpg --symmetric --batch --passphrase "$ENCRYPTION_KEY" --cipher-algo AES256 networkstack.pk8
+      gpg --symmetric --batch --passphrase "$ENCRYPTION_KEY" --cipher-algo AES256 networkstack.x509.pem
+      aws s3 sync "${KEYS_DIR}" "s3://${AWS_ENCRYPTED_KEYS_BUCKET}" --exclude "*" --include "*.gpg"
+    else
+      log "Uploading new networkstack key to s3://${AWS_KEYS_BUCKET}"
+      aws s3 sync "s3://${AWS_KEYS_BUCKET}" "${KEYS_DIR}"
+    fi
+  fi
+  popd
 }
 
 gen_keys() {
@@ -1179,7 +1209,7 @@ gen_keys() {
 
   mkdir -p "${KEYS_DIR}/${DEVICE}"
   cd "${KEYS_DIR}/${DEVICE}"
-  for key in {releasekey,platform,shared,media,verity} ; do
+  for key in {releasekey,platform,shared,media,networkstack,verity} ; do
     # make_key exits with unsuccessful code 1 instead of 0, need ! to negate
     ! "${BUILD_DIR}/development/tools/make_key" "$key" "$CERTIFICATE_SUBJECT"
   done
