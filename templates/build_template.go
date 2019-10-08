@@ -722,8 +722,6 @@ apply_patches() {
   patch_launcher
   patch_broken_alarmclock
   patch_disable_apex
-  # TODO: need to add this back
-  #patch_vendor_security_level
 }
 
 # currently don't have a need for apex updates (https://source.android.com/devices/tech/ota/apex)
@@ -832,19 +830,6 @@ patch_base_config() {
 
   # enable swipe up gesture functionality as option
   sed -i 's@<bool name="config_swipe_up_gesture_setting_available">false</bool>@<bool name="config_swipe_up_gesture_setting_available">true</bool>@' ${BUILD_DIR}/frameworks/base/core/res/res/values/config.xml
-}
-
-patch_vendor_security_level() {
-  log_header ${FUNCNAME}
-
-  aosp_build_lower=$(tr '[:upper:]' '[:lower:]' <<< "${AOSP_BUILD}")
-  # TODO: this is assuming android-prepare-vendor data is still around
-  PLATFORM_SECURITY_PATCH=$(grep 'ro.build.version.security_patch=' $BUILD_DIR/vendor/android-prepare-vendor/${DEVICE}/${aosp_build_lower}/factory_imgs_repaired_data/system/build.prop | cut -f2 -d=)
-  if [ -z "$PLATFORM_SECURITY_PATCH" ]; then
-    log "ERROR: Unable to parse platform security patch. Skipping.."
-  else
-    sed -i 's@PLATFORM_SECURITY_PATCH := 2019-09-05@PLATFORM_SECURITY_PATCH := '${PLATFORM_SECURITY_PATCH}'@' ${BUILD_DIR}/build/core/version_defaults.mk || true
-  fi
 }
 
 patch_device_config() {
