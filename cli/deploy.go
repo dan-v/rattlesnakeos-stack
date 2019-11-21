@@ -4,6 +4,7 @@ import (
 	"errors"
 	"fmt"
 	"os"
+	"strconv"
 	"strings"
 
 	"github.com/dan-v/rattlesnakeos-stack/stack"
@@ -14,7 +15,8 @@ import (
 	yaml "gopkg.in/yaml.v2"
 )
 
-const defaultInstanceRegions = "us-west-2,us-west-1,us-east-1,us-east-2"
+const defaultInstanceRegions = "us-west-2,us-west-1,us-east-2"
+const minimumChromiumVersion = 80
 
 var name, region, email, device, sshKey, maxPrice, skipPrice, schedule string
 var instanceType, instanceRegions, hostsFile, chromiumVersion string
@@ -30,7 +32,6 @@ var supportedRegions = []string{"ap-northeast-1", "ap-northeast-2", "ap-northeas
 	"ap-southeast-2", "ca-central-1", "eu-central-1", "eu-north-1", "eu-west-1", "eu-west-2", "eu-west-3", "sa-east-1",
 	"us-east-1", "us-east-2", "us-west-1", "us-west-2", "cn-northwest-1", "cn-north-1"}
 
-// TODO: add back sailfish when it has an api-29 android-prepare-vendor config
 var supportedDevicesFriendly = []string{"Pixel", "Pixel XL", "Pixel 2", "Pixel 2 XL", "Pixel 3", "Pixel 3 XL", "Pixel 3a", "Pixel 3a XL"}
 var supportedDevicesCodename = []string{"sailfish", "marlin", "walleye", "taimen", "blueline", "crosshatch", "sargo", "bonito"}
 var supportDevicesOutput string
@@ -55,7 +56,7 @@ func init() {
 	viper.BindPFlag("region", flags.Lookup("region"))
 
 	flags.StringVarP(&device, "device", "d", "",
-		"device you want to build for (e.g. marlin): to list supported devices use '-d list'")
+		"device you want to build for (e.g. crosshatch): to list supported devices use '-d list'")
 	viper.BindPFlag("device", flags.Lookup("device"))
 
 	flags.StringVarP(&email, "email", "e", "",
@@ -94,7 +95,7 @@ func init() {
 	viper.BindPFlag("hosts-file", flags.Lookup("hosts-file"))
 
 	flags.StringVar(&chromiumVersion, "chromium-version", "",
-		"specify the version of Chromium you want (e.g. 69.0.3497.100) to pin to. if not specified, the latest stable "+
+		"specify the version of Chromium you want (e.g. 80.0.3971.4) to pin to. if not specified, the latest stable "+
 			"version of Chromium is used.")
 	viper.BindPFlag("chromium-version", flags.Lookup("chromium-version"))
 
@@ -144,6 +145,22 @@ var deployCmd = &cobra.Command{
 		}
 		if viper.GetString("device") == "" {
 			return errors.New("must specify device type")
+		}
+		if viper.GetString("device") == "marlin" || viper.GetString("device") == "sailfish" {
+			log.Warnf("WARNING: marlin/sailfish devices are no longer receiving security updates and will likely be completely deprecated in the future")
+		}
+		if viper.GetString("chromium-version") != "" {
+			chromiumVersionSplit := strings.Split(viper.GetString("chromium-version"), ".")
+			if len(chromiumVersionSplit) != 4 {
+				return errors.New("invalid chromium-version specified")
+			}
+			chromiumMajorNumber, err := strconv.Atoi(chromiumVersionSplit[0])
+			if err != nil {
+				return fmt.Errorf("unable to parse specified chromium-version: %v", err)
+			}
+			if chromiumMajorNumber < minimumChromiumVersion {
+				return fmt.Errorf("pinned chromium-version must have major version of at least %v", minimumChromiumVersion)
+			}
 		}
 		if viper.GetBool("attestation-server") {
 			if viper.GetString("device") != "crosshatch" && viper.GetString("device") != "blueline" &&

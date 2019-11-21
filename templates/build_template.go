@@ -82,7 +82,7 @@ ANDROID_VERSION="10.0"
 BUILD_TYPE="user"
 
 # build channel (stable or beta)
-BUILD_CHANNEL="beta"
+BUILD_CHANNEL="stable"
 
 # user customizable things
 HOSTS_FILE=<% .HostsFile %>
@@ -107,7 +107,7 @@ SECONDS=0
 BUILD_TARGET="release aosp_${DEVICE} ${BUILD_TYPE}"
 RELEASE_URL="https://${AWS_RELEASE_BUCKET}.s3.amazonaws.com"
 RELEASE_CHANNEL="${DEVICE}-${BUILD_CHANNEL}"
-CHROME_CHANNEL="stable"
+CHROME_CHANNEL="dev"
 BUILD_DATE=$(date +%Y.%m.%d.%H)
 BUILD_TIMESTAMP=$(date +%s)
 BUILD_DIR="$HOME/rattlesnake-os"
@@ -290,11 +290,22 @@ full_run() {
   if [ "${DEVICE}" == "marlin" ] || [ "${DEVICE}" == "sailfish" ]; then
     rebuild_marlin_kernel
   fi
+  add_chromium
   build_aosp
   release "${DEVICE}"
   aws_upload
   checkpoint_versions
   aws_notify "RattlesnakeOS Build SUCCESS"
+}
+
+add_chromium() {
+  log_header ${FUNCNAME}
+
+  # replace AOSP webview with latest built chromium webview
+  aws s3 cp "s3://${AWS_RELEASE_BUCKET}/chromium/SystemWebView.apk" ${BUILD_DIR}/external/chromium-webview/prebuilt/arm64/webview.apk
+
+  # add latest built chromium browser to external/chromium
+  aws s3 cp "s3://${AWS_RELEASE_BUCKET}/chromium/ChromeModernPublic.apk" ${BUILD_DIR}/external/chromium/prebuilt/arm64/
 }
 
 build_fdroid() {
@@ -547,8 +558,7 @@ check_chromium() {
 
   log "Chromium latest: $LATEST_CHROMIUM"
   if [ "$LATEST_CHROMIUM" == "$current" ]; then
-    log "Chromium latest ($LATEST_CHROMIUM) matches current ($current) - just copying s3 chromium artifact"
-    aws s3 cp "s3://${AWS_RELEASE_BUCKET}/chromium/MonochromePublic.apk" ${BUILD_DIR}/external/chromium/prebuilt/arm64/
+    log "Chromium latest ($LATEST_CHROMIUM) matches current ($current)"
   else
     log "Building chromium $LATEST_CHROMIUM"
     build_chromium $LATEST_CHROMIUM
@@ -611,15 +621,14 @@ android_default_version_code = "$DEFAULT_VERSION"
 EOF
   gn gen out/Default
 
-  log "Building chromium monochrome_public_apk target"
-  autoninja -C out/Default/ monochrome_public_apk
-
-  # copy to build tree
-  mkdir -p ${BUILD_DIR}/external/chromium/prebuilt/arm64
-  cp out/Default/apks/MonochromePublic.apk ${BUILD_DIR}/external/chromium/prebuilt/arm64/
-
+  log "Building chromium system_webview_apk target"
+  autoninja -C out/Default/ system_webview_apk
+  log "Building chromium chrome_modern_public_apk target"
+  autoninja -C out/Default/ chrome_modern_public_apk
+  
   # upload to s3 for future builds
-  aws s3 cp "${BUILD_DIR}/external/chromium/prebuilt/arm64/MonochromePublic.apk" "s3://${AWS_RELEASE_BUCKET}/chromium/MonochromePublic.apk"
+  aws s3 cp "out/Default/apks/SystemWebView.apk" "s3://${AWS_RELEASE_BUCKET}/chromium/SystemWebView.apk"
+  aws s3 cp "out/Default/apks/ChromeModernPublic.apk" "s3://${AWS_RELEASE_BUCKET}/chromium/ChromeModernPublic.apk"
   echo "${CHROMIUM_REVISION}" | aws s3 cp - "s3://${AWS_RELEASE_BUCKET}/chromium/revision"
 }
 
@@ -634,6 +643,7 @@ aosp_repo_modifications() {
   log_header ${FUNCNAME}
   cd "${BUILD_DIR}"
 
+  # TODO: remove revision=dev from platform_external_chromium in future release, didn't want to break build for anyone on beta 10.x build
   # make modifications to default AOSP
   if ! grep -q "RattlesnakeOS" .repo/manifest.xml; then
     # really ugly awk script to add additional repos to manifest
@@ -658,15 +668,13 @@ aosp_repo_modifications() {
       <% if .EnableAttestation %>
       print "  <project path=\"external/Auditor\" name=\"platform_external_Auditor\" remote=\"github\" />";
       <% end %>
-      print "  <project path=\"external/chromium\" name=\"platform_external_chromium\" remote=\"github\" />";
+      print "  <project path=\"external/chromium\" name=\"platform_external_chromium\" remote=\"github\" revision=\"dev\" />";
       print "  <project path=\"packages/apps/Updater\" name=\"platform_packages_apps_Updater\" remote=\"github\" />";
       print "  <project path=\"packages/apps/F-Droid\" name=\"platform_external_fdroid\" remote=\"github\" />";
       print "  <project path=\"packages/apps/F-DroidPrivilegedExtension\" name=\"privileged-extension\" remote=\"fdroid\" revision=\"refs/tags/" FDROID_PRIV_EXT_VERSION "\" />";
       print "  <project path=\"vendor/android-prepare-vendor\" name=\"android-prepare-vendor\" remote=\"github\" />"}' .repo/manifest.xml
 
     # remove things from manifest
-    # TODO: add this back when trichrome webview is working
-    # sed -i '/chromium-webview/d' .repo/manifest.xml
     sed -i '/packages\/apps\/Browser2/d' .repo/manifest.xml
     sed -i '/packages\/apps\/Calendar/d' .repo/manifest.xml
     sed -i '/packages\/apps\/QuickSearchBox/d' .repo/manifest.xml
@@ -714,9 +722,8 @@ apply_patches() {
   patch_aosp_removals
   patch_add_apps
   patch_base_config
+  patch_settings_app
   patch_device_config
-  # TODO: add this back when trichrome webview is working
-  # patch_chromium_webview
   patch_updater
   patch_priv_ext
   patch_launcher
@@ -749,16 +756,8 @@ patch_broken_alarmclock() {
 patch_aosp_removals() {
   log_header ${FUNCNAME}
 
-  # TODO: add this back when trichrome webview is working
-  # remove aosp chromium webview directory
-  # rm -rf ${BUILD_DIR}/external/chromium-webview
-
   # loop over all make files as these keep changing and remove components
   for mk_file in ${BUILD_DIR}/build/make/target/product/*.mk; do
-    # TODO: add this back when trichrome webview is working
-    # remove aosp webview
-    # sed -i '/webview \\/d' ${mk_file}
-
     # remove Browser2
     sed -i '/Browser2/d' ${mk_file}
 
@@ -832,6 +831,13 @@ patch_base_config() {
   sed -i 's@<bool name="config_swipe_up_gesture_setting_available">false</bool>@<bool name="config_swipe_up_gesture_setting_available">true</bool>@' ${BUILD_DIR}/frameworks/base/core/res/res/values/config.xml
 }
 
+patch_settings_app() {
+  log_header ${FUNCNAME}
+
+  # fix for cards not disappearing in settings app
+  sed -i 's@<bool name="config_use_legacy_suggestion">true</bool>@<bool name="config_use_legacy_suggestion">false</bool>@' ${BUILD_DIR}/packages/apps/Settings/res/values/config.xml
+}
+
 patch_device_config() {
   log_header ${FUNCNAME}
 
@@ -849,18 +855,6 @@ patch_device_config() {
 
   sed -i 's@PRODUCT_MODEL := AOSP on bonito@PRODUCT_MODEL := Pixel 3a XL@' ${BUILD_DIR}/device/google/bonito/aosp_bonito.mk || true
   sed -i 's@PRODUCT_MODEL := AOSP on sargo@PRODUCT_MODEL := Pixel 3a@' ${BUILD_DIR}/device/google/bonito/aosp_sargo.mk || true
-}
-
-patch_chromium_webview() {
-  log_header ${FUNCNAME}
-
-  cat <<EOF > ${BUILD_DIR}/frameworks/base/core/res/res/xml/config_webview_packages.xml
-<?xml version="1.0" encoding="utf-8"?>
-<webviewproviders>
-    <webviewprovider description="Chromium" packageName="org.chromium.chrome" availableByDefault="true">
-    </webviewprovider>
-</webviewproviders>
-EOF
 }
 
 get_package_mk_file() {

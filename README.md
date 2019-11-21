@@ -2,7 +2,8 @@ RattlesnakeOS is a privacy and security focused Android OS for Google Pixel phon
 
 ## Features
 * Based on latest [AOSP](https://source.android.com/) 10.0
-* Support for Google <b>Pixel, Pixel XL, Pixel 2, Pixel 2 XL, Pixel 3, Pixel 3 XL, Pixel 3a, Pixel 3a XL</b>
+* Active Support for Google <b>Pixel 2, Pixel 2 XL, Pixel 3, Pixel 3 XL, Pixel 3a, Pixel 3a XL</b>
+* Legacy Support for Google <b>Pixel, Pixel XL</b>. These devices no longer receive security updates and will eventually be deprecated.
 * Monthly software and firmware security fixes delivered through built in OTA updater
 * [Verified boot](https://source.android.com/security/verifiedboot/) with a locked bootloader just like official Android but with your own personal signing keys
 * Optional support for [remote attestation](#how-does-the-remote-attestation-feature-work) using [Auditor](https://github.com/GrapheneOS/Auditor) and [AttestationServer](https://github.com/GrapheneOS/AttestationServer)
@@ -10,6 +11,7 @@ RattlesnakeOS is a privacy and security focused Android OS for Google Pixel phon
 * Latest stable [F-Droid](https://f-droid.org/) app store and [privileged extension](https://gitlab.com/fdroid/privileged-extension)
 * Free of Google’s apps and services
 * Advanced build customization options
+
 
 ## Background
 RattlesnakeOS is truly just stock AOSP and has all of the baseline privacy and security features from there. Unlike other alternative Android OSes, it aims to keep security on par with stock Android by keeping critical security features like verified boot enabled, ensuring monthly OTA security updates not only update the OS but also the device specific drivers and firmware, and by not adding additional features or software that will needlessly increase attack surface. By not deviating from stock AOSP, updating to new major Android releases doesn't require any major porting effort and this means devices running RattlesnakeOS continue to receive proper security updates without delay.
@@ -61,8 +63,8 @@ The rattlesnakeos-stack `config` subcommand should be run first to initialize a 
 ```none
 ./rattlesnakeos-stack config
 
-Device is the device codename (e.g. sailfish). Supported devices: sailfish (Pixel), marlin (Pixel XL), walleye (Pixel 2), taimen (Pixel 2 XL), blueline (Pixel 3), crosshatch (Pixel 3 XL)
-Device: taimen
+Device is the device codename (e.g. sailfish). Supported devices: sailfish (Pixel), marlin (Pixel XL), walleye (Pixel 2), taimen (Pixel 2 XL), blueline (Pixel 3), crosshatch (Pixel 3 XL), sargo (Pixel 3a), bonito (Pixel 3a XL)
+device: taimen
 
 Stack name is used as an identifier for all the AWS components that get deployed. THIS NAME MUST BE UNIQUE OR DEPLOYMENT WILL FAIL.
 Stack name: <rattlesnakeos-stackname>
@@ -95,7 +97,7 @@ email: user@domain.com
 encrypted-keys: false
 ignore-version-checks: false
 hosts-file: ""
-instance-regions: us-west-2,us-west-1,us-east-1,us-east-2
+instance-regions: us-west-2,us-west-1,us-east-2
 instance-type: c5.4xlarge
 max-price: "1.00"
 name: <rattlesnakeos-stackname>
@@ -129,13 +131,13 @@ Or you can specify a different config file to use
 Here is an example of a more advanced config file that: enables deployment of a personal attestation server, locks to a specific version of Chromium, specifies a hosts file to install, uses a larger EC2 instance type, builds every 2 days, and pulls in custom patches from the [community patches repo](https://github.com/RattlesnakeOS/community_patches). You can read more about [advanced customization options in FAQ](#customizations).
 ```toml 
 attestation-server = true
-chromium-version = "70.0.3538.80"
+chromium-version = "80.0.3971.4"
 device = "crosshatch"
 email = "user@domain.com"
 encrypted-keys = "false"
 ignore-version-checks = false
 hosts-file = "https://raw.githubusercontent.com/StevenBlack/hosts/master/hosts"
-instance-regions = "us-west-2,us-west-1,us-east-1,us-east-2"
+instance-regions = "us-west-2,us-west-1,us-east-2"
 instance-type = "c5.18xlarge"
 max-price = "1.00"
 name = "<rattlesnakeos-stackname>"
@@ -166,13 +168,13 @@ Flags:
       --attestation-max-price string       max ec2 spot instance bid for attestation server. if this value is too low, you may not launch an instance. (default ".005")
       --attestation-server                 deploys and configures a personal attestation server
       --chromium-version string            specify the version of Chromium you want (e.g. 69.0.3497.100) to pin to. if not specified, the latest stable version of Chromium is used.
-  -d, --device string                      device you want to build for (e.g. marlin): to list supported devices use '-d list'
+  -d, --device string                      device you want to build for (e.g. crosshatch): to list supported devices use '-d list'
   -e, --email string                       email address you want to use for build notifications
       --encrypted-keys                     an advanced option that allows signing keys to be stored with symmetric gpg encryption and decrypted into memory during the build process. this option requires manual intervention during builds where you will be sent a notification and need to provide the key required for decryption over SSH to continue the build process. important: if you have an existing stack - please see the FAQ for how to migrate your keys
   -h, --help                               help for deploy
       --hosts-file string                  an advanced option that allows you to specify a replacement /etc/hosts file to enable global dns adblocking (e.g. https://raw.githubusercontent.com/StevenBlack/hosts/master/hosts). note: be careful with this, as you 1) won't get any sort of notification on blocking 2) if you need to unblock something you'll have to rebuild the OS
       --ignore-version-checks              ignore the versions checks for stack, AOSP, Chromium, and F-Droid and always do a build.
-      --instance-regions string            possible regions to launch spot instance. the region with cheapest spot instance price will be used. (default "us-west-2,us-west-1,us-east-1,us-east-2")
+      --instance-regions string            possible regions to launch spot instance. the region with cheapest spot instance price will be used. (default "us-west-2,us-west-1,us-east-2")
       --instance-type string               EC2 instance type (e.g. c4.4xlarge) to use for the build. (default "c5.4xlarge")
       --max-price string                   max ec2 spot instance bid. if this value is too low, you may not obtain an instance or it may terminate during a build. (default "1.00")
   -n, --name string                        name for stack. note: this must be a valid/unique S3 bucket name.
@@ -394,6 +396,7 @@ fastboot erase avb_custom_key
 ```
 
 ## Donations
+* [Github](https://github.com/sponsors/dan-v)
 * [Liberapay](https://liberapay.com/rattlesnakeos/)
 * [Bitcoin](https://www.blockchain.com/btc/address/17GHmnK3fyw9TBngvaM8Veh37UR65rmvZS)
 
