@@ -217,12 +217,14 @@ check_for_new_versions() {
     LATEST_CHROMIUM="$CHROMIUM_PINNED_VERSION"
   fi
   existing_chromium=$(aws s3 cp "s3://${AWS_RELEASE_BUCKET}/chromium/revision" - || true)
-  if [ "$existing_chromium" == "$LATEST_CHROMIUM" ]; then
+  chromium_included=$(aws s3 cp "s3://${AWS_RELEASE_BUCKET}/chromium/included" - || true)
+  if [ "$existing_chromium" == "$LATEST_CHROMIUM" ] && [ "$chromium_included" == "yes" ]; then
     echo "Chromium build ($existing_chromium) is up to date"
   else
     echo "Chromium needs to be updated to ${LATEST_CHROMIUM}"
     needs_update=true
     BUILD_REASON="$BUILD_REASON 'Chromium version $existing_chromium != $LATEST_CHROMIUM'"
+    echo "no" | aws s3 cp - "s3://${AWS_RELEASE_BUCKET}/chromium/included"
   fi
 
   # check fdroid
@@ -701,8 +703,7 @@ setup_vendor() {
 
   # get vendor files (with timeout)
   timeout 30m "${BUILD_DIR}/vendor/android-prepare-vendor/execute-all.sh" --debugfs --keep --yes --device "${DEVICE}" --buildID "${AOSP_BUILD}" --output "${BUILD_DIR}/vendor/android-prepare-vendor"
-  aws s3 cp - "s3://${AWS_RELEASE_BUCKET}/${DEVICE}-vendor" --acl public-read <<< "${AOSP_BUILD}" || true
-
+  
   # copy vendor files to build tree
   mkdir --parents "${BUILD_DIR}/vendor/google_devices" || true
   rm -rf "${BUILD_DIR}/vendor/google_devices/$DEVICE" || true
@@ -1108,6 +1109,12 @@ checkpoint_versions() {
   # checkpoint f-droid
   echo "${FDROID_PRIV_EXT_VERSION}" | aws s3 cp - "s3://${AWS_RELEASE_BUCKET}/fdroid-priv/revision"
   echo "${FDROID_CLIENT_VERSION}" | aws s3 cp - "s3://${AWS_RELEASE_BUCKET}/fdroid/revision"
+  
+  # checkpoint aosp
+  aws s3 cp - "s3://${AWS_RELEASE_BUCKET}/${DEVICE}-vendor" --acl public-read <<< "${AOSP_BUILD}" || true
+  
+  # checkpoint chromium
+  echo "yes" | aws s3 cp - "s3://${AWS_RELEASE_BUCKET}/chromium/included"
 }
 
 aws_notify_simple() {
