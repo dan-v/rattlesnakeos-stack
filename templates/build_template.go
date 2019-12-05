@@ -222,9 +222,14 @@ check_for_new_versions() {
     echo "Chromium build ($existing_chromium) is up to date"
   else
     echo "Chromium needs to be updated to ${LATEST_CHROMIUM}"
-    needs_update=true
-    BUILD_REASON="$BUILD_REASON 'Chromium version $existing_chromium != $LATEST_CHROMIUM'"
     echo "no" | aws s3 cp - "s3://${AWS_RELEASE_BUCKET}/chromium/included"
+    needs_update=true
+    if [ "$existing_chromium" == "$LATEST_CHROMIUM" ]; then
+      BUILD_REASON="$BUILD_REASON 'Chromium version $existing_chromium built but not installed'"
+    else
+      BUILD_REASON="$BUILD_REASON 'Chromium version $existing_chromium != $LATEST_CHROMIUM'"
+    fi
+    
   fi
 
   # check fdroid
