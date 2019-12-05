@@ -229,7 +229,6 @@ check_for_new_versions() {
     else
       BUILD_REASON="$BUILD_REASON 'Chromium version $existing_chromium != $LATEST_CHROMIUM'"
     fi
-    
   fi
 
   # check fdroid
