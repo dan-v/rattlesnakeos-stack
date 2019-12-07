@@ -728,6 +728,7 @@ apply_patches() {
   patch_priv_ext
   patch_launcher
   patch_broken_alarmclock
+  patch_broken_messaging
   patch_disable_apex
 }
 
@@ -750,6 +751,16 @@ patch_broken_alarmclock() {
   if ! grep -q "android.permission.FOREGROUND_SERVICE" ${BUILD_DIR}/packages/apps/DeskClock/AndroidManifest.xml; then
     sed -i '/<uses-permission android:name="android.permission.READ_EXTERNAL_STORAGE" \/>/a <uses-permission android:name="android.permission.FOREGROUND_SERVICE" \/>' ${BUILD_DIR}/packages/apps/DeskClock/AndroidManifest.xml
     sed -i 's@<uses-sdk android:minSdkVersion="19" android:targetSdkVersion="28" />@<uses-sdk android:minSdkVersion="19" android:targetSdkVersion="25" />@' ${BUILD_DIR}/packages/apps/DeskClock/AndroidManifest.xml
+  fi
+}
+
+# TODO: remove once this once fix from upstream makes it into release branch
+# https://android.googlesource.com/platform/packages/apps/Messaging/+/8e71d1b707123e1b48b5529b1661d53762922400%5E%21/
+patch_broken_messaging() {
+  log_header ${FUNCNAME}
+
+  if ! grep -q "android:targetSdkVersion=\"24\"" ${BUILD_DIR}/packages/apps/Messaging/AndroidManifest.xml; then
+    sed -i 's@<uses-sdk android:minSdkVersion="19" android:targetSdkVersion="28" />@<uses-sdk android:minSdkVersion="19" android:targetSdkVersion="24" />@' ${BUILD_DIR}/packages/apps/Messaging/AndroidManifest.xml
   fi
 }
 
