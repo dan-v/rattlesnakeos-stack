@@ -37,7 +37,7 @@ REGION_AMIS = {
 
 NAME = '<% .Name %>'
 SRC_PATH = 's3://<% .Name %>-script/build.sh'
-FLEET_ROLE = 'arn:aws:iam::{0}:role/<% .Name %>-spot-fleet-role'
+FLEET_ROLE = 'arn:aws:iam::{0}:role/aws-service-role/spotfleet.amazonaws.com/AWSServiceRoleForEC2SpotFleet'
 IAM_PROFILE = 'arn:aws:iam::{0}:instance-profile/<% .Name %>-ec2'
 SNS_ARN = 'arn:aws:sns:<% .Region %>:{}:<% .Name %>'
 INSTANCE_TYPE = '<% .InstanceType %>'
@@ -182,6 +182,8 @@ runcmd:
             return message
         else:
             print("Not including SSH key in spot request as couldn't find a key in region {} with name {}: {}".format(cheapest_region, SSH_KEY_NAME, e))
+
+    print("spot_fleet_request_config: ", spot_fleet_request_config)
 
     try:
         print("Requesting spot instance in AZ {} with current price of {}".format(cheapest_az, cheapest_price))

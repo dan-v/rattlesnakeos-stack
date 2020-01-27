@@ -8,6 +8,7 @@ import (
 	"github.com/aws/aws-sdk-go/aws"
 	"github.com/aws/aws-sdk-go/aws/awserr"
 	"github.com/aws/aws-sdk-go/aws/session"
+	"github.com/aws/aws-sdk-go/service/iam"
 	"github.com/aws/aws-sdk-go/service/s3"
 	"github.com/aws/aws-sdk-go/service/sns"
 	"github.com/dan-v/rattlesnakeos-stack/templates"
@@ -123,14 +124,33 @@ func NewAWSStack(config *AWSStackConfig) (*AWSStack, error) {
 func (s *AWSStack) Apply() error {
 	defer s.terraformClient.Cleanup()
 
-	log.Info("Creating AWS resources")
-	err := s.terraformClient.Apply()
+	sess, err := session.NewSession(aws.NewConfig().WithCredentialsChainVerboseErrors(true))
+	if err != nil {
+		return err
+	}
+
+	log.Info("Creating required service linked roles if needed")
+	_, err = iam.New(sess).CreateServiceLinkedRole(&iam.CreateServiceLinkedRoleInput{
+		AWSServiceName: aws.String("spot.amazonaws.com"),
+	})
+	if errWithCode, ok := err.(awserr.Error); ok && iam.ErrCodeInvalidInputException == errWithCode.Code() {
+		log.Debug("spot service linked role already exists")
+	}
+
+	_, err = iam.New(sess).CreateServiceLinkedRole(&iam.CreateServiceLinkedRoleInput{
+		AWSServiceName: aws.String("spotfleet.amazonaws.com"),
+	})
+	if errWithCode, ok := err.(awserr.Error); ok && iam.ErrCodeInvalidInputException == errWithCode.Code() {
+		log.Debug("spotfleet service role already exists")
+	}
+
+	log.Info("Creating/updating AWS resources")
+	err = s.terraformClient.Apply()
 	if err != nil {
 		return err
 	}
 	log.Infof("Successfully deployed/updated AWS resources for stack %v", s.Config.Name)
 
-	sess, err := session.NewSession(aws.NewConfig().WithCredentialsChainVerboseErrors(true))
 	snsClient := sns.New(sess, &aws.Config{Region: &s.Config.Region})
 	resp, err := snsClient.ListTopics(&sns.ListTopicsInput{NextToken: aws.String("")})
 	for _, topic := range resp.Topics {

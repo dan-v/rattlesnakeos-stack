@@ -26,10 +26,12 @@ case "$DEVICE" in
   crosshatch|blueline)
     DEVICE_FAMILY=crosshatch
     AVB_MODE=vbmeta_chained
+    EXTRA_OTA=(--retrofit_dynamic_partitions)
     ;;
   sargo|bonito)
     DEVICE_FAMILY=bonito
     AVB_MODE=vbmeta_chained
+    EXTRA_OTA=(--retrofit_dynamic_partitions)
     ;;
   *)
     echo "warning: unknown device $DEVICE, using Pixel 3 defaults"
@@ -74,7 +76,7 @@ ENCRYPTION_KEY=
 ENCRYPTION_PIPE="/tmp/key"
 
 # pin to specific version of android
-ANDROID_VERSION="9.0"
+ANDROID_VERSION="10.0"
 
 # build type (user or userdebug)
 BUILD_TYPE="user"
@@ -105,7 +107,7 @@ SECONDS=0
 BUILD_TARGET="release aosp_${DEVICE} ${BUILD_TYPE}"
 RELEASE_URL="https://${AWS_RELEASE_BUCKET}.s3.amazonaws.com"
 RELEASE_CHANNEL="${DEVICE}-${BUILD_CHANNEL}"
-CHROME_CHANNEL="stable"
+CHROME_CHANNEL="dev"
 BUILD_DATE=$(date +%Y.%m.%d.%H)
 BUILD_TIMESTAMP=$(date +%s)
 BUILD_DIR="$HOME/rattlesnake-os"
@@ -168,7 +170,7 @@ get_latest_versions() {
 
   # attempt to automatically pick latest build version and branch. note this is likely to break with any page redesign. should also add some validation here.
   if [ -z "$AOSP_BUILD" ]; then
-    AOSP_BUILD=$(curl --fail -s ${AOSP_URL_BUILD} | grep -A1 "${DEVICE}" | egrep '[a-zA-Z]+ [0-9]{4}\)' | grep "${ANDROID_VERSION}" | tail -1 | cut -d"(" -f2 | cut -d"," -f1)
+    AOSP_BUILD=$(curl --fail -s ${AOSP_URL_BUILD} | grep -A1 "${DEVICE}" | egrep '[a-zA-Z]+ [0-9]{4}\)' | grep -F "${ANDROID_VERSION}" | tail -1 | cut -d"(" -f2 | cut -d"," -f1)
     if [ -z "$AOSP_BUILD" ]; then
       aws_notify_simple "ERROR: Unable to get latest AOSP build information. Stopping build. This lookup is pretty fragile and can break on any page redesign of ${AOSP_URL_BUILD}"
       exit 1
@@ -215,12 +217,18 @@ check_for_new_versions() {
     LATEST_CHROMIUM="$CHROMIUM_PINNED_VERSION"
   fi
   existing_chromium=$(aws s3 cp "s3://${AWS_RELEASE_BUCKET}/chromium/revision" - || true)
-  if [ "$existing_chromium" == "$LATEST_CHROMIUM" ]; then
+  chromium_included=$(aws s3 cp "s3://${AWS_RELEASE_BUCKET}/chromium/included" - || true)
+  if [ "$existing_chromium" == "$LATEST_CHROMIUM" ] && [ "$chromium_included" == "yes" ]; then
     echo "Chromium build ($existing_chromium) is up to date"
   else
     echo "Chromium needs to be updated to ${LATEST_CHROMIUM}"
+    echo "no" | aws s3 cp - "s3://${AWS_RELEASE_BUCKET}/chromium/included"
     needs_update=true
-    BUILD_REASON="$BUILD_REASON 'Chromium version $existing_chromium != $LATEST_CHROMIUM'"
+    if [ "$existing_chromium" == "$LATEST_CHROMIUM" ]; then
+      BUILD_REASON="$BUILD_REASON 'Chromium version $existing_chromium built but not installed'"
+    else
+      BUILD_REASON="$BUILD_REASON 'Chromium version $existing_chromium != $LATEST_CHROMIUM'"
+    fi
   fi
 
   # check fdroid
@@ -282,16 +290,42 @@ full_run() {
     attestation_setup
   fi
   setup_vendor
+  build_fdroid
   apply_patches
   # only marlin and sailfish need kernel rebuilt so that verity_key is included
   if [ "${DEVICE}" == "marlin" ] || [ "${DEVICE}" == "sailfish" ]; then
     rebuild_marlin_kernel
   fi
+  add_chromium
   build_aosp
   release "${DEVICE}"
   aws_upload
   checkpoint_versions
   aws_notify "RattlesnakeOS Build SUCCESS"
+}
+
+add_chromium() {
+  log_header ${FUNCNAME}
+
+  # replace AOSP webview with latest built chromium webview
+  aws s3 cp "s3://${AWS_RELEASE_BUCKET}/chromium/SystemWebView.apk" ${BUILD_DIR}/external/chromium-webview/prebuilt/arm64/webview.apk
+
+  # add latest built chromium browser to external/chromium
+  aws s3 cp "s3://${AWS_RELEASE_BUCKET}/chromium/ChromeModernPublic.apk" ${BUILD_DIR}/external/chromium/prebuilt/arm64/
+}
+
+build_fdroid() {
+  log_header ${FUNCNAME}
+
+  # build it outside AOSP build tree or hit errors
+  git clone https://gitlab.com/fdroid/fdroidclient ${HOME}/fdroidclient
+  pushd ${HOME}/fdroidclient
+  echo "sdk.dir=${HOME}/sdk" > local.properties
+  echo "sdk.dir=${HOME}/sdk" > app/local.properties
+  git checkout $FDROID_CLIENT_VERSION
+  retry ./gradlew assembleRelease
+  cp -f app/build/outputs/apk/full/release/app-full-release-unsigned.apk ${BUILD_DIR}/packages/apps/F-Droid/F-Droid.apk
+  popd
 }
 
 attestation_setup() {
@@ -414,7 +448,7 @@ get_encryption_key() {
   error_message=""
   while [ 1 ]; do
     aws sns publish --region ${REGION} --topic-arn "$AWS_SNS_ARN" \
-      --message="$(printf "%s Need to login to the EC2 instance and provide the encryption passphrase (${wait_time} timeout before shutdown). You may need to open up SSH in the default security group, see the FAQ for details. %s\n\nssh ubuntu@%s 'printf \"Enter encryption passphrase: \" && read k && echo \"\$k\" > %s'" "$error_message" "$additional_message" "${INSTANCE_IP}" "${ENCRYPTION_PIPE}")"
+      --message="$(printf "%s Need to login to the EC2 instance and provide the encryption passphrase (${wait_time} timeout before shutdown). You may need to open up SSH in the default security group, see the FAQ for details. %s\n\nssh ubuntu@%s 'printf \"Enter encryption passphrase: \" && read -s k && echo \"\$k\" > %s'" "$error_message" "$additional_message" "${INSTANCE_IP}" "${ENCRYPTION_PIPE}")"
     error_message=""
 
     log "Waiting for encryption passphrase (with $wait_time timeout) to be provided over named pipe $ENCRYPTION_PIPE"
@@ -500,6 +534,10 @@ setup_env() {
   sudo DEBIAN_FRONTEND=noninteractive apt-get -y install repo gperf jq openjdk-8-jdk git-core gnupg flex bison build-essential zip curl zlib1g-dev gcc-multilib g++-multilib libc6-dev-i386 lib32ncurses5-dev x11proto-core-dev libx11-dev lib32z-dev ccache libgl1-mesa-dev libxml2-utils xsltproc unzip python-networkx liblz4-tool pxz
   sudo DEBIAN_FRONTEND=noninteractive apt-get -y build-dep "linux-image-$(uname --kernel-release)"
 
+  # temporary workaround as java 11 is default version and not compatible with sdkmanager
+  sudo update-java-alternatives --jre-headless --jre --set java-1.8.0-openjdk-amd64 || true
+  sudo update-java-alternatives --set java-1.8.0-openjdk-amd64 || true
+
   # setup android sdk (required for fdroid build)
   if [ ! -f "${HOME}/sdk/tools/bin/sdkmanager" ]; then
     mkdir -p ${HOME}/sdk
@@ -526,8 +564,7 @@ check_chromium() {
 
   log "Chromium latest: $LATEST_CHROMIUM"
   if [ "$LATEST_CHROMIUM" == "$current" ]; then
-    log "Chromium latest ($LATEST_CHROMIUM) matches current ($current) - just copying s3 chromium artifact"
-    aws s3 cp "s3://${AWS_RELEASE_BUCKET}/chromium/MonochromePublic.apk" ${BUILD_DIR}/external/chromium/prebuilt/arm64/
+    log "Chromium latest ($LATEST_CHROMIUM) matches current ($current)"
   else
     log "Building chromium $LATEST_CHROMIUM"
     build_chromium $LATEST_CHROMIUM
@@ -590,15 +627,14 @@ android_default_version_code = "$DEFAULT_VERSION"
 EOF
   gn gen out/Default
 
-  log "Building chromium monochrome_public target"
-  autoninja -C out/Default/ monochrome_public_apk
-
-  # copy to build tree
-  mkdir -p ${BUILD_DIR}/external/chromium/prebuilt/arm64
-  cp out/Default/apks/MonochromePublic.apk ${BUILD_DIR}/external/chromium/prebuilt/arm64/
-
+  log "Building chromium system_webview_apk target"
+  autoninja -C out/Default/ system_webview_apk
+  log "Building chromium chrome_modern_public_apk target"
+  autoninja -C out/Default/ chrome_modern_public_apk
+  
   # upload to s3 for future builds
-  aws s3 cp "${BUILD_DIR}/external/chromium/prebuilt/arm64/MonochromePublic.apk" "s3://${AWS_RELEASE_BUCKET}/chromium/MonochromePublic.apk"
+  aws s3 cp "out/Default/apks/SystemWebView.apk" "s3://${AWS_RELEASE_BUCKET}/chromium/SystemWebView.apk"
+  aws s3 cp "out/Default/apks/ChromeModernPublic.apk" "s3://${AWS_RELEASE_BUCKET}/chromium/ChromeModernPublic.apk"
   echo "${CHROMIUM_REVISION}" | aws s3 cp - "s3://${AWS_RELEASE_BUCKET}/chromium/revision"
 }
 
@@ -613,6 +649,7 @@ aosp_repo_modifications() {
   log_header ${FUNCNAME}
   cd "${BUILD_DIR}"
 
+  # TODO: remove revision=dev from platform_external_chromium in future release, didn't want to break build for anyone on beta 10.x build
   # make modifications to default AOSP
   if ! grep -q "RattlesnakeOS" .repo/manifest.xml; then
     # really ugly awk script to add additional repos to manifest
@@ -624,7 +661,6 @@ aosp_repo_modifications() {
       print "  ";
       print "  <remote name=\"github\" fetch=\"https://github.com/RattlesnakeOS/\" revision=\"" ANDROID_VERSION "\" />";
       print "  <remote name=\"fdroid\" fetch=\"https://gitlab.com/fdroid/\" />";
-      print "  <remote name=\"prepare-vendor\" fetch=\"https://github.com/RattlesnakeOS/\" revision=\"master\" />";
       <% if .CustomManifestRemotes %>
       <% range $i, $r := .CustomManifestRemotes %>
       print "  <remote name=\"<% .Name %>\" fetch=\"<% .Fetch %>\" revision=\"<% .Revision %>\" />";
@@ -638,14 +674,13 @@ aosp_repo_modifications() {
       <% if .EnableAttestation %>
       print "  <project path=\"external/Auditor\" name=\"platform_external_Auditor\" remote=\"github\" />";
       <% end %>
-      print "  <project path=\"external/chromium\" name=\"platform_external_chromium\" remote=\"github\" />";
+      print "  <project path=\"external/chromium\" name=\"platform_external_chromium\" remote=\"github\" revision=\"dev\" />";
       print "  <project path=\"packages/apps/Updater\" name=\"platform_packages_apps_Updater\" remote=\"github\" />";
-      print "  <project path=\"packages/apps/F-Droid\" name=\"fdroidclient\" remote=\"fdroid\" revision=\"refs/tags/" FDROID_CLIENT_VERSION "\" />";
+      print "  <project path=\"packages/apps/F-Droid\" name=\"platform_external_fdroid\" remote=\"github\" />";
       print "  <project path=\"packages/apps/F-DroidPrivilegedExtension\" name=\"privileged-extension\" remote=\"fdroid\" revision=\"refs/tags/" FDROID_PRIV_EXT_VERSION "\" />";
-      print "  <project path=\"vendor/android-prepare-vendor\" name=\"android-prepare-vendor\" remote=\"prepare-vendor\" />"}' .repo/manifest.xml
+      print "  <project path=\"vendor/android-prepare-vendor\" name=\"android-prepare-vendor\" remote=\"github\" />"}' .repo/manifest.xml
 
     # remove things from manifest
-    sed -i '/chromium-webview/d' .repo/manifest.xml
     sed -i '/packages\/apps\/Browser2/d' .repo/manifest.xml
     sed -i '/packages\/apps\/Calendar/d' .repo/manifest.xml
     sed -i '/packages\/apps\/QuickSearchBox/d' .repo/manifest.xml
@@ -667,10 +702,12 @@ aosp_repo_sync() {
 setup_vendor() {
   log_header ${FUNCNAME}
 
+  # new dependency to extract ota partitions
+  sudo DEBIAN_FRONTEND=noninteractive apt-get -y install python-protobuf
+
   # get vendor files (with timeout)
   timeout 30m "${BUILD_DIR}/vendor/android-prepare-vendor/execute-all.sh" --debugfs --keep --yes --device "${DEVICE}" --buildID "${AOSP_BUILD}" --output "${BUILD_DIR}/vendor/android-prepare-vendor"
-  aws s3 cp - "s3://${AWS_RELEASE_BUCKET}/${DEVICE}-vendor" --acl public-read <<< "${AOSP_BUILD}" || true
-
+  
   # copy vendor files to build tree
   mkdir --parents "${BUILD_DIR}/vendor/google_devices" || true
   rm -rf "${BUILD_DIR}/vendor/google_devices/$DEVICE" || true
@@ -690,26 +727,53 @@ apply_patches() {
   patch_aosp_removals
   patch_add_apps
   patch_base_config
+  patch_settings_app
   patch_device_config
-  patch_chromium_webview
   patch_updater
-  patch_fdroid
   patch_priv_ext
   patch_launcher
-  patch_vendor_security_level
+  patch_broken_alarmclock
+  patch_broken_messaging
+  patch_disable_apex
+}
+
+# currently don't have a need for apex updates (https://source.android.com/devices/tech/ota/apex)
+patch_disable_apex() {
+  log_header ${FUNCNAME}
+
+  # pixel 1 devices do not support apex so nothing to patch
+  # pixel 2 devices opt in here
+  sed -i 's@$(call inherit-product, $(SRC_TARGET_DIR)/product/updatable_apex.mk)@@' ${BUILD_DIR}/device/google/wahoo/device.mk
+  # all other devices use mainline and opt in here
+  sed -i 's@$(call inherit-product, $(SRC_TARGET_DIR)/product/updatable_apex.mk)@@' ${BUILD_DIR}/build/make/target/product/mainline_system.mk
+}
+
+# TODO: remove once this once fix from upstream makes it into release branch
+# https://android.googlesource.com/platform/packages/apps/DeskClock/+/e6351b3b85b2f5d53d43e4797d3346ce22a5fa6f%5E%21/
+patch_broken_alarmclock() {
+  log_header ${FUNCNAME}
+
+  if ! grep -q "android.permission.FOREGROUND_SERVICE" ${BUILD_DIR}/packages/apps/DeskClock/AndroidManifest.xml; then
+    sed -i '/<uses-permission android:name="android.permission.READ_EXTERNAL_STORAGE" \/>/a <uses-permission android:name="android.permission.FOREGROUND_SERVICE" \/>' ${BUILD_DIR}/packages/apps/DeskClock/AndroidManifest.xml
+    sed -i 's@<uses-sdk android:minSdkVersion="19" android:targetSdkVersion="28" />@<uses-sdk android:minSdkVersion="19" android:targetSdkVersion="25" />@' ${BUILD_DIR}/packages/apps/DeskClock/AndroidManifest.xml
+  fi
+}
+
+# TODO: remove once this once fix from upstream makes it into release branch
+# https://android.googlesource.com/platform/packages/apps/Messaging/+/8e71d1b707123e1b48b5529b1661d53762922400%5E%21/
+patch_broken_messaging() {
+  log_header ${FUNCNAME}
+
+  if ! grep -q "android:targetSdkVersion=\"24\"" ${BUILD_DIR}/packages/apps/Messaging/AndroidManifest.xml; then
+    sed -i 's@<uses-sdk android:minSdkVersion="19" android:targetSdkVersion="28" />@<uses-sdk android:minSdkVersion="19" android:targetSdkVersion="24" />@' ${BUILD_DIR}/packages/apps/Messaging/AndroidManifest.xml
+  fi
 }
 
 patch_aosp_removals() {
   log_header ${FUNCNAME}
 
-  # remove aosp chromium webview directory
-  rm -rf ${BUILD_DIR}/platform/external/chromium-webview
-
   # loop over all make files as these keep changing and remove components
   for mk_file in ${BUILD_DIR}/build/make/target/product/*.mk; do
-    # remove aosp webview
-    sed -i '/webview \\/d' ${mk_file}
-
     # remove Browser2
     sed -i '/Browser2/d' ${mk_file}
 
@@ -783,12 +847,11 @@ patch_base_config() {
   sed -i 's@<bool name="config_swipe_up_gesture_setting_available">false</bool>@<bool name="config_swipe_up_gesture_setting_available">true</bool>@' ${BUILD_DIR}/frameworks/base/core/res/res/values/config.xml
 }
 
-patch_vendor_security_level() {
+patch_settings_app() {
   log_header ${FUNCNAME}
 
-  f=$(echo "${AOSP_BUILD}" | awk -F"." '{print $2}')
-  VENDOR_SECURITY_PATCH_LEVEL="20${f::2}-${f:2:2}-${f:4:2}"
-  sed -i 's@2018-09-05@'${VENDOR_SECURITY_PATCH_LEVEL}'@' ${BUILD_DIR}/device/google/crosshatch/device-common.mk || true
+  # fix for cards not disappearing in settings app
+  sed -i 's@<bool name="config_use_legacy_suggestion">true</bool>@<bool name="config_use_legacy_suggestion">false</bool>@' ${BUILD_DIR}/packages/apps/Settings/res/values/config.xml
 }
 
 patch_device_config() {
@@ -805,47 +868,16 @@ patch_device_config() {
 
   sed -i 's@PRODUCT_MODEL := AOSP on crosshatch@PRODUCT_MODEL := Pixel 3 XL@' ${BUILD_DIR}/device/google/crosshatch/aosp_crosshatch.mk || true
   sed -i 's@PRODUCT_MODEL := AOSP on blueline@PRODUCT_MODEL := Pixel 3@' ${BUILD_DIR}/device/google/crosshatch/aosp_blueline.mk || true
-  
+
   sed -i 's@PRODUCT_MODEL := AOSP on bonito@PRODUCT_MODEL := Pixel 3a XL@' ${BUILD_DIR}/device/google/bonito/aosp_bonito.mk || true
   sed -i 's@PRODUCT_MODEL := AOSP on sargo@PRODUCT_MODEL := Pixel 3a@' ${BUILD_DIR}/device/google/bonito/aosp_sargo.mk || true
 }
 
-patch_chromium_webview() {
-  log_header ${FUNCNAME}
-
-  cat <<EOF > ${BUILD_DIR}/frameworks/base/core/res/res/xml/config_webview_packages.xml
-<?xml version="1.0" encoding="utf-8"?>
-<webviewproviders>
-    <webviewprovider description="Chromium" packageName="org.chromium.chrome" availableByDefault="true">
-    </webviewprovider>
-</webviewproviders>
-EOF
-}
-
-patch_fdroid() {
-  log_header ${FUNCNAME}
-
-  echo "sdk.dir=${HOME}/sdk" > ${BUILD_DIR}/packages/apps/F-Droid/local.properties
-  echo "sdk.dir=${HOME}/sdk" > ${BUILD_DIR}/packages/apps/F-Droid/app/local.properties
-  sed -i 's/gradle assembleRelease/..\/gradlew assembleRelease/' ${BUILD_DIR}/packages/apps/F-Droid/Android.mk
-  sed -i 's@fdroid_apk   := build/outputs/apk/$(fdroid_dir)-release-unsigned.apk@fdroid_apk   := build/outputs/apk/full/release/app-full-release-unsigned.apk@'  ${BUILD_DIR}/packages/apps/F-Droid/Android.mk
-
-  # sometimes gradle dependencies fail to download, so gradle build with retry before the AOSP build as workaround
-  pushd ${BUILD_DIR}/packages/apps/F-Droid
-  retry ./gradlew assembleRelease
-  popd
-}
-
 get_package_mk_file() {
-  # this is newer location in master
   mk_file=${BUILD_DIR}/build/make/target/product/handheld_system.mk
   if [ ! -f ${mk_file} ]; then
-    # this is older location
-    mk_file=${BUILD_DIR}/build/make/target/product/core.mk
-    if [ ! -f ${mk_file} ]; then
-      log "Expected handheld_system.mk or core.mk do not exist"
-      exit 1
-    fi
+    log "Expected handheld_system.mk or core.mk do not exist"
+    exit 1
   fi
   echo ${mk_file}
 }
@@ -916,19 +948,20 @@ rebuild_marlin_kernel() {
   git checkout ${kernel_commit_id}
 
   # run in another shell to avoid it mucking with environment variables for normal AOSP build
-  bash -c "\
-    set -e;
-    cd ${BUILD_DIR};
-    . build/envsetup.sh;
-    make -j$(nproc --all) dtc mkdtimg;
-    export PATH=${BUILD_DIR}/out/host/linux-x86/bin:${PATH};
-    ln --verbose --symbolic ${KEYS_DIR}/${DEVICE}/verity_user.der.x509 ${MARLIN_KERNEL_SOURCE_DIR}/verity_user.der.x509;
-    cd ${MARLIN_KERNEL_SOURCE_DIR};
-    make -j$(nproc --all) ARCH=arm64 marlin_defconfig;
-    make -j$(nproc --all) ARCH=arm64 CONFIG_COMPAT_VDSO=n CROSS_COMPILE=${BUILD_DIR}/prebuilts/gcc/linux-x86/aarch64/aarch64-linux-android-4.9/bin/aarch64-linux-android-;
-    cp -f arch/arm64/boot/Image.lz4-dtb ${BUILD_DIR}/device/google/marlin-kernel/;
-    rm -rf ${BUILD_DIR}/out/build_*;
-  "
+  (
+      set -e;
+      export PATH="${BUILD_DIR}/prebuilts/gcc/linux-x86/aarch64/aarch64-linux-android-4.9/bin:${PATH}";
+      export PATH="${BUILD_DIR}/prebuilts/gcc/linux-x86/arm/arm-linux-androideabi-4.9/bin:${PATH}";
+      export PATH="${BUILD_DIR}/prebuilts/misc/linux-x86/lz4:${PATH}";
+      export PATH="${BUILD_DIR}/prebuilts/misc/linux-x86/dtc:${PATH}";
+      export PATH="${BUILD_DIR}/prebuilts/misc/linux-x86/libufdt:${PATH}";
+      ln --verbose --symbolic ${KEYS_DIR}/${DEVICE}/verity_user.der.x509 ${MARLIN_KERNEL_SOURCE_DIR}/verity_user.der.x509;
+      cd ${MARLIN_KERNEL_SOURCE_DIR};
+      make O=out ARCH=arm64 marlin_defconfig;
+      make -j$(nproc --all) O=out ARCH=arm64 CROSS_COMPILE=aarch64-linux-android- CROSS_COMPILE_ARM32=arm-linux-androideabi-
+      cp -f out/arch/arm64/boot/Image.lz4-dtb ${BUILD_DIR}/device/google/marlin-kernel/;
+      rm -rf ${BUILD_DIR}/out/build_*;
+  )
 }
 
 build_aosp() {
@@ -986,7 +1019,7 @@ release() {
   RADIO=$(get_radio_image baseband google_devices/${DEVICE})
   PREFIX=aosp_
   BUILD=$BUILD_NUMBER
-  VERSION=$(grep -Po "export BUILD_ID=\K.+" build/core/build_id.mk | tr '[:upper:]' '[:lower:]')
+  VERSION=$(grep -Po "BUILD_ID=\K.+" build/core/build_id.mk | tr '[:upper:]' '[:lower:]')
   PRODUCT=${DEVICE}
   TARGET_FILES=$DEVICE-target_files-$BUILD.zip
 
@@ -1014,8 +1047,10 @@ release() {
       ;;
   esac
 
+  export PATH=$BUILD_DIR/prebuilts/build-tools/linux-x86/bin:$PATH
+
   log "Running sign_target_files_apks"
-  build/tools/releasetools/sign_target_files_apks -o -d "$KEY_DIR" "${AVB_SWITCHES[@]}" \
+  build/tools/releasetools/sign_target_files_apks -o -d "$KEY_DIR" -k "build/target/product/security/networkstack=${KEY_DIR}/networkstack" "${AVB_SWITCHES[@]}" \
     out/target/product/$DEVICE/obj/PACKAGING/target_files_intermediates/$PREFIX$DEVICE-target_files-$BUILD_NUMBER.zip \
     $OUT/$TARGET_FILES
 
@@ -1089,6 +1124,12 @@ checkpoint_versions() {
   # checkpoint f-droid
   echo "${FDROID_PRIV_EXT_VERSION}" | aws s3 cp - "s3://${AWS_RELEASE_BUCKET}/fdroid-priv/revision"
   echo "${FDROID_CLIENT_VERSION}" | aws s3 cp - "s3://${AWS_RELEASE_BUCKET}/fdroid/revision"
+  
+  # checkpoint aosp
+  aws s3 cp - "s3://${AWS_RELEASE_BUCKET}/${DEVICE}-vendor" --acl public-read <<< "${AOSP_BUILD}" || true
+  
+  # checkpoint chromium
+  echo "yes" | aws s3 cp - "s3://${AWS_RELEASE_BUCKET}/chromium/included"
 }
 
 aws_notify_simple() {
@@ -1144,6 +1185,24 @@ aws_import_keys() {
       aws s3 sync "s3://${AWS_KEYS_BUCKET}" "${KEYS_DIR}"
     fi
   fi
+
+  # handle migration with new networkstack key for 10.0
+  pushd "${KEYS_DIR}/${DEVICE}"
+  if [ ! -f "${KEYS_DIR}/${DEVICE}/networkstack.pk8" ]; then
+    log "Did not find networkstack key - generating one"
+    ! "${BUILD_DIR}/development/tools/make_key" "networkstack" "$CERTIFICATE_SUBJECT"
+
+    if [ "$ENCRYPTED_KEYS" = true ]; then
+      log "Encrypting and uploading new networkstack key to s3://${AWS_ENCRYPTED_KEYS_BUCKET}"
+      gpg --symmetric --batch --passphrase "$ENCRYPTION_KEY" --cipher-algo AES256 networkstack.pk8
+      gpg --symmetric --batch --passphrase "$ENCRYPTION_KEY" --cipher-algo AES256 networkstack.x509.pem
+      aws s3 sync "${KEYS_DIR}" "s3://${AWS_ENCRYPTED_KEYS_BUCKET}" --exclude "*" --include "*.gpg"
+    else
+      log "Uploading new networkstack key to s3://${AWS_KEYS_BUCKET}"
+      aws s3 sync "s3://${AWS_KEYS_BUCKET}" "${KEYS_DIR}"
+    fi
+  fi
+  popd
 }
 
 gen_keys() {
@@ -1151,7 +1210,7 @@ gen_keys() {
 
   mkdir -p "${KEYS_DIR}/${DEVICE}"
   cd "${KEYS_DIR}/${DEVICE}"
-  for key in {releasekey,platform,shared,media,verity} ; do
+  for key in {releasekey,platform,shared,media,networkstack,verity} ; do
     # make_key exits with unsuccessful code 1 instead of 0, need ! to negate
     ! "${BUILD_DIR}/development/tools/make_key" "$key" "$CERTIFICATE_SUBJECT"
   done
