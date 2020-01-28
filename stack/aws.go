@@ -74,6 +74,7 @@ type AWSStackConfig struct {
 	EnableAttestation       bool
 	AttestationMaxSpotPrice string
 	AttestationInstanceType string
+	IncludeChromium         bool
 }
 
 type AWSStack struct {

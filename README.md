@@ -145,6 +145,7 @@ region = "us-west-2"
 schedule = "rate(2 days)"
 skip-price = "1.00"
 ssh-key = "rattlesnakeos"
+include-chromium = true
 
 [[custom-patches]]
   patches = [
@@ -174,6 +175,7 @@ Flags:
   -h, --help                               help for deploy
       --hosts-file string                  an advanced option that allows you to specify a replacement /etc/hosts file to enable global dns adblocking (e.g. https://raw.githubusercontent.com/StevenBlack/hosts/master/hosts). note: be careful with this, as you 1) won't get any sort of notification on blocking 2) if you need to unblock something you'll have to rebuild the OS
       --ignore-version-checks              ignore the versions checks for stack, AOSP, Chromium, and F-Droid and always do a build.
+      --include-chromium                   should we build and include chromium? if false AOSP webview and Browser will be used
       --instance-regions string            possible regions to launch spot instance. the region with cheapest spot instance price will be used. (default "us-west-2,us-west-1,us-east-2")
       --instance-type string               EC2 instance type (e.g. c4.4xlarge) to use for the build. (default "c5.4xlarge")
       --max-price string                   max ec2 spot instance bid. if this value is too low, you may not obtain an instance or it may terminate during a build. (default "1.00")
@@ -338,6 +340,8 @@ It's also possible to add remotes and projects to the AOSP build manifest file. 
   modules = [ "Backup" ]
 ```
 
+#### Can I opt-out of using chromium?
+You may wish to exclude chromium from your build because of the privacy implications of chromium [contacting google services](https://github.com/prism-break/prism-break/issues/169). Passing the cli parameter `--include-chromium` as `false` or setting `include-chromium` to `false` in your config will cause the build to avoid compiling or including chromium webview or browser. Instead, AOSP webview and browser will be used.
 #### Can I change the boot animation?
 It is possible to change the boot animation using patches, there is an example repo [here](https://github.com/RattlesnakeOS/example_patch_shellscript).
 #### Can I add microG to the build?

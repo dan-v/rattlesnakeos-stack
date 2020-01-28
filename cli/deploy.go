@@ -21,7 +21,7 @@ const minimumChromiumVersion = 80
 var name, region, email, device, sshKey, maxPrice, skipPrice, schedule string
 var instanceType, instanceRegions, hostsFile, chromiumVersion string
 var attestationMaxPrice, attestationInstanceType string
-var preventShutdown, ignoreVersionChecks, encryptedKeys, saveConfig, attestationServer bool
+var preventShutdown, ignoreVersionChecks, encryptedKeys, saveConfig, attestationServer, includeChromium bool
 var patches = &stack.CustomPatches{}
 var scripts = &stack.CustomScripts{}
 var prebuilts = &stack.CustomPrebuilts{}
@@ -125,6 +125,9 @@ func init() {
 	flags.StringVar(&attestationInstanceType, "attestation-instance-type", "t3.nano",
 		"instance type to use for attestation server.")
 	viper.BindPFlag("attestation-instance-type", flags.Lookup("attestation-instance-type"))
+
+	flags.BoolVar(&includeChromium, "include-chromium", true, "should we build and include chromium")
+	viper.BindPFlag("include-chromium", flags.Lookup("include-chromium"))
 }
 
 var deployCmd = &cobra.Command{
@@ -253,6 +256,7 @@ var deployCmd = &cobra.Command{
 			EnableAttestation:       viper.GetBool("attestation-server"),
 			AttestationInstanceType: viper.GetString("attestation-instance-type"),
 			AttestationMaxSpotPrice: viper.GetString("attestation-max-price"),
+			IncludeChromium:         viper.GetBool("include-chromium"),
 		})
 		if err != nil {
 			log.Fatal(err)

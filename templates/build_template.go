@@ -133,6 +133,13 @@ LATEST_STACK_VERSION=
 LATEST_CHROMIUM=
 FDROID_CLIENT_VERSION=
 FDROID_PRIV_EXT_VERSION=
+
+INCLUDE_CHROMIUM="<% .IncludeChromium %>"
+
+include_chromium() {
+  return $INCLUDE_CHROMIUM == "true"
+}
+
 get_latest_versions() {
   log_header ${FUNCNAME}
 
@@ -149,11 +156,14 @@ get_latest_versions() {
     STACK_UPDATE_MESSAGE="WARNING: you should upgrade to the latest version: ${LATEST_STACK_VERSION}"
   fi
 
-  # check for latest stable chromium version
-  LATEST_CHROMIUM=$(curl --fail -s "$CHROME_URL_LATEST" | jq -r '.[] | select(.os == "android") | .versions[] | select(.channel == "'$CHROME_CHANNEL'") | .current_version')
-  if [ -z "$LATEST_CHROMIUM" ]; then
-    aws_notify_simple "ERROR: Unable to get latest Chromium version details. Stopping build."
-    exit 1
+  if [ include_chromium ]; then
+    # check for latest stable chromium version
+    LATEST_CHROMIUM=$(curl --fail -s "$CHROME_URL_LATEST" | jq -r '.[] | select(.os == "android") | .versions[] | select(.channel == "'$CHROME_CHANNEL'") | .current_version')
+    
+    if [ -z "$LATEST_CHROMIUM" ]; then
+      aws_notify_simple "ERROR: Unable to get latest Chromium version details. Stopping build."
+      exit 1
+    fi
   fi
 
   # fdroid - get latest non alpha tags from gitlab (sorted)
@@ -211,23 +221,25 @@ check_for_new_versions() {
     BUILD_REASON="$BUILD_REASON 'AOSP build $existing_aosp_build != $AOSP_BUILD'"
   fi
 
-  # check chromium
-  if [ ! -z "$CHROMIUM_PINNED_VERSION" ]; then
-    log "Setting LATEST_CHROMIUM to pinned version $CHROMIUM_PINNED_VERSION"
-    LATEST_CHROMIUM="$CHROMIUM_PINNED_VERSION"
-  fi
-  existing_chromium=$(aws s3 cp "s3://${AWS_RELEASE_BUCKET}/chromium/revision" - || true)
-  chromium_included=$(aws s3 cp "s3://${AWS_RELEASE_BUCKET}/chromium/included" - || true)
-  if [ "$existing_chromium" == "$LATEST_CHROMIUM" ] && [ "$chromium_included" == "yes" ]; then
-    echo "Chromium build ($existing_chromium) is up to date"
-  else
-    echo "Chromium needs to be updated to ${LATEST_CHROMIUM}"
-    echo "no" | aws s3 cp - "s3://${AWS_RELEASE_BUCKET}/chromium/included"
-    needs_update=true
-    if [ "$existing_chromium" == "$LATEST_CHROMIUM" ]; then
-      BUILD_REASON="$BUILD_REASON 'Chromium version $existing_chromium built but not installed'"
+  if [ include_chromium ]; then
+    # check chromium
+    if [ ! -z "$CHROMIUM_PINNED_VERSION" ]; then
+      log "Setting LATEST_CHROMIUM to pinned version $CHROMIUM_PINNED_VERSION"
+      LATEST_CHROMIUM="$CHROMIUM_PINNED_VERSION"
+    fi
+    existing_chromium=$(aws s3 cp "s3://${AWS_RELEASE_BUCKET}/chromium/revision" - || true)
+    chromium_included=$(aws s3 cp "s3://${AWS_RELEASE_BUCKET}/chromium/included" - || true)
+    if [ "$existing_chromium" == "$LATEST_CHROMIUM" ] && [ "$chromium_included" == "yes" ]; then
+      echo "Chromium build ($existing_chromium) is up to date"
     else
-      BUILD_REASON="$BUILD_REASON 'Chromium version $existing_chromium != $LATEST_CHROMIUM'"
+      echo "Chromium needs to be updated to ${LATEST_CHROMIUM}"
+      echo "no" | aws s3 cp - "s3://${AWS_RELEASE_BUCKET}/chromium/included"
+      needs_update=true
+      if [ "$existing_chromium" == "$LATEST_CHROMIUM" ]; then
+        BUILD_REASON="$BUILD_REASON 'Chromium version $existing_chromium built but not installed'"
+      else
+        BUILD_REASON="$BUILD_REASON 'Chromium version $existing_chromium != $LATEST_CHROMIUM'"
+      fi
     fi
   fi
 
@@ -281,7 +293,11 @@ full_run() {
   initial_key_setup
   aws_notify "RattlesnakeOS Build STARTED"
   setup_env
-  check_chromium
+  
+  if [ include_chromium ]; then
+    check_chromium
+  fi
+
   aosp_repo_init
   aosp_repo_modifications
   aosp_repo_sync
@@ -296,7 +312,11 @@ full_run() {
   if [ "${DEVICE}" == "marlin" ] || [ "${DEVICE}" == "sailfish" ]; then
     rebuild_marlin_kernel
   fi
-  add_chromium
+  
+  if [ include_chromium ]; then
+    add_chromium
+  fi
+  
   build_aosp
   release "${DEVICE}"
   aws_upload
@@ -674,14 +694,19 @@ aosp_repo_modifications() {
       <% if .EnableAttestation %>
       print "  <project path=\"external/Auditor\" name=\"platform_external_Auditor\" remote=\"github\" />";
       <% end %>
+      <% if .IncludeChromium %>
       print "  <project path=\"external/chromium\" name=\"platform_external_chromium\" remote=\"github\" revision=\"dev\" />";
+      <% end %>
       print "  <project path=\"packages/apps/Updater\" name=\"platform_packages_apps_Updater\" remote=\"github\" />";
       print "  <project path=\"packages/apps/F-Droid\" name=\"platform_external_fdroid\" remote=\"github\" />";
       print "  <project path=\"packages/apps/F-DroidPrivilegedExtension\" name=\"privileged-extension\" remote=\"fdroid\" revision=\"refs/tags/" FDROID_PRIV_EXT_VERSION "\" />";
       print "  <project path=\"vendor/android-prepare-vendor\" name=\"android-prepare-vendor\" remote=\"github\" />"}' .repo/manifest.xml
 
     # remove things from manifest
-    sed -i '/packages\/apps\/Browser2/d' .repo/manifest.xml
+    if [ include_chromium ]; then
+      sed -i '/packages\/apps\/Browser2/d' .repo/manifest.xml
+    fi
+ 
     sed -i '/packages\/apps\/Calendar/d' .repo/manifest.xml
     sed -i '/packages\/apps\/QuickSearchBox/d' .repo/manifest.xml
   else
@@ -774,8 +799,10 @@ patch_aosp_removals() {
 
   # loop over all make files as these keep changing and remove components
   for mk_file in ${BUILD_DIR}/build/make/target/product/*.mk; do
-    # remove Browser2
-    sed -i '/Browser2/d' ${mk_file}
+    if [ include_chromium ]; then
+      # remove Browser2
+      sed -i '/Browser2/d' ${mk_file}
+    fi
 
     # remove Calendar
     sed -i '/Calendar \\/d' ${mk_file}
@@ -889,7 +916,11 @@ patch_add_apps() {
   sed -i "\$aPRODUCT_PACKAGES += Updater" ${mk_file}
   sed -i "\$aPRODUCT_PACKAGES += F-DroidPrivilegedExtension" ${mk_file}
   sed -i "\$aPRODUCT_PACKAGES += F-Droid" ${mk_file}
-  sed -i "\$aPRODUCT_PACKAGES += chromium" ${mk_file}
+  
+  if [ include_chromium ]; then
+    sed -i "\$aPRODUCT_PACKAGES += chromium" ${mk_file}
+  fi
+  
   if [ "${ENABLE_ATTESTATION}" == "true" ]; then
     sed -i "\$aPRODUCT_PACKAGES += Auditor" ${mk_file}
   fi
