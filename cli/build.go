@@ -166,7 +166,7 @@ var buildListCmd = &cobra.Command{
 			log.Fatalf("Failed to setup AWS session: %v", err)
 		}
 
-		log.Infof("Looking for builds for stack %v in the following regions: %v", name, instanceRegions)
+		log.Infof("Looking for builds for stack %v in the following regions: %v", name, listRegions)
 		runningInstances := 0
 		for _, region := range strings.Split(listRegions, ",") {
 			ec2Client := ec2.New(sess, &aws.Config{Region: &region})
