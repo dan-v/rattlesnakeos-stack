@@ -846,6 +846,9 @@ patch_base_config() {
 
   # enable swipe up gesture functionality as option
   sed -i 's@<bool name="config_swipe_up_gesture_setting_available">false</bool>@<bool name="config_swipe_up_gesture_setting_available">true</bool>@' ${BUILD_DIR}/frameworks/base/core/res/res/values/config.xml
+
+  # enable doze and app standby
+  sed -i 's@<bool name="config_enableAutoPowerModes">false</bool>@<bool name="config_enableAutoPowerModes">true</bool>@' ${BUILD_DIR}/frameworks/base/core/res/res/values/config.xml
 }
 
 patch_settings_app() {
