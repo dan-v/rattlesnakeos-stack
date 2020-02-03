@@ -628,10 +628,11 @@ android_default_version_code = "$DEFAULT_VERSION"
 EOF
   gn gen out/Default
 
-  log "Building chromium system_webview_apk target"
-  autoninja -C out/Default/ system_webview_apk
   log "Building chromium chrome_modern_public_apk target"
   autoninja -C out/Default/ chrome_modern_public_apk
+
+  log "Building chromium system_webview_apk target"
+  autoninja -C out/Default/ system_webview_apk
   
   # upload to s3 for future builds
   aws s3 cp "out/Default/apks/SystemWebView.apk" "s3://${AWS_RELEASE_BUCKET}/chromium/SystemWebView.apk"
