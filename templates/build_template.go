@@ -1199,7 +1199,7 @@ aws_import_keys() {
       aws s3 sync "${KEYS_DIR}" "s3://${AWS_ENCRYPTED_KEYS_BUCKET}" --exclude "*" --include "*.gpg"
     else
       log "Uploading new networkstack key to s3://${AWS_KEYS_BUCKET}"
-      aws s3 sync "s3://${AWS_KEYS_BUCKET}" "${KEYS_DIR}"
+      aws s3 sync "${KEYS_DIR}" "s3://${AWS_KEYS_BUCKET}"
     fi
   fi
   popd
