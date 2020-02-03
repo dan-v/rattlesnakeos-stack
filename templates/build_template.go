@@ -157,12 +157,13 @@ get_latest_versions() {
   fi
 
   # fdroid - get latest non alpha tags from gitlab (sorted)
-  FDROID_CLIENT_VERSION=$(curl --fail -s "$FDROID_CLIENT_URL_LATEST" | jq -r 'sort_by(.name) | reverse | [.[] | select(.name | test("^[0-9]+\\.[0-9]+")) | select(.name | contains("alpha") | not) | select(.name | contains("ota") | not)][0] | .name')
+  # TODO: exclude alpha once 1.8 stable is released
+  FDROID_CLIENT_VERSION=$(curl --fail -s "$FDROID_CLIENT_URL_LATEST" | jq -r '[.[] | select(.name | test("^[0-9]+\\.[0-9]+")) | select(.name | contains("ota") | not)][] | .name' | sort --version-sort -r | head -1)
   if [ -z "$FDROID_CLIENT_VERSION" ]; then
     aws_notify_simple "ERROR: Unable to get latest F-Droid version details. Stopping build."
     exit 1
   fi
-  FDROID_PRIV_EXT_VERSION=$(curl --fail -s "$FDROID_PRIV_EXT_URL_LATEST" | jq -r 'sort_by(.name) | reverse | [.[] | select(.name | test("^[0-9]+\\.[0-9]+")) | select(.name | contains("alpha") | not) | select(.name | contains("ota") | not)][0] | .name')
+  FDROID_PRIV_EXT_VERSION=$(curl --fail -s "$FDROID_PRIV_EXT_URL_LATEST" | jq -r '[.[] | select(.name | test("^[0-9]+\\.[0-9]+")) | select(.name | contains("alpha") | not) | select(.name | contains("ota") | not)][] | .name' | sort --version-sort -r | head -1)
   if [ -z "$FDROID_PRIV_EXT_VERSION" ]; then
     aws_notify_simple "ERROR: Unable to get latest F-Droid privilege extension version details. Stopping build."
     exit 1
