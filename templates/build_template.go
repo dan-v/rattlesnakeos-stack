@@ -651,7 +651,6 @@ aosp_repo_modifications() {
   log_header ${FUNCNAME}
   cd "${BUILD_DIR}"
 
-  # TODO: remove revision=dev from platform_external_chromium in future release, didn't want to break build for anyone on beta 10.x build
   # make modifications to default AOSP
   if ! grep -q "RattlesnakeOS" .repo/manifest.xml; then
     # really ugly awk script to add additional repos to manifest
@@ -676,7 +675,7 @@ aosp_repo_modifications() {
       <% if .EnableAttestation %>
       print "  <project path=\"external/Auditor\" name=\"platform_external_Auditor\" remote=\"github\" />";
       <% end %>
-      print "  <project path=\"external/chromium\" name=\"platform_external_chromium\" remote=\"github\" revision=\"dev\" />";
+      print "  <project path=\"external/chromium\" name=\"platform_external_chromium\" remote=\"github\" />";
       print "  <project path=\"packages/apps/Updater\" name=\"platform_packages_apps_Updater\" remote=\"github\" />";
       print "  <project path=\"packages/apps/F-Droid\" name=\"platform_external_fdroid\" remote=\"github\" />";
       print "  <project path=\"packages/apps/F-DroidPrivilegedExtension\" name=\"privileged-extension\" remote=\"fdroid\" revision=\"refs/tags/" FDROID_PRIV_EXT_VERSION "\" />";
