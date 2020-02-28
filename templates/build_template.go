@@ -651,43 +651,40 @@ aosp_repo_modifications() {
   log_header ${FUNCNAME}
   cd "${BUILD_DIR}"
 
-  # make modifications to default AOSP
-  if ! grep -q "RattlesnakeOS" .repo/manifest.xml; then
-    # really ugly awk script to add additional repos to manifest
-    awk -i inplace \
-      -v ANDROID_VERSION="$ANDROID_VERSION" \
-      -v FDROID_CLIENT_VERSION="$FDROID_CLIENT_VERSION" \
-      -v FDROID_PRIV_EXT_VERSION="$FDROID_PRIV_EXT_VERSION" \
-      '1;/<repo-hooks in-project=/{
-      print "  ";
-      print "  <remote name=\"github\" fetch=\"https://github.com/RattlesnakeOS/\" revision=\"" ANDROID_VERSION "\" />";
-      print "  <remote name=\"fdroid\" fetch=\"https://gitlab.com/fdroid/\" />";
-      <% if .CustomManifestRemotes %>
-      <% range $i, $r := .CustomManifestRemotes %>
-      print "  <remote name=\"<% .Name %>\" fetch=\"<% .Fetch %>\" revision=\"<% .Revision %>\" />";
-      <% end %>
-      <% end %>
-      print "  ";
-      <% if .CustomManifestProjects %><% range $i, $r := .CustomManifestProjects %>
-      print "  <project path=\"<% .Path %>\" name=\"<% .Name %>\" remote=\"<% .Remote %>\" />";
-      <% end %>
-      <% end %>
-      <% if .EnableAttestation %>
-      print "  <project path=\"external/Auditor\" name=\"platform_external_Auditor\" remote=\"github\" />";
-      <% end %>
-      print "  <project path=\"external/chromium\" name=\"platform_external_chromium\" remote=\"github\" />";
-      print "  <project path=\"packages/apps/Updater\" name=\"platform_packages_apps_Updater\" remote=\"github\" />";
-      print "  <project path=\"packages/apps/F-Droid\" name=\"platform_external_fdroid\" remote=\"github\" />";
-      print "  <project path=\"packages/apps/F-DroidPrivilegedExtension\" name=\"privileged-extension\" remote=\"fdroid\" revision=\"refs/tags/" FDROID_PRIV_EXT_VERSION "\" />";
-      print "  <project path=\"vendor/android-prepare-vendor\" name=\"android-prepare-vendor\" remote=\"github\" />"}' .repo/manifest.xml
+  mkdir -p ${BUILD_DIR}/.repo/local_manifests
 
-    # remove things from manifest
-    sed -i '/packages\/apps\/Browser2/d' .repo/manifest.xml
-    sed -i '/packages\/apps\/Calendar/d' .repo/manifest.xml
-    sed -i '/packages\/apps\/QuickSearchBox/d' .repo/manifest.xml
-  else
-    log "Skipping modification of .repo/manifest.xml as they have already been made"
-  fi
+  cat <<EOF > ${BUILD_DIR}/.repo/local_manifests/rattlesnakeos.xml
+<?xml version="1.0" encoding="UTF-8"?>
+<manifest>
+  <remote name="github" fetch="https://github.com/RattlesnakeOS/" revision="${ANDROID_VERSION}" />
+  <remote name="fdroid" fetch="https://gitlab.com/fdroid/" />
+
+  <project path="external/chromium" name="platform_external_chromium" remote="github" />
+  <project path="packages/apps/Updater" name="platform_packages_apps_Updater" remote="github" />
+  <project path="packages/apps/F-Droid" name="platform_external_fdroid" remote="github" />
+  <project path="packages/apps/F-DroidPrivilegedExtension" name="privileged-extension" remote="fdroid" revision="refs/tags/${FDROID_PRIV_EXT_VERSION}" />
+  <project path="vendor/android-prepare-vendor" name="android-prepare-vendor" remote="github" />
+
+  <remove-project name="platform/packages/apps/Browser2" />
+  <remove-project name="platform/packages/apps/Calendar" />
+  <remove-project name="platform/packages/apps/QuickSearchBox" />
+
+  <% if .CustomManifestRemotes %>
+  <% range $i, $r := .CustomManifestRemotes %>
+  <remote name="<% .Name %>" fetch="<% .Fetch %>" revision="<% .Revision %>" />
+  <% end %>
+  <% end %>
+  <% if .CustomManifestProjects %><% range $i, $r := .CustomManifestProjects %>
+  <project path="<% .Path %>" name="<% .Name %>" remote="<% .Remote %>" />
+  <% end %>
+  <% end %>
+  <% if .EnableAttestation %>
+  <project path="external/Auditor" name="platform_external_Auditor" remote="github" />
+  <% end %>
+
+</manifest>
+EOF
+
 }
 
 aosp_repo_sync() {
