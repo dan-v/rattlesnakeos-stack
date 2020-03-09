@@ -713,12 +713,6 @@ aosp_repo_modifications() {
 
   mkdir -p ${BUILD_DIR}/.repo/local_manifests
 
-  # TODO: temporary fix for missing apifinder until upstream issue is resolved: https://issuetracker.google.com/issues/150626837
-  temporary_apifinder_fix=""
-  if ! grep -q "platform/tools/apifinder" ${BUILD_DIR}/.repo/manifests/default.xml; then
-    temporary_apifinder_fix='<project path="tools/apifinder" name="platform/tools/apifinder" revision="refs/tags/android-mainline-10.0.0_r9" />'
-  fi
-
   cat <<EOF > ${BUILD_DIR}/.repo/local_manifests/rattlesnakeos.xml
 <?xml version="1.0" encoding="UTF-8"?>
 <manifest>
@@ -730,8 +724,6 @@ aosp_repo_modifications() {
   <project path="packages/apps/F-Droid" name="platform_external_fdroid" remote="github" />
   <project path="packages/apps/F-DroidPrivilegedExtension" name="privileged-extension" remote="fdroid" revision="refs/tags/${FDROID_PRIV_EXT_VERSION}" />
   <project path="vendor/android-prepare-vendor" name="android-prepare-vendor" remote="github" />
-
-  $temporary_apifinder_fix
 
   <remove-project name="platform/packages/apps/Browser2" />
   <remove-project name="platform/packages/apps/Calendar" />
