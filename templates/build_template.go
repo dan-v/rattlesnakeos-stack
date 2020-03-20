@@ -50,6 +50,7 @@ fi
 # allow build and branch to be specified
 AOSP_BUILD=$3
 AOSP_BRANCH=$4
+AOSP_VENDOR_BUILD=
 
 # set region
 REGION=<% .Region %>
@@ -219,28 +220,35 @@ get_latest_versions() {
           factory_builds="${factory_builds_strict}"
       fi
   fi
-  AOSP_BUILD=$(echo "$factory_builds" | cut -d"(" -f2 | cut -d"," -f1 || true)
-  if [ -z "$AOSP_BUILD" ]; then
+
+  AOSP_VENDOR_BUILD=$(echo "$factory_builds" | cut -d"(" -f2 | cut -d"," -f1 || true)
+  if [ -z "$AOSP_VENDOR_BUILD" ]; then
       echo "Unable to determine factory build number when parsing factory_builds='${factory_builds}'"
       aws_notify_simple "ERROR: Unable to get latest AOSP build (factory build) information. Stopping build."
       exit 1
   fi
+  if [ -z "$AOSP_BUILD" ]; then
+      AOSP_BUILD=${AOSP_VENDOR_BUILD}
+  fi
+  echo "AOSP_VENDOR_BUILD=${AOSP_VENDOR_BUILD}"
   echo "AOSP_BUILD=${AOSP_BUILD}"
 
-  AOSP_BRANCH=""
-  echo "Searching through latest AOSP tags to find tag that corresponds with factory build ${AOSP_BRANCH}"
-  for tag in $(git ls-remote --tags "${AOSP_URL_PLATFORM_BUILD}" | grep "android-${ANDROID_VERSION}" | grep -v '\^{}' | awk -F"/" '{print $3}' | sort -V | tac || true); do
-      echo "Searching tag ${tag} for build_id=${AOSP_BUILD}"
-      build_id=$(curl -s "${AOSP_URL_PLATFORM_BUILD}/+/refs/tags/${tag}/core/build_id.mk?format=TEXT" | base64 --decode | awk -F= '/BUILD_ID=/{print $2}' || true)
-      if [ "${AOSP_BUILD}" = "${build_id}" ]; then
-          AOSP_BRANCH="${tag}"
-          break
-      fi
-      echo "Skipping tag ${tag} as build_id=${build_id}"
-  done
   if [ -z "$AOSP_BRANCH" ]; then
-    aws_notify_simple "ERROR: Unable to get latest AOSP branch information. Stopping build."
-    exit 1
+    AOSP_BRANCH=""
+    echo "Searching through latest AOSP tags to find tag that corresponds with factory build ${AOSP_BRANCH}"
+    for tag in $(git ls-remote --tags "${AOSP_URL_PLATFORM_BUILD}" | grep "android-${ANDROID_VERSION}" | grep -v '\^{}' | awk -F"/" '{print $3}' | sort -V | tac || true); do
+        echo "Searching tag ${tag} for build_id=${AOSP_BUILD}"
+        build_id=$(curl -s "${AOSP_URL_PLATFORM_BUILD}/+/refs/tags/${tag}/core/build_id.mk?format=TEXT" | base64 --decode | awk -F= '/BUILD_ID=/{print $2}' || true)
+        if [ "${AOSP_BUILD}" = "${build_id}" ]; then
+            AOSP_BRANCH="${tag}"
+            break
+        fi
+        echo "Skipping tag ${tag} as build_id=${build_id}"
+    done
+    if [ -z "$AOSP_BRANCH" ]; then
+      aws_notify_simple "ERROR: Unable to get latest AOSP branch information. Stopping build."
+      exit 1
+    fi
   fi
   echo "AOSP_BRANCH=${AOSP_BRANCH}"
 
@@ -264,12 +272,12 @@ check_for_new_versions() {
 
   # check aosp
   existing_aosp_build=$(aws s3 cp "s3://${AWS_RELEASE_BUCKET}/${DEVICE}-vendor" - || true)
-  if [ "$existing_aosp_build" == "$AOSP_BUILD" ]; then
+  if [ "$existing_aosp_build" == "$AOSP_VENDOR_BUILD" ]; then
     echo "AOSP build ($existing_aosp_build) is up to date"
   else
-    echo "AOSP needs to be updated to ${AOSP_BUILD}"
+    echo "AOSP needs to be updated to ${AOSP_VENDOR_BUILD}"
     needs_update=true
-    BUILD_REASON="$BUILD_REASON 'AOSP build $existing_aosp_build != $AOSP_BUILD'"
+    BUILD_REASON="$BUILD_REASON 'AOSP build $existing_aosp_build != $AOSP_VENDOR_BUILD'"
   fi
 
   # check chromium
@@ -764,17 +772,17 @@ setup_vendor() {
   sudo DEBIAN_FRONTEND=noninteractive apt-get -y install python-protobuf
 
   # get vendor files (with timeout)
-  timeout 30m "${BUILD_DIR}/vendor/android-prepare-vendor/execute-all.sh" --debugfs --keep --yes --device "${DEVICE}" --buildID "${AOSP_BUILD}" --output "${BUILD_DIR}/vendor/android-prepare-vendor"
+  timeout 30m "${BUILD_DIR}/vendor/android-prepare-vendor/execute-all.sh" --debugfs --keep --yes --device "${DEVICE}" --buildID "${AOSP_VENDOR_BUILD}" --output "${BUILD_DIR}/vendor/android-prepare-vendor"
   
   # copy vendor files to build tree
   mkdir --parents "${BUILD_DIR}/vendor/google_devices" || true
   rm -rf "${BUILD_DIR}/vendor/google_devices/$DEVICE" || true
-  mv "${BUILD_DIR}/vendor/android-prepare-vendor/${DEVICE}/$(tr '[:upper:]' '[:lower:]' <<< "${AOSP_BUILD}")/vendor/google_devices/${DEVICE}" "${BUILD_DIR}/vendor/google_devices"
+  mv "${BUILD_DIR}/vendor/android-prepare-vendor/${DEVICE}/$(tr '[:upper:]' '[:lower:]' <<< "${AOSP_VENDOR_BUILD}")/vendor/google_devices/${DEVICE}" "${BUILD_DIR}/vendor/google_devices"
 
   # smaller devices need big brother vendor files
   if [ "$DEVICE" != "$DEVICE_FAMILY" ]; then
     rm -rf "${BUILD_DIR}/vendor/google_devices/$DEVICE_FAMILY" || true
-    mv "${BUILD_DIR}/vendor/android-prepare-vendor/$DEVICE/$(tr '[:upper:]' '[:lower:]' <<< "${AOSP_BUILD}")/vendor/google_devices/$DEVICE_FAMILY" "${BUILD_DIR}/vendor/google_devices"
+    mv "${BUILD_DIR}/vendor/android-prepare-vendor/$DEVICE/$(tr '[:upper:]' '[:lower:]' <<< "${AOSP_VENDOR_BUILD}")/vendor/google_devices/$DEVICE_FAMILY" "${BUILD_DIR}/vendor/google_devices"
   fi
 }
 
@@ -1030,6 +1038,12 @@ build_aosp() {
 
   cd "$BUILD_DIR"
 
+  if [ "${AOSP_BUILD}" != "${AOSP_VENDOR_BUILD}" ]; then
+    log "WARNING: Requested AOSP build does not match upstream vendor files. These images may not be functional."
+    log "Patching build_id to match ${AOSP_BUILD}"
+    echo "${AOSP_BUILD}" > vendor/google_devices/${DEVICE}/build_id.txt
+  fi
+
   ############################
   # from original setup.sh script
   ############################
@@ -1187,7 +1201,7 @@ checkpoint_versions() {
   echo "${FDROID_CLIENT_VERSION}" | aws s3 cp - "s3://${AWS_RELEASE_BUCKET}/fdroid/revision"
   
   # checkpoint aosp
-  aws s3 cp - "s3://${AWS_RELEASE_BUCKET}/${DEVICE}-vendor" --acl public-read <<< "${AOSP_BUILD}" || true
+  aws s3 cp - "s3://${AWS_RELEASE_BUCKET}/${DEVICE}-vendor" --acl public-read <<< "${AOSP_VENDOR_BUILD}" || true
   
   # checkpoint chromium
   echo "yes" | aws s3 cp - "s3://${AWS_RELEASE_BUCKET}/chromium/included"
@@ -1208,8 +1222,8 @@ aws_notify() {
   fi
   ELAPSED="$(($SECONDS / 3600))hrs $((($SECONDS / 60) % 60))min $(($SECONDS % 60))sec"
   aws sns publish --region ${REGION} --topic-arn "$AWS_SNS_ARN" \
-    --message="$(printf "$1\n  Device: %s\n  Stack Name: %s\n  Stack Version: %s %s\n  Stack Region: %s\n  Release Channel: %s\n  Instance Type: %s\n  Instance Region: %s\n  Instance IP: %s\n  Build Date: %s\n  Elapsed Time: %s\n  AOSP Build: %s\n  AOSP Branch: %s\n  Chromium Version: %s\n  F-Droid Version: %s\n  F-Droid Priv Extension Version: %s\n  Build Reason: %s\n%s" \
-      "${DEVICE}" "${STACK_NAME}" "${STACK_VERSION}" "${STACK_UPDATE_MESSAGE}" "${REGION}" "${RELEASE_CHANNEL}" "${INSTANCE_TYPE}" "${INSTANCE_REGION}" "${INSTANCE_IP}" "${BUILD_DATE}" "${ELAPSED}" "${AOSP_BUILD}" "${AOSP_BRANCH}" "${LATEST_CHROMIUM}" "${FDROID_CLIENT_VERSION}" "${FDROID_PRIV_EXT_VERSION}" "${BUILD_REASON}" "${LOGOUTPUT}")" || true
+    --message="$(printf "$1\n  Device: %s\n  Stack Name: %s\n  Stack Version: %s %s\n  Stack Region: %s\n  Release Channel: %s\n  Instance Type: %s\n  Instance Region: %s\n  Instance IP: %s\n  Build Date: %s\n  Elapsed Time: %s\n  AOSP Build: %s\n  AOSP Vendor Build: %s\n  AOSP Branch: %s\n  Chromium Version: %s\n  F-Droid Version: %s\n  F-Droid Priv Extension Version: %s\n  Build Reason: %s\n%s" \
+      "${DEVICE}" "${STACK_NAME}" "${STACK_VERSION}" "${STACK_UPDATE_MESSAGE}" "${REGION}" "${RELEASE_CHANNEL}" "${INSTANCE_TYPE}" "${INSTANCE_REGION}" "${INSTANCE_IP}" "${BUILD_DATE}" "${ELAPSED}" "${AOSP_BUILD}" "${AOSP_VENDOR_BUILD}" "${AOSP_BRANCH}" "${LATEST_CHROMIUM}" "${FDROID_CLIENT_VERSION}" "${FDROID_PRIV_EXT_VERSION}" "${BUILD_REASON}" "${LOGOUTPUT}")" || true
 }
 
 aws_logging() {
