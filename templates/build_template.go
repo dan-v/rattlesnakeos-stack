@@ -13,29 +13,41 @@ DEVICE=$1
 case "$DEVICE" in
   marlin|sailfish)
     DEVICE_FAMILY=marlin
+    KERNEL_FAMILY=marlin
+    KERNEL_DEFCONFIG=marlin
     AVB_MODE=verity_only
     ;;
   taimen)
     DEVICE_FAMILY=taimen
+    KERNEL_FAMILY=wahoo
+    KERNEL_DEFCONFIG=wahoo
     AVB_MODE=vbmeta_simple
     ;;
   walleye)
     DEVICE_FAMILY=muskie
+    KERNEL_FAMILY=wahoo
+    KERNEL_DEFCONFIG=wahoo
     AVB_MODE=vbmeta_simple
     ;;
   crosshatch|blueline)
     DEVICE_FAMILY=crosshatch
+    KERNEL_FAMILY=crosshatch
+    KERNEL_DEFCONFIG=b1c1
     AVB_MODE=vbmeta_chained
     EXTRA_OTA=(--retrofit_dynamic_partitions)
     ;;
   sargo|bonito)
     DEVICE_FAMILY=bonito
+    KERNEL_FAMILY=bonito
+    KERNEL_DEFCONFIG=bonito
     AVB_MODE=vbmeta_chained
     EXTRA_OTA=(--retrofit_dynamic_partitions)
     ;;
   *)
     echo "warning: unknown device $DEVICE, using Pixel 3 defaults"
     DEVICE_FAMILY=$1
+    KERNEL_FAMILY=crosshatch
+    KERNEL_DEFCONFIG=b1c1
     AVB_MODE=vbmeta_chained
     ;;
 esac
@@ -69,6 +81,10 @@ IGNORE_VERSION_CHECKS=<% .IgnoreVersionChecks %>
 
 # version of chromium to pin to if requested
 CHROMIUM_PINNED_VERSION=<% .ChromiumVersion %>
+
+# Whether the kernel needs to be rebuilt
+# It is always rebuilt for marlin/sailfish
+ENABLE_KERNEL_BUILD=false
 
 # whether keys are client side encrypted or not
 ENCRYPTED_KEYS="<% .EncryptedKeys %>"
@@ -114,7 +130,7 @@ BUILD_DIR="$HOME/rattlesnake-os"
 KEYS_DIR="${BUILD_DIR}/keys"
 CERTIFICATE_SUBJECT='/CN=RattlesnakeOS'
 OFFICIAL_FDROID_KEY="43238d512c1e5eb2d6569f4a3afbf5523418b82e0a3ed1552770abb9a9c9ccab"
-MARLIN_KERNEL_SOURCE_DIR="${HOME}/kernel/google/marlin"
+KERNEL_SOURCE_DIR="${HOME}/kernel/google/${KERNEL_FAMILY}"
 BUILD_REASON=""
 
 # urls
@@ -354,8 +370,9 @@ full_run() {
   build_fdroid
   apply_patches
   # only marlin and sailfish need kernel rebuilt so that verity_key is included
-  if [ "${DEVICE}" == "marlin" ] || [ "${DEVICE}" == "sailfish" ]; then
-    rebuild_marlin_kernel
+  # Also build the kernel if enabled in the config 
+  if [ "${KERNEL_FAMILY}" == "marlin" ] || [ "${ENABLE_KERNEL_BUILD}" == "true" ]; then
+    rebuild_kernel
   fi
   add_chromium
   build_aosp
@@ -996,17 +1013,26 @@ patch_launcher() {
   sed -i.original "s/boolean createEmptyRowOnFirstScreen;/boolean createEmptyRowOnFirstScreen = false;/" "${BUILD_DIR}/packages/apps/Launcher3/src/com/android/launcher3/provider/ImportDataTask.java"
 }
 
-rebuild_marlin_kernel() {
+rebuild_kernel() {
   log_header ${FUNCNAME}
 
   # checkout kernel source on proper commit
-  mkdir -p "${MARLIN_KERNEL_SOURCE_DIR}"
-  retry git clone "${KERNEL_SOURCE_URL}" "${MARLIN_KERNEL_SOURCE_DIR}"
+  mkdir -p "${KERNEL_SOURCE_DIR}"
+  retry git clone "${KERNEL_SOURCE_URL}" "${KERNEL_SOURCE_DIR}"
+  
+  if [ "${KERNEL_FAMILY}" == "marlin" ] || [ "${KERNEL_FAMILY}" == "wahoo" ]; then
+    kernel_image="${BUILD_DIR}/device/google/${KERNEL_FAMILY}-kernel/Image.lz4-dtb"
+  else
+    kernel_image="${BUILD_DIR}/device/google/${KERNEL_FAMILY}-kernel/Image.lz4"
+  fi
+
   # TODO: make this a bit more robust
-  kernel_commit_id=$(lz4cat "${BUILD_DIR}/device/google/marlin-kernel/Image.lz4-dtb" | grep -a 'Linux version' | cut -d ' ' -f3 | cut -d'-' -f2 | sed 's/^g//g')
-  cd "${MARLIN_KERNEL_SOURCE_DIR}"
+  kernel_commit_id=$(lz4cat "${kernel_image}" | strings | grep -a 'Linux version [0-9]' | cut -d ' ' -f3 | cut -d'-' -f2 | sed 's/^g//g')
+  cd "${KERNEL_SOURCE_DIR}"
   log "Checking out kernel commit ${kernel_commit_id}"
   git checkout ${kernel_commit_id}
+
+  # TODO: kernel patch hooks should be added here 
 
   # run in another shell to avoid it mucking with environment variables for normal AOSP build
   (
@@ -1016,11 +1042,44 @@ rebuild_marlin_kernel() {
       export PATH="${BUILD_DIR}/prebuilts/misc/linux-x86/lz4:${PATH}";
       export PATH="${BUILD_DIR}/prebuilts/misc/linux-x86/dtc:${PATH}";
       export PATH="${BUILD_DIR}/prebuilts/misc/linux-x86/libufdt:${PATH}";
-      ln --verbose --symbolic ${KEYS_DIR}/${DEVICE}/verity_user.der.x509 ${MARLIN_KERNEL_SOURCE_DIR}/verity_user.der.x509;
-      cd ${MARLIN_KERNEL_SOURCE_DIR};
-      make O=out ARCH=arm64 marlin_defconfig;
-      make -j$(nproc --all) O=out ARCH=arm64 CROSS_COMPILE=aarch64-linux-android- CROSS_COMPILE_ARM32=arm-linux-androideabi-
-      cp -f out/arch/arm64/boot/Image.lz4-dtb ${BUILD_DIR}/device/google/marlin-kernel/;
+      cd ${KERNEL_SOURCE_DIR};
+
+      if [ "${KERNEL_FAMILY}" == "marlin" ]; then
+        ln --verbose --symbolic ${KEYS_DIR}/${DEVICE}/verity_user.der.x509 ${KERNEL_SOURCE_DIR}/verity_user.der.x509;
+        make O=out ARCH=arm64 ${KERNEL_DEFCONFIG}_defconfig;
+        make -j$(nproc --all) \
+          O=out \
+          ARCH=arm64 \
+          CROSS_COMPILE=aarch64-linux-android- \
+          CROSS_COMPILE_ARM32=arm-linux-androideabi-
+        
+        cp -f out/arch/arm64/boot/Image.lz4-dtb ${BUILD_DIR}/device/google/${KERNEL_FAMILY}-kernel/;
+      fi
+
+      if [ "${KERNEL_FAMILY}" == "wahoo" ] || [ "${KERNEL_FAMILY}" == "crosshatch" ] || [ "${KERNEL_FAMILY}" == "bonito" ]; then
+        export PATH="${BUILD_DIR}/prebuilts/clang/host/linux-x86/clang-r353983c/bin:${PATH}";
+        export LD_LIBRARY_PATH="${BUILD_DIR}/prebuilts/clang/host/linux-x86/clang-r353983c/lib64:${LD_LIBRARY_PATH}";
+        make O=out ARCH=arm64 ${KERNEL_DEFCONFIG}_defconfig;
+        make -j$(nproc --all) \
+          O=out \
+          ARCH=arm64 \
+          CC=clang \
+          CLANG_TRIPLE=aarch64-linux-gnu- \
+          CROSS_COMPILE=aarch64-linux-android- \
+          CROSS_COMPILE_ARM32=arm-linux-androideabi-
+        
+        cp -f out/arch/arm64/boot/{dtbo.img,Image.lz4-dtb} ${BUILD_DIR}/device/google/${KERNEL_FAMILY}-kernel/;
+
+        if [ "${KERNEL_FAMILY}" == "crosshatch" ]; then
+          cp -f out/arch/arm64/boot/dts/qcom/{sdm845-v2.dtb,sdm845-v2.1.dtb} ${BUILD_DIR}/device/google/${KERNEL_FAMILY}-kernel/;
+        fi
+
+        if [ "${KERNEL_FAMILY}" == "bonito" ]; then
+          cp -f out/arch/arm64/boot/dts/qcom/sdm670.dtb ${BUILD_DIR}/device/google/${KERNEL_FAMILY}-kernel/;
+        fi
+      
+      fi
+      
       rm -rf ${BUILD_DIR}/out/build_*;
   )
 }
