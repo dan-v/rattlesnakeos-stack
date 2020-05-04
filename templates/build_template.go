@@ -211,6 +211,7 @@ get_latest_versions() {
   # if more than one factory build exists,
   # first check strict (e.g. (QQ1A.200205.002, Feb 2020))
   # second check for known variations that Google has used in the past - for now just removing anything with 'only'"
+  # this is fragile and likely need to move to a file tracking this instead: https://github.com/dan-v/rattlesnakeos-stack/issues/153
   if [ "$factory_builds_count" -ne 1 ]; then
       echo -e "\nAttempting strict filter to a single factory build"
       factory_builds_strict=$(echo "$factory_builds" | egrep '[A-Z]{1}[a-z]{2} [0-9]{4}\)' || true)
@@ -223,8 +224,12 @@ get_latest_versions() {
           echo -e "\nAttempting loose filter to a single factory build"
           factory_builds_loose=$(echo "$factory_builds" | grep -i -v 'only' || true)
           factory_builds_loose_count=$(echo "$factory_builds_loose" | wc -l | awk '{print $1}' || true)
-          if [ -z "$factory_builds_loose" ]; then
-              factory_builds_loose_count=0
+          if [ -z "$factory_builds_loose" ] || [ "$factory_builds_loose_count" -gt 1 ]; then
+              factory_builds_loose=$(echo "$factory_builds" | grep -i 'All carriers except' || true)
+              factory_builds_loose_count=$(echo "$factory_builds_loose" | wc -l | awk '{print $1}' || true)
+              if [ -z "$factory_builds_loose" ]; then
+                  $factory_builds_loose_count=0
+              fi
           fi
           if [ "$factory_builds_loose_count" -ne 1 ]; then
               aws_notify_simple "ERROR: Unable to determine what build to use for latest_factory_build_date='${latest_factory_build_date}'. Stopping build. This lookup is pretty fragile and can break on any page redesign of ${AOSP_URL_BUILD}"
