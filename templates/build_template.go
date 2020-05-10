@@ -668,7 +668,7 @@ aosp_repo_init() {
   log_header ${FUNCNAME}
   cd "${BUILD_DIR}"
 
-  repo init --manifest-url "$MANIFEST_URL" --manifest-branch "$AOSP_BRANCH" --depth 1 || true
+  retry repo init --manifest-url "$MANIFEST_URL" --manifest-branch "$AOSP_BRANCH" --depth 1 || true
 }
 
 aosp_repo_modifications() {
