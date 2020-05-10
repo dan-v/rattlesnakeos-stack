@@ -190,7 +190,7 @@ get_latest_versions() {
   # this is going to continue being quite fragile unless another method for determining latest factory build is found
   # parsing html that can change at any time and can have variations every month is never going to be reliable
   echo "Searching for latest factory build date for device=${DEVICE} android_version=${ANDROID_VERSION}"
-  latest_factory_build_date=$(curl --fail -s "${AOSP_URL_BUILD}" | grep -A1 "${DEVICE}" | grep -F "${ANDROID_VERSION}" | tail -1 | cut -d"(" -f2 | cut -d"," -f2 | cut -d")" -f1 | sed -e 's/^[ \t]*//' || true)
+  latest_factory_build_date=$(curl --cookie "devsite_wall_acks=nexus-image-tos" --fail -s "${AOSP_URL_BUILD}" | grep -A1 "${DEVICE}" | grep -F "${ANDROID_VERSION}" | tail -1 | cut -d"(" -f2 | cut -d"," -f2 | cut -d")" -f1 | sed -e 's/^[ \t]*//' || true)
   if [ -z "$latest_factory_build_date" ]; then
       aws_notify_simple "ERROR: Unable to determine latest factory build date for device=${DEVICE} android_version=${ANDROID_VERSION}. Stopping build. This lookup is pretty fragile and can break on any page redesign of ${AOSP_URL_BUILD}"
       exit 1
@@ -198,7 +198,7 @@ get_latest_versions() {
   echo "latest_factory_build_date='${latest_factory_build_date}'"
 
   # first check to see if any factory builds exist for this date
-  factory_builds=$(curl --fail -s "${AOSP_URL_BUILD}" | grep -A1 "${DEVICE}" | grep -F "${ANDROID_VERSION}" | grep "${latest_factory_build_date}" || true)
+  factory_builds=$(curl --cookie "devsite_wall_acks=nexus-image-tos" --fail -s "${AOSP_URL_BUILD}" | grep -A1 "${DEVICE}" | grep -F "${ANDROID_VERSION}" | grep "${latest_factory_build_date}" || true)
   factory_builds_count=$(echo "$factory_builds" | wc -l | awk '{print $1}' || true)
   if [ -z "$factory_builds" ]; then
       factory_builds_count=0
