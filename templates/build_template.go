@@ -137,13 +137,14 @@ BUILD_REASON=""
 # urls
 ANDROID_SDK_URL="https://dl.google.com/android/repository/sdk-tools-linux-4333796.zip"
 MANIFEST_URL="https://android.googlesource.com/platform/manifest"
-CHROME_URL_LATEST="https://omahaproxy.appspot.com/all.json"
 STACK_URL_LATEST="https://api.github.com/repos/dan-v/rattlesnakeos-stack/releases/latest"
-FDROID_CLIENT_URL_LATEST="https://gitlab.com/api/v4/projects/36189/repository/tags"
-FDROID_PRIV_EXT_URL_LATEST="https://gitlab.com/api/v4/projects/1481578/repository/tags"
 KERNEL_SOURCE_URL="https://android.googlesource.com/kernel/msm"
 AOSP_URL_BUILD="https://developers.google.com/android/images"
 AOSP_URL_PLATFORM_BUILD="https://android.googlesource.com/platform/build"
+RATTLESNAKEOS_LATEST_JSON="https://raw.githubusercontent.com/RattlesnakeOS/latest/${ANDROID_VERSION}"
+RATTLESNAKEOS_LATEST_JSON_AOSP="${RATTLESNAKEOS_LATEST_JSON}/aosp.json"
+RATTLESNAKEOS_LATEST_JSON_CHROMIUM="${RATTLESNAKEOS_LATEST_JSON}/chromium.json"
+RATTLESNAKEOS_LATEST_JSON_FDROID="${RATTLESNAKEOS_LATEST_JSON}/fdroid.json"
 
 STACK_UPDATE_MESSAGE=
 LATEST_STACK_VERSION=
@@ -166,110 +167,43 @@ get_latest_versions() {
     STACK_UPDATE_MESSAGE="WARNING: you should upgrade to the latest version: ${LATEST_STACK_VERSION}"
   fi
 
-  # check for latest stable chromium version
-  LATEST_CHROMIUM=$(curl --fail -s "$CHROME_URL_LATEST" | jq -r '.[] | select(.os == "android") | .versions[] | select(.channel == "'$CHROME_CHANNEL'") | .current_version')
+  # check for latest chromium version
+  LATEST_CHROMIUM=$(curl --fail -s "${RATTLESNAKEOS_LATEST_JSON_CHROMIUM}" | jq -r ".$CHROME_CHANNEL")
   if [ -z "$LATEST_CHROMIUM" ]; then
     aws_notify_simple "ERROR: Unable to get latest Chromium version details. Stopping build."
     exit 1
   fi
+  echo "LATEST_CHROMIUM=${LATEST_CHROMIUM}"
 
-  # fdroid - get latest non alpha tags from gitlab (sorted)
-  # TODO: exclude alpha once 1.8 stable is released
-  FDROID_CLIENT_VERSION=$(curl --fail -s "$FDROID_CLIENT_URL_LATEST" | jq -r '[.[] | select(.name | test("^[0-9]+\\.[0-9]+")) | select(.name | contains("ota") | not)][] | .name' | sort --version-sort -r | head -1)
+  FDROID_CLIENT_VERSION=$(curl --fail -s "${RATTLESNAKEOS_LATEST_JSON_FDROID}" | jq -r ".client")
   if [ -z "$FDROID_CLIENT_VERSION" ]; then
     aws_notify_simple "ERROR: Unable to get latest F-Droid version details. Stopping build."
     exit 1
   fi
-  FDROID_PRIV_EXT_VERSION=$(curl --fail -s "$FDROID_PRIV_EXT_URL_LATEST" | jq -r '[.[] | select(.name | test("^[0-9]+\\.[0-9]+")) | select(.name | contains("alpha") | not) | select(.name | contains("ota") | not)][] | .name' | sort --version-sort -r | head -1)
+  echo "FDROID_CLIENT_VERSION=${FDROID_CLIENT_VERSION}"
+
+  FDROID_PRIV_EXT_VERSION=$(curl --fail -s "${RATTLESNAKEOS_LATEST_JSON_FDROID}" | jq -r ".privilegedextention")
   if [ -z "$FDROID_PRIV_EXT_VERSION" ]; then
     aws_notify_simple "ERROR: Unable to get latest F-Droid privilege extension version details. Stopping build."
     exit 1
   fi
+  echo "FDROID_PRIV_EXT_VERSION=${FDROID_PRIV_EXT_VERSION}"
 
-  # check for latest factory image and corresponding aosp branch
-  # this is going to continue being quite fragile unless another method for determining latest factory build is found
-  # parsing html that can change at any time and can have variations every month is never going to be reliable
-  echo "Searching for latest factory build date for device=${DEVICE} android_version=${ANDROID_VERSION}"
-  latest_factory_build_date=$(curl --cookie "devsite_wall_acks=nexus-image-tos" --fail -s "${AOSP_URL_BUILD}" | grep -A1 "${DEVICE}" | grep -F "${ANDROID_VERSION}" | tail -1 | cut -d"(" -f2 | cut -d"," -f2 | cut -d")" -f1 | sed -e 's/^[ \t]*//' || true)
-  if [ -z "$latest_factory_build_date" ]; then
-      aws_notify_simple "ERROR: Unable to determine latest factory build date for device=${DEVICE} android_version=${ANDROID_VERSION}. Stopping build. This lookup is pretty fragile and can break on any page redesign of ${AOSP_URL_BUILD}"
-      exit 1
-  fi
-  echo "latest_factory_build_date='${latest_factory_build_date}'"
-
-  # first check to see if any factory builds exist for this date
-  factory_builds=$(curl --cookie "devsite_wall_acks=nexus-image-tos" --fail -s "${AOSP_URL_BUILD}" | grep -A1 "${DEVICE}" | grep -F "${ANDROID_VERSION}" | grep "${latest_factory_build_date}" || true)
-  factory_builds_count=$(echo "$factory_builds" | wc -l | awk '{print $1}' || true)
-  if [ -z "$factory_builds" ]; then
-      factory_builds_count=0
-  fi
-  if [ "$factory_builds_count" -eq 0 ]; then
-      aws_notify_simple "ERROR: Unable to find any builds for latest_factory_build_date='${latest_factory_build_date}'. Stopping build. This lookup is pretty fragile and can break on any page redesign of ${AOSP_URL_BUILD}"
-      exit 1
-  fi
-
-  # if more than one factory build exists,
-  # first check strict (e.g. (QQ1A.200205.002, Feb 2020))
-  # second check for known variations that Google has used in the past - for now just removing anything with 'only'"
-  # this is fragile and likely need to move to a file tracking this instead: https://github.com/dan-v/rattlesnakeos-stack/issues/153
-  if [ "$factory_builds_count" -ne 1 ]; then
-      echo -e "\nAttempting strict filter to a single factory build"
-      factory_builds_strict=$(echo "$factory_builds" | egrep '[A-Z]{1}[a-z]{2} [0-9]{4}\)' || true)
-      factory_builds_strict_count=$(echo "$factory_builds_strict" | wc -l | awk '{print $1}' || true)
-      if [ -z "$factory_builds_strict" ]; then
-          factory_builds_strict_count=0
-      fi
-
-      if [ "$factory_builds_strict_count" -ne 1 ]; then
-          echo -e "\nAttempting loose filter to a single factory build"
-          factory_builds_loose=$(echo "$factory_builds" | grep -i -v 'only' || true)
-          factory_builds_loose_count=$(echo "$factory_builds_loose" | wc -l | awk '{print $1}' || true)
-          if [ -z "$factory_builds_loose" ] || [ "$factory_builds_loose_count" -gt 1 ]; then
-              factory_builds_loose=$(echo "$factory_builds" | grep -i 'All carriers except' || true)
-              factory_builds_loose_count=$(echo "$factory_builds_loose" | wc -l | awk '{print $1}' || true)
-              if [ -z "$factory_builds_loose" ]; then
-                  $factory_builds_loose_count=0
-              fi
-          fi
-          if [ "$factory_builds_loose_count" -ne 1 ]; then
-              aws_notify_simple "ERROR: Unable to determine what build to use for latest_factory_build_date='${latest_factory_build_date}'. Stopping build. This lookup is pretty fragile and can break on any page redesign of ${AOSP_URL_BUILD}"
-              echo "factory_builds_loose_count=${factory_builds_loose_count} factory_builds_loose=${factory_builds_loose}"
-              exit 1
-          fi
-          factory_builds="${factory_builds_loose}"
-      else
-          factory_builds="${factory_builds_strict}"
-      fi
-  fi
-
-  AOSP_VENDOR_BUILD=$(echo "$factory_builds" | cut -d"(" -f2 | cut -d"," -f1 || true)
-  if [ -z "$AOSP_VENDOR_BUILD" ]; then
-      echo "Unable to determine factory build number when parsing factory_builds='${factory_builds}'"
-      aws_notify_simple "ERROR: Unable to get latest AOSP build (factory build) information. Stopping build."
-      exit 1
+  AOSP_VENDOR_BUILD=$(curl --fail -s "${RATTLESNAKEOS_LATEST_JSON_AOSP}" | jq -r ".${DEVICE}.build")
+  if [ -z "AOSP_VENDOR_BUILD" ]; then
+    aws_notify_simple "ERROR: Unable to get latest AOSP build version details. Stopping build."
+    exit 1
   fi
   if [ -z "$AOSP_BUILD" ]; then
-      AOSP_BUILD=${AOSP_VENDOR_BUILD}
+    AOSP_BUILD=${AOSP_VENDOR_BUILD}
   fi
   echo "AOSP_VENDOR_BUILD=${AOSP_VENDOR_BUILD}"
   echo "AOSP_BUILD=${AOSP_BUILD}"
 
-  if [ -z "$AOSP_BRANCH" ]; then
-    AOSP_BRANCH=""
-    echo "Searching through latest AOSP tags to find tag that corresponds with factory build ${AOSP_BRANCH}"
-    for tag in $(git ls-remote --tags "${AOSP_URL_PLATFORM_BUILD}" | grep "android-${ANDROID_VERSION}" | grep -v '\^{}' | awk -F"/" '{print $3}' | sort -V | tac || true); do
-        echo "Searching tag ${tag} for build_id=${AOSP_BUILD}"
-        build_id=$(curl -s "${AOSP_URL_PLATFORM_BUILD}/+/refs/tags/${tag}/core/build_id.mk?format=TEXT" | base64 --decode | awk -F= '/BUILD_ID=/{print $2}' || true)
-        if [ "${AOSP_BUILD}" = "${build_id}" ]; then
-            AOSP_BRANCH="${tag}"
-            break
-        fi
-        echo "Skipping tag ${tag} as build_id=${build_id}"
-    done
-    if [ -z "$AOSP_BRANCH" ]; then
-      aws_notify_simple "ERROR: Unable to get latest AOSP branch information. Stopping build."
-      exit 1
-    fi
+  AOSP_BRANCH=$(curl --fail -s "${RATTLESNAKEOS_LATEST_JSON_AOSP}" | jq -r ".${DEVICE}.branch")
+  if [ -z "AOSP_BUILD" ]; then
+    aws_notify_simple "ERROR: Unable to get latest AOSP branch details. Stopping build."
+    exit 1
   fi
   echo "AOSP_BRANCH=${AOSP_BRANCH}"
 
