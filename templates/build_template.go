@@ -43,6 +43,12 @@ case "$DEVICE" in
     AVB_MODE=vbmeta_chained
     EXTRA_OTA=(--retrofit_dynamic_partitions)
     ;;
+  flame|coral)
+    DEVICE_FAMILY=coral
+    KERNEL_FAMILY=coral
+    KERNEL_DEFCONFIG=coral
+    AVB_MODE=vbmeta_chained_v2
+    ;;
   *)
     echo "warning: unknown device $DEVICE, using Pixel 3 defaults"
     DEVICE_FAMILY=$1
@@ -896,6 +902,9 @@ patch_device_config() {
 
   sed -i 's@PRODUCT_MODEL := AOSP on bonito@PRODUCT_MODEL := Pixel 3a XL@' ${BUILD_DIR}/device/google/bonito/aosp_bonito.mk || true
   sed -i 's@PRODUCT_MODEL := AOSP on sargo@PRODUCT_MODEL := Pixel 3a@' ${BUILD_DIR}/device/google/bonito/aosp_sargo.mk || true
+
+  sed -i 's@PRODUCT_MODEL := AOSP on coral@PRODUCT_MODEL := Pixel 4 XL@' ${BUILD_DIR}/device/google/coral/aosp_coral.mk || true
+  sed -i 's@PRODUCT_MODEL := AOSP on flame@PRODUCT_MODEL := Pixel 4@' ${BUILD_DIR}/device/google/coral/aosp_flame.mk || true
 }
 
 get_package_mk_file() {
@@ -1003,7 +1012,8 @@ rebuild_kernel() {
         cp -f out/arch/arm64/boot/Image.lz4-dtb ${BUILD_DIR}/device/google/${KERNEL_FAMILY}-kernel/;
       fi
 
-      if [ "${KERNEL_FAMILY}" == "wahoo" ] || [ "${KERNEL_FAMILY}" == "crosshatch" ] || [ "${KERNEL_FAMILY}" == "bonito" ]; then
+      # TODO: haven't tested kernel build for coral
+      if [ "${KERNEL_FAMILY}" == "wahoo" ] || [ "${KERNEL_FAMILY}" == "crosshatch" ] || [ "${KERNEL_FAMILY}" == "bonito" ] || [ "${KERNEL_FAMILY}" == "coral" ]; then
         export PATH="${BUILD_DIR}/prebuilts/clang/host/linux-x86/clang-r353983c/bin:${PATH}";
         export LD_LIBRARY_PATH="${BUILD_DIR}/prebuilts/clang/host/linux-x86/clang-r353983c/lib64:${LD_LIBRARY_PATH}";
         make O=out ARCH=arm64 ${KERNEL_DEFCONFIG}_defconfig;
@@ -1117,6 +1127,14 @@ release() {
                     --avb_vbmeta_algorithm SHA256_RSA2048
                     --avb_system_key "$KEY_DIR/avb.pem"
                     --avb_system_algorithm SHA256_RSA2048)
+      ;;
+    vbmeta_chained_v2)
+      AVB_SWITCHES=(--avb_vbmeta_key "$KEY_DIR/avb.pem"
+                    --avb_vbmeta_algorithm SHA256_RSA2048
+                    --avb_system_key "$KEY_DIR/avb.pem"
+                    --avb_system_algorithm SHA256_RSA2048
+                    --avb_vbmeta_system_key "$KEY_DIR/avb.pem"
+                    --avb_vbmeta_system_algorithm SHA256_RSA2048)
       ;;
   esac
 
