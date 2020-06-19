@@ -206,10 +206,12 @@ get_latest_versions() {
   echo "AOSP_VENDOR_BUILD=${AOSP_VENDOR_BUILD}"
   echo "AOSP_BUILD=${AOSP_BUILD}"
 
-  AOSP_BRANCH=$(curl --fail -s "${RATTLESNAKEOS_LATEST_JSON_AOSP}" | jq -r ".${DEVICE}.branch")
-  if [ -z "AOSP_BUILD" ]; then
-    aws_notify_simple "ERROR: Unable to get latest AOSP branch details. Stopping build."
-    exit 1
+  if [ -z "$AOSP_BRANCH" ]; then
+    AOSP_BRANCH=$(curl --fail -s "${RATTLESNAKEOS_LATEST_JSON_AOSP}" | jq -r ".${DEVICE}.branch")
+    if [ -z "$AOSP_BRANCH" ]; then
+      aws_notify_simple "ERROR: Unable to get latest AOSP branch details. Stopping build."
+      exit 1
+    fi
   fi
   echo "AOSP_BRANCH=${AOSP_BRANCH}"
 
