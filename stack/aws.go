@@ -49,31 +49,28 @@ type CustomManifestProjects []struct {
 }
 
 type AWSStackConfig struct {
-	Name                    string
-	Region                  string
-	Device                  string
-	Email                   string
-	InstanceType            string
-	InstanceRegions         string
-	SkipPrice               string
-	MaxPrice                string
-	SSHKey                  string
-	PreventShutdown         bool
-	Version                 string
-	Schedule                string
-	IgnoreVersionChecks     bool
-	ChromiumVersion         string
-	CustomPatches           *CustomPatches
-	CustomScripts           *CustomScripts
-	CustomPrebuilts         *CustomPrebuilts
-	CustomManifestRemotes   *CustomManifestRemotes
-	CustomManifestProjects  *CustomManifestProjects
-	HostsFile               string
-	EncryptedKeys           bool
-	AMI                     string
-	EnableAttestation       bool
-	AttestationMaxSpotPrice string
-	AttestationInstanceType string
+	Name                   string
+	Region                 string
+	Device                 string
+	Email                  string
+	InstanceType           string
+	InstanceRegions        string
+	SkipPrice              string
+	MaxPrice               string
+	SSHKey                 string
+	PreventShutdown        bool
+	Version                string
+	Schedule               string
+	IgnoreVersionChecks    bool
+	ChromiumVersion        string
+	CustomPatches          *CustomPatches
+	CustomScripts          *CustomScripts
+	CustomPrebuilts        *CustomPrebuilts
+	CustomManifestRemotes  *CustomManifestRemotes
+	CustomManifestProjects *CustomManifestProjects
+	HostsFile              string
+	EncryptedKeys          bool
+	AMI                    string
 }
 
 type AWSStack struct {

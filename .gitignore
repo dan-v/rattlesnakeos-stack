@@ -35,3 +35,4 @@ rattlesnakeos-stack
 .vscode/
 *.toml
 .DS_Store
+.idea/

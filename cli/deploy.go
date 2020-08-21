@@ -20,8 +20,7 @@ const minimumChromiumVersion = 80
 
 var name, region, email, device, sshKey, maxPrice, skipPrice, schedule string
 var instanceType, instanceRegions, hostsFile, chromiumVersion string
-var attestationMaxPrice, attestationInstanceType string
-var preventShutdown, ignoreVersionChecks, encryptedKeys, saveConfig, attestationServer bool
+var preventShutdown, ignoreVersionChecks, encryptedKeys, saveConfig bool
 var patches = &stack.CustomPatches{}
 var scripts = &stack.CustomScripts{}
 var prebuilts = &stack.CustomPrebuilts{}
@@ -35,11 +34,11 @@ var supportedRegions = []string{"ap-northeast-1", "ap-northeast-2", "ap-northeas
 var supportedDevicesFriendly = []string{
 	"Pixel", "Pixel XL", "Pixel 2", "Pixel 2 XL",
 	"Pixel 3", "Pixel 3 XL", "Pixel 3a", "Pixel 3a XL",
-	"Pixel 4", "Pixel 4 XL"}
+	"Pixel 4", "Pixel 4 XL", "Pixel 4a"}
 var supportedDevicesCodename = []string{
 	"sailfish", "marlin", "walleye", "taimen",
 	"blueline", "crosshatch", "sargo", "bonito",
-	"flame", "coral"}
+	"flame", "coral", "sunfish"}
 var supportDevicesOutput string
 
 func init() {
@@ -120,17 +119,6 @@ func init() {
 
 	flags.BoolVar(&preventShutdown, "prevent-shutdown", false,
 		"for debugging purposes only - will prevent ec2 instance from shutting down after build.")
-
-	flags.BoolVar(&attestationServer, "attestation-server", false, "deploys and configures a personal attestation server (Pixel 3/Pixel 3 XL only)")
-	viper.BindPFlag("attestation-server", flags.Lookup("attestation-server"))
-
-	flags.StringVar(&attestationMaxPrice, "attestation-max-price", ".005",
-		"max ec2 spot instance price for attestation server. if this value is too low, you may not launch an instance.")
-	viper.BindPFlag("attestation-max-price", flags.Lookup("attestation-max-price"))
-
-	flags.StringVar(&attestationInstanceType, "attestation-instance-type", "t3.nano",
-		"instance type to use for attestation server.")
-	viper.BindPFlag("attestation-instance-type", flags.Lookup("attestation-instance-type"))
 }
 
 var deployCmd = &cobra.Command{
@@ -166,12 +154,6 @@ var deployCmd = &cobra.Command{
 			}
 			if chromiumMajorNumber < minimumChromiumVersion {
 				return fmt.Errorf("pinned chromium-version must have major version of at least %v", minimumChromiumVersion)
-			}
-		}
-		if viper.GetBool("attestation-server") {
-			if viper.GetString("device") != "crosshatch" && viper.GetString("device") != "blueline" &&
-				viper.GetString("device") != "sargo" && viper.GetString("device") != "bonito" {
-				return errors.New("attestation-server is only supported for pixel 3 devices")
 			}
 		}
 		if viper.GetString("force-build") != "" {
@@ -235,30 +217,27 @@ var deployCmd = &cobra.Command{
 		}
 
 		s, err := stack.NewAWSStack(&stack.AWSStackConfig{
-			Name:                    viper.GetString("name"),
-			Region:                  viper.GetString("region"),
-			Device:                  viper.GetString("device"),
-			Email:                   viper.GetString("email"),
-			InstanceType:            viper.GetString("instance-type"),
-			InstanceRegions:         viper.GetString("instance-regions"),
-			SSHKey:                  viper.GetString("ssh-key"),
-			SkipPrice:               viper.GetString("skip-price"),
-			MaxPrice:                viper.GetString("max-price"),
-			Schedule:                viper.GetString("schedule"),
-			ChromiumVersion:         viper.GetString("chromium-version"),
-			HostsFile:               viper.GetString("hosts-file"),
-			EncryptedKeys:           viper.GetBool("encrypted-keys"),
-			IgnoreVersionChecks:     viper.GetBool("ignore-version-checks"),
-			CustomPatches:           patches,
-			CustomScripts:           scripts,
-			CustomPrebuilts:         prebuilts,
-			CustomManifestRemotes:   manifestRemotes,
-			CustomManifestProjects:  manifestProjects,
-			PreventShutdown:         preventShutdown,
-			Version:                 version,
-			EnableAttestation:       viper.GetBool("attestation-server"),
-			AttestationInstanceType: viper.GetString("attestation-instance-type"),
-			AttestationMaxSpotPrice: viper.GetString("attestation-max-price"),
+			Name:                   viper.GetString("name"),
+			Region:                 viper.GetString("region"),
+			Device:                 viper.GetString("device"),
+			Email:                  viper.GetString("email"),
+			InstanceType:           viper.GetString("instance-type"),
+			InstanceRegions:        viper.GetString("instance-regions"),
+			SSHKey:                 viper.GetString("ssh-key"),
+			SkipPrice:              viper.GetString("skip-price"),
+			MaxPrice:               viper.GetString("max-price"),
+			Schedule:               viper.GetString("schedule"),
+			ChromiumVersion:        viper.GetString("chromium-version"),
+			HostsFile:              viper.GetString("hosts-file"),
+			EncryptedKeys:          viper.GetBool("encrypted-keys"),
+			IgnoreVersionChecks:    viper.GetBool("ignore-version-checks"),
+			CustomPatches:          patches,
+			CustomScripts:          scripts,
+			CustomPrebuilts:        prebuilts,
+			CustomManifestRemotes:  manifestRemotes,
+			CustomManifestProjects: manifestProjects,
+			PreventShutdown:        preventShutdown,
+			Version:                version,
 		})
 		if err != nil {
 			log.Fatal(err)
