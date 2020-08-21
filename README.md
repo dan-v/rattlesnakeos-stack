@@ -6,7 +6,6 @@ RattlesnakeOS is a privacy and security focused Android OS for Google Pixel phon
 * Legacy Support for Google <b>Pixel, Pixel XL</b>. These devices no longer receive security updates and will eventually be deprecated.
 * Monthly software and firmware security fixes delivered through built in OTA updater
 * [Verified boot](https://source.android.com/security/verifiedboot/) with a locked bootloader just like official Android but with your own personal signing keys
-* Optional support for [remote attestation](#how-does-the-remote-attestation-feature-work) using [Auditor](https://github.com/GrapheneOS/Auditor) and [AttestationServer](https://github.com/GrapheneOS/AttestationServer)
 * Latest stable Chromium [browser](https://www.chromium.org) and [webview](https://www.chromium.org/developers/how-tos/build-instructions-android-webview)
 * Latest stable [F-Droid](https://f-droid.org/) app store and [privileged extension](https://gitlab.com/fdroid/privileged-extension)
 * Free of Google’s apps and services
@@ -34,7 +33,6 @@ Rather than providing random binaries of RattlesnakeOS to install on your phone,
      * [General](#general)
      * [Costs](#costs)
      * [Builds](#builds)
-     * [Remote Attestation](#remote-attestation)
      * [Customizations](#customizations)
      * [Security](#security)
    * [Uninstalling](#uninstalling)
@@ -128,9 +126,8 @@ Or you can specify a different config file to use
 ```
 
 #### Advanced Examples
-Here is an example of a more advanced config file that: enables deployment of a personal attestation server, locks to a specific version of Chromium, specifies a hosts file to install, uses a larger EC2 instance type, builds every 2 days, and pulls in custom patches from the [community patches repo](https://github.com/RattlesnakeOS/community_patches). You can read more about [advanced customization options in FAQ](#customizations).
+Here is an example of a more advanced config file that: locks to a specific version of Chromium, specifies a hosts file to install, uses a larger EC2 instance type, builds every 2 days, and pulls in custom patches from the [community patches repo](https://github.com/RattlesnakeOS/community_patches). You can read more about [advanced customization options in FAQ](#customizations).
 ```toml 
-attestation-server = true
 chromium-version = "80.0.3971.4"
 device = "crosshatch"
 email = "user@domain.com"
@@ -164,9 +161,6 @@ Usage:
   rattlesnakeos-stack deploy [flags]
 
 Flags:
-      --attestation-instance-type string   instance type to use for attestation server. (default "t3.nano")
-      --attestation-max-price string       max ec2 spot instance bid for attestation server. if this value is too low, you may not launch an instance. (default ".005")
-      --attestation-server                 deploys and configures a personal attestation server
       --chromium-version string            specify the version of Chromium you want (e.g. 69.0.3497.100) to pin to. if not specified, the latest stable version of Chromium is used.
   -d, --device string                      device you want to build for (e.g. crosshatch): to list supported devices use '-d list'
   -e, --email string                       email address you want to use for build notifications
@@ -251,7 +245,6 @@ No. RattlesnakeOS was created initially as an alternative to [CopperheadOS](http
 The costs are going to be variable by AWS region and by day and time you are running your builds as spot instances have a variable price depending on market demand. Below is an example scenario that should give you a rough estimate of costs:
    * The majority of the cost will come from builds on EC2. It currently launches spot instances of type c5.4xlarge which average maybe $.30 an hour in us-west-2 (will vary by region) but can get up over $1 an hour depending on the day and time. You can modify the default `max-price` config value to set the max price you are willing to pay and if market price exceeds that then your instance will be terminated. Builds can take anywhere from 2-6 hours depending on if Chromium needs to be built. So let's say you're doing a build every month at $0.50 an hour and it is taking on average 4 hours - you'd pay ~$2 in EC2 costs per month. 
    * The other very minimal cost would be S3. Storage costs are almost non existent as a stack will only store about 3GB worth of files (factory image, ota file, target file) and at $0.023 per GB you're looking at $0.07 per month in S3 storage costs. The other S3 cost would be for data transfer out for OTA updates - let's say you are just downloading an update per month (~500MB file) at $0.09 per GB you're looking at $0.05 per month in S3 network costs.
-   * If you are running the optional attestation server, the costs will be around $3-$5/month. This cost comes from an EC2 spot instance and EBS volumes it uses. You can modify the default `attestation-max-price` to a lower value if you want to try to reduce costs further, but if you go to low you may never launch an instance.
 
 ### Builds
 #### How do I change build frequency?
@@ -272,22 +265,6 @@ There are a few steps required to be able to do this:
 There is a flag you can pass `rattlesnakeos-stack` called `--prevent-shutdown` that will prevent the EC2 instance from terminating so that you can SSH into the instance and debug. Note that this will keep the instance online for 12 hours or until you manually terminate it.
 #### Why did my EC2 instance randomly terminate?
 If there wasn't an error notification, this is likely because the [Spot Instance](https://aws.amazon.com/ec2/spot/) max price was not high enough or EC2 is low on capacity and needs to reclaim instances. You can see historical spot instance pricing in the [EC2 console](https://console.aws.amazon.com/ec2sp/v1/spot/home). Click `Pricing History`, select c5.4xlarge for `Instance Type` and pick a date range. I would recommend not setting your `max-price` beyond the on demand price.
-
-### Remote Attestation
-#### What is remote attestation?
-You can read more about remote attestation [here](https://attestation.app/about). 
-
-#### How does the remote attestation feature work?
-There are two primary pieces involved:
-* [AttestationServer](https://github.com/GrapheneOS/AttestationServer) - this is the server component used for remote attestation and it is deployed as an [Elastic Beanstalk](https://aws.amazon.com/elasticbeanstalk/) Docker application running on a spot instance to keep costs to a minimum. A number of things are automated here like: SSL certificate generation with Letsencrypt, backups of sqlite database to S3, customization of app to use your personal keys, etc.
-* [Auditor](https://github.com/GrapheneOS/Auditor) - this app is built with your keys and updated to point at your personal AttestationServer.
-
-Steps to setup:
-* On your computer, set `attestation-server = true` option in your config and `deploy`. This will setup all of the AWS infrastructure for running AttestationServer, but AttestationServer code isn't deployed yet. Note: you should get a few emails about the app being setup and an instance launching.
-* On your computer, start a RattlesnakeOS build with the `build` command. As part of the build process AttestationServer is deployed (should get more emails) and the Auditor app will be built and included into your resulting RattlesnakeOS build.
-* Install the resulting OS build on your phone.
-* In emails (or within the Auditor app) you should have seen a URL that looks like https://attestation.azmgdmnqbn.us-west-2.elasticbeanstalk.com; visit this in your computer browser, create an account and don't lose the username/password as this has been locked down to only a single user registration.
-* On your phone, in the Auditor app click the button in the top right, 'Enable remote verification', and then scan the barcode.
 
 ### Customizations
 #### How do I customize RattlesnakeOS builds?
