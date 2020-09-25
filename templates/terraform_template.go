@@ -26,7 +26,7 @@ variable "region" {
 }
 
 variable "device" {
-    description = "Device type (marlin/sailfish)"
+    description = "Device type"
     default     = "<% .Config.Device %>"
 }
 

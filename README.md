@@ -1,9 +1,8 @@
 RattlesnakeOS is a privacy and security focused Android OS for Google Pixel phones.
 
 ## Features
-* Based on latest [AOSP](https://source.android.com/) 10.0
-* Active Support for Google <b>Pixel 2-4(a) (XL)</b>
-* Legacy Support for Google <b>Pixel, Pixel XL</b>. These devices no longer receive security updates and will eventually be deprecated.
+* Based on latest [AOSP](https://source.android.com/) 11.0
+* Support for Google <b>Pixel 2-4(a) (XL)</b>
 * Monthly software and firmware security fixes delivered through built in OTA updater
 * [Verified boot](https://source.android.com/security/verifiedboot/) with a locked bootloader just like official Android but with your own personal signing keys
 * Latest stable Chromium [browser](https://www.chromium.org) and [webview](https://www.chromium.org/developers/how-tos/build-instructions-android-webview)
@@ -61,7 +60,7 @@ The rattlesnakeos-stack `config` subcommand should be run first to initialize a 
 ```none
 ./rattlesnakeos-stack config
 
-Device is the device codename (e.g. sailfish). Supported devices: sailfish (Pixel), marlin (Pixel XL), walleye (Pixel 2), taimen (Pixel 2 XL), blueline (Pixel 3), crosshatch (Pixel 3 XL), sargo (Pixel 3a), bonito (Pixel 3a XL)
+Device is the device codename (e.g. sunfish). Supported devices: walleye (Pixel 2), taimen (Pixel 2 XL), blueline (Pixel 3), crosshatch (Pixel 3 XL), sargo (Pixel 3a), bonito (Pixel 3a XL)
 device: taimen
 
 Stack name is used as an identifier for all the AWS components that get deployed. THIS NAME MUST BE UNIQUE OR DEPLOYMENT WILL FAIL.
@@ -145,8 +144,8 @@ ssh-key = "rattlesnakeos"
 
 [[custom-patches]]
   patches = [
-        "<community patches need to be upgraded to 10.0>.patch",
-        "<community patches need to be upgraded to 10.0>.patch",
+        "<community patches need to be upgraded to 11.0>.patch",
+        "<community patches need to be upgraded to 11.0>.patch",
   ]
   repo = "https://github.com/RattlesnakeOS/community_patches"
 ```
@@ -279,7 +278,7 @@ There is an option to execute patches and shell scripts against the AOSP build t
 [[custom-patches]]
   repo = "https://github.com/RattlesnakeOS/community_patches"
   patches = [
-      "<community patches need to be upgraded to 10.0>.patch", "<community patches need to be upgraded to 10.0>.patch",
+      "<community patches need to be upgraded to 11.0>.patch", "<community patches need to be upgraded to 11.0>.patch",
   ]
 
 [[custom-scripts]]
@@ -364,9 +363,7 @@ If you decide this isn't for you and you want to remove all the provisioned AWS 
 <b>Important note</b>: this will not terminate any running EC2 instances that may have launched and these will need to be terminated manually.
 
 ### Revert back to stock Android
-For Pixel and Pixel XL, just unlock your bootloader and flash stock factory image.
-
-For newer devices, you'll need to clear the configured AVB public key after unlocking the bootloader and before locking it again with the stock factory images.
+You'll need to clear the configured AVB public key after unlocking the bootloader and before locking it again with the stock factory images.
 
 ```sh
 fastboot erase avb_custom_key

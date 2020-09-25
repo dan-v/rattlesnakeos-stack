@@ -32,11 +32,11 @@ var supportedRegions = []string{"ap-northeast-1", "ap-northeast-2", "ap-northeas
 	"us-east-1", "us-east-2", "us-west-1", "us-west-2", "cn-northwest-1", "cn-north-1"}
 
 var supportedDevicesFriendly = []string{
-	"Pixel", "Pixel XL", "Pixel 2", "Pixel 2 XL",
+	"Pixel 2", "Pixel 2 XL",
 	"Pixel 3", "Pixel 3 XL", "Pixel 3a", "Pixel 3a XL",
 	"Pixel 4", "Pixel 4 XL", "Pixel 4a"}
 var supportedDevicesCodename = []string{
-	"sailfish", "marlin", "walleye", "taimen",
+	"walleye", "taimen",
 	"blueline", "crosshatch", "sargo", "bonito",
 	"flame", "coral", "sunfish"}
 var supportDevicesOutput string
@@ -139,9 +139,6 @@ var deployCmd = &cobra.Command{
 		}
 		if viper.GetString("device") == "" {
 			return errors.New("must specify device type")
-		}
-		if viper.GetString("device") == "marlin" || viper.GetString("device") == "sailfish" {
-			log.Warnf("WARNING: marlin/sailfish devices are no longer receiving security updates and will likely be completely deprecated in the future")
 		}
 		if viper.GetString("chromium-version") != "" {
 			chromiumVersionSplit := strings.Split(viper.GetString("chromium-version"), ".")

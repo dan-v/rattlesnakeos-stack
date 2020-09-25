@@ -11,56 +11,35 @@ fi
 # check if supported device
 DEVICE=$1
 case "$DEVICE" in
-  marlin|sailfish)
-    DEVICE_FAMILY=marlin
-    KERNEL_FAMILY=marlin
-    KERNEL_DEFCONFIG=marlin
-    AVB_MODE=verity_only
-    ;;
   taimen)
     DEVICE_FAMILY=taimen
-    KERNEL_FAMILY=wahoo
-    KERNEL_DEFCONFIG=wahoo
     AVB_MODE=vbmeta_simple
     ;;
   walleye)
     DEVICE_FAMILY=muskie
-    KERNEL_FAMILY=wahoo
-    KERNEL_DEFCONFIG=wahoo
     AVB_MODE=vbmeta_simple
     ;;
   crosshatch|blueline)
     DEVICE_FAMILY=crosshatch
-    KERNEL_FAMILY=crosshatch
-    KERNEL_DEFCONFIG=b1c1
     AVB_MODE=vbmeta_chained
     EXTRA_OTA=(--retrofit_dynamic_partitions)
     ;;
   sargo|bonito)
     DEVICE_FAMILY=bonito
-    KERNEL_FAMILY=bonito
-    KERNEL_DEFCONFIG=bonito
     AVB_MODE=vbmeta_chained
     EXTRA_OTA=(--retrofit_dynamic_partitions)
     ;;
   flame|coral)
     DEVICE_FAMILY=coral
-    KERNEL_FAMILY=coral
-    KERNEL_DEFCONFIG=coral
     AVB_MODE=vbmeta_chained_v2
     ;;
   sunfish)
     DEVICE_FAMILY=sunfish
-    KERNEL_FAMILY=sunfish
-    KERNEL_DEFCONFIG=sunfish
     AVB_MODE=vbmeta_chained_v2
     ;;
   *)
-    echo "warning: unknown device $DEVICE, using Pixel 3 defaults"
-    DEVICE_FAMILY=$1
-    KERNEL_FAMILY=crosshatch
-    KERNEL_DEFCONFIG=b1c1
-    AVB_MODE=vbmeta_chained
+    echo "error: unknown device $DEVICE"
+    exit 1
     ;;
 esac
 
@@ -95,17 +74,13 @@ IGNORE_VERSION_CHECKS=<% .IgnoreVersionChecks %>
 # version of chromium to pin to if requested
 CHROMIUM_PINNED_VERSION=<% .ChromiumVersion %>
 
-# Whether the kernel needs to be rebuilt
-# It is always rebuilt for marlin/sailfish
-ENABLE_KERNEL_BUILD=false
-
 # whether keys are client side encrypted or not
 ENCRYPTED_KEYS="<% .EncryptedKeys %>"
 ENCRYPTION_KEY=
 ENCRYPTION_PIPE="/tmp/key"
 
 # pin to specific version of android
-ANDROID_VERSION="10.0"
+ANDROID_VERSION="11.0"
 
 # build type (user or userdebug)
 BUILD_TYPE="user"
@@ -131,27 +106,21 @@ SECONDS=0
 BUILD_TARGET="release aosp_${DEVICE} ${BUILD_TYPE}"
 RELEASE_URL="https://${AWS_RELEASE_BUCKET}.s3.amazonaws.com"
 RELEASE_CHANNEL="${DEVICE}-${BUILD_CHANNEL}"
-CHROME_CHANNEL="stable"
 BUILD_DATE=$(date +%Y.%m.%d.%H)
 BUILD_TIMESTAMP=$(date +%s)
 BUILD_DIR="$HOME/rattlesnake-os"
 KEYS_DIR="${BUILD_DIR}/keys"
 CERTIFICATE_SUBJECT='/CN=RattlesnakeOS'
 OFFICIAL_FDROID_KEY="43238d512c1e5eb2d6569f4a3afbf5523418b82e0a3ed1552770abb9a9c9ccab"
-KERNEL_SOURCE_DIR="${HOME}/kernel/google/${KERNEL_FAMILY}"
 BUILD_REASON=""
 
 # urls
 ANDROID_SDK_URL="https://dl.google.com/android/repository/sdk-tools-linux-4333796.zip"
 MANIFEST_URL="https://android.googlesource.com/platform/manifest"
 STACK_URL_LATEST="https://api.github.com/repos/dan-v/rattlesnakeos-stack/releases/latest"
-KERNEL_SOURCE_URL="https://android.googlesource.com/kernel/msm"
 AOSP_URL_BUILD="https://developers.google.com/android/images"
 AOSP_URL_PLATFORM_BUILD="https://android.googlesource.com/platform/build"
-RATTLESNAKEOS_LATEST_JSON="https://raw.githubusercontent.com/RattlesnakeOS/latest/${ANDROID_VERSION}"
-RATTLESNAKEOS_LATEST_JSON_AOSP="${RATTLESNAKEOS_LATEST_JSON}/aosp.json"
-RATTLESNAKEOS_LATEST_JSON_CHROMIUM="${RATTLESNAKEOS_LATEST_JSON}/chromium.json"
-RATTLESNAKEOS_LATEST_JSON_FDROID="${RATTLESNAKEOS_LATEST_JSON}/fdroid.json"
+RATTLESNAKEOS_LATEST_JSON="https://raw.githubusercontent.com/RattlesnakeOS/latest/${ANDROID_VERSION}/latest.json"
 
 STACK_UPDATE_MESSAGE=
 LATEST_STACK_VERSION=
@@ -174,29 +143,32 @@ get_latest_versions() {
     STACK_UPDATE_MESSAGE="WARNING: you should upgrade to the latest version: ${LATEST_STACK_VERSION}"
   fi
 
+  # download latest.json and use for remaining checks
+  curl --fail -s "${RATTLESNAKEOS_LATEST_JSON}" > $HOME/latest.json
+
   # check for latest chromium version
-  LATEST_CHROMIUM=$(curl --fail -s "${RATTLESNAKEOS_LATEST_JSON_CHROMIUM}" | jq -r ".$CHROME_CHANNEL")
+  LATEST_CHROMIUM=$(jq -r '.chromium' $HOME/latest.json)
   if [ -z "$LATEST_CHROMIUM" ]; then
     aws_notify_simple "ERROR: Unable to get latest Chromium version details. Stopping build."
     exit 1
   fi
   echo "LATEST_CHROMIUM=${LATEST_CHROMIUM}"
 
-  FDROID_CLIENT_VERSION=$(curl --fail -s "${RATTLESNAKEOS_LATEST_JSON_FDROID}" | jq -r ".client")
+  FDROID_CLIENT_VERSION=$(jq -r '.fdroid.client' $HOME/latest.json)
   if [ -z "$FDROID_CLIENT_VERSION" ]; then
     aws_notify_simple "ERROR: Unable to get latest F-Droid version details. Stopping build."
     exit 1
   fi
   echo "FDROID_CLIENT_VERSION=${FDROID_CLIENT_VERSION}"
 
-  FDROID_PRIV_EXT_VERSION=$(curl --fail -s "${RATTLESNAKEOS_LATEST_JSON_FDROID}" | jq -r ".privilegedextention")
+  FDROID_PRIV_EXT_VERSION=$(jq -r '.fdroid.privilegedextention' $HOME/latest.json)
   if [ -z "$FDROID_PRIV_EXT_VERSION" ]; then
     aws_notify_simple "ERROR: Unable to get latest F-Droid privilege extension version details. Stopping build."
     exit 1
   fi
   echo "FDROID_PRIV_EXT_VERSION=${FDROID_PRIV_EXT_VERSION}"
 
-  AOSP_VENDOR_BUILD=$(curl --fail -s "${RATTLESNAKEOS_LATEST_JSON_AOSP}" | jq -r ".${DEVICE}.build")
+  AOSP_VENDOR_BUILD=$(jq -r ".devices.${DEVICE}.build_id" $HOME/latest.json)
   if [ -z "AOSP_VENDOR_BUILD" ]; then
     aws_notify_simple "ERROR: Unable to get latest AOSP build version details. Stopping build."
     exit 1
@@ -208,7 +180,7 @@ get_latest_versions() {
   echo "AOSP_BUILD=${AOSP_BUILD}"
 
   if [ -z "$AOSP_BRANCH" ]; then
-    AOSP_BRANCH=$(curl --fail -s "${RATTLESNAKEOS_LATEST_JSON_AOSP}" | jq -r ".${DEVICE}.branch")
+    AOSP_BRANCH=$(jq -r ".devices.${DEVICE}.aosp_tag" $HOME/latest.json)
     if [ -z "$AOSP_BRANCH" ]; then
       aws_notify_simple "ERROR: Unable to get latest AOSP branch details. Stopping build."
       exit 1
@@ -322,11 +294,6 @@ full_run() {
   setup_vendor
   build_fdroid
   apply_patches
-  # only marlin and sailfish need kernel rebuilt so that verity_key is included
-  # Also build the kernel if enabled in the config 
-  if [ "${KERNEL_FAMILY}" == "marlin" ] || [ "${ENABLE_KERNEL_BUILD}" == "true" ]; then
-    rebuild_kernel
-  fi
   add_chromium
   build_aosp
   release "${DEVICE}"
@@ -340,9 +307,6 @@ add_chromium() {
 
   # replace AOSP webview with latest built chromium webview
   aws s3 cp "s3://${AWS_RELEASE_BUCKET}/chromium/SystemWebView.apk" ${BUILD_DIR}/external/chromium-webview/prebuilt/arm64/webview.apk
-
-  # add latest built chromium browser to external/chromium
-  aws s3 cp "s3://${AWS_RELEASE_BUCKET}/chromium/ChromeModernPublic.apk" ${BUILD_DIR}/external/chromium/prebuilt/arm64/
 }
 
 build_fdroid() {
@@ -579,15 +543,10 @@ aosp_repo_modifications() {
   <remote name="github" fetch="https://github.com/RattlesnakeOS/" revision="${ANDROID_VERSION}" />
   <remote name="fdroid" fetch="https://gitlab.com/fdroid/" />
 
-  <project path="external/chromium" name="platform_external_chromium" remote="github" />
   <project path="packages/apps/Updater" name="platform_packages_apps_Updater" remote="github" />
   <project path="packages/apps/F-Droid" name="platform_external_fdroid" remote="github" />
   <project path="packages/apps/F-DroidPrivilegedExtension" name="privileged-extension" remote="fdroid" revision="refs/tags/${FDROID_PRIV_EXT_VERSION}" />
   <project path="vendor/android-prepare-vendor" name="android-prepare-vendor" remote="github" />
-
-  <remove-project name="platform/packages/apps/Browser2" />
-  <remove-project name="platform/packages/apps/Calendar" />
-  <remove-project name="platform/packages/apps/QuickSearchBox" />
 
   <% if .CustomManifestRemotes %>
   <% range $i, $r := .CustomManifestRemotes %>
@@ -621,7 +580,7 @@ setup_vendor() {
   sudo DEBIAN_FRONTEND=noninteractive apt-get -y install python-protobuf
 
   # get vendor files (with timeout)
-  timeout 30m "${BUILD_DIR}/vendor/android-prepare-vendor/execute-all.sh" --debugfs --keep --yes --device "${DEVICE}" --buildID "${AOSP_VENDOR_BUILD}" --output "${BUILD_DIR}/vendor/android-prepare-vendor"
+  timeout 30m "${BUILD_DIR}/vendor/android-prepare-vendor/execute-all.sh" --debugfs --yes --device "${DEVICE}" --buildID "${AOSP_VENDOR_BUILD}" --output "${BUILD_DIR}/vendor/android-prepare-vendor"
   
   # copy vendor files to build tree
   mkdir --parents "${BUILD_DIR}/vendor/google_devices" || true
@@ -633,73 +592,52 @@ setup_vendor() {
     rm -rf "${BUILD_DIR}/vendor/google_devices/$DEVICE_FAMILY" || true
     mv "${BUILD_DIR}/vendor/android-prepare-vendor/$DEVICE/$(tr '[:upper:]' '[:lower:]' <<< "${AOSP_VENDOR_BUILD}")/vendor/google_devices/$DEVICE_FAMILY" "${BUILD_DIR}/vendor/google_devices"
   fi
+
+  # workaround for libsdsprpc and libadsprpc not specifying LOCAL_SHARED_LIBRARIES
+  sed -i '/LOCAL_MODULE := libsdsprpc/a LOCAL_SHARED_LIBRARIES := libc++ libc libcutils libdl libion liblog libm' ${BUILD_DIR}/vendor/google_devices/${DEVICE}/Android.mk || true
+  sed -i '/LOCAL_MODULE := libadsprpc/a LOCAL_SHARED_LIBRARIES := libc++ libc libcutils libdl libion liblog libm' ${BUILD_DIR}/vendor/google_devices/${DEVICE}/Android.mk || true
 }
 
 apply_patches() {
   log_header ${FUNCNAME}
 
+  patch_11_issues
+  patch_disable_apex
   patch_custom
-  patch_aosp_removals
-  patch_add_apps
   patch_base_config
-  patch_settings_app
   patch_device_config
+  patch_add_apps
   patch_updater
   patch_priv_ext
-  patch_launcher
-  patch_broken_alarmclock
-  patch_broken_messaging
-  patch_disable_apex
+}
+
+patch_11_issues() {
+  log_header ${FUNCNAME}
+
+  # workaround for vintf build issue
+  sed -i '1 i\BUILD_BROKEN_VINTF_PRODUCT_COPY_FILES := true' ${BUILD_DIR}/build/make/target/board/BoardConfigMainlineCommon.mk
+
+  # workaround for coral/flame build issue
+  sed -i 's@PRODUCT_ENFORCE_ARTIFACT_PATH_REQUIREMENTS := strict@#PRODUCT_ENFORCE_ARTIFACT_PATH_REQUIREMENTS := strict@' ${BUILD_DIR}/device/google/coral/aosp_coral.mk || true
+  sed -i 's@PRODUCT_ENFORCE_ARTIFACT_PATH_REQUIREMENTS := strict@#PRODUCT_ENFORCE_ARTIFACT_PATH_REQUIREMENTS := strict@' ${BUILD_DIR}/device/google/coral/aosp_flame.mk || true
+
+  # biometrics was disabled (https://cs.android.com/android/_/android/platform/frameworks/base/+/ede919cace2a32ec235eefe86e04a75848bd1d5f)
+  # but never added upstream to device specific overlays
+  if [ "${DEVICE_FAMILY}" == "coral" ]; then
+    sed 's@<!-- <item>0:8:15</item>  ID0:Fingerprint:Strong -->@    <item>0:2:15</item>@' ${BUILD_DIR}/frameworks/base/core/res/res/values/config.xml
+  else
+    sed 's@<!-- <item>0:2:15</item>  ID0:Fingerprint:Strong -->@    <item>0:2:15</item>@' ${BUILD_DIR}/frameworks/base/core/res/res/values/config.xml
+  fi
 }
 
 # currently don't have a need for apex updates (https://source.android.com/devices/tech/ota/apex)
 patch_disable_apex() {
   log_header ${FUNCNAME}
 
-  # pixel 1 devices do not support apex so nothing to patch
   # pixel 2 devices opt in here
   sed -i 's@$(call inherit-product, $(SRC_TARGET_DIR)/product/updatable_apex.mk)@@' ${BUILD_DIR}/device/google/wahoo/device.mk
   # all other devices use mainline and opt in here
   sed -i 's@$(call inherit-product, $(SRC_TARGET_DIR)/product/updatable_apex.mk)@@' ${BUILD_DIR}/build/make/target/product/mainline_system.mk
-}
-
-# TODO: remove once this once fix from upstream makes it into release branch
-# https://android.googlesource.com/platform/packages/apps/DeskClock/+/e6351b3b85b2f5d53d43e4797d3346ce22a5fa6f%5E%21/
-patch_broken_alarmclock() {
-  log_header ${FUNCNAME}
-
-  if ! grep -q "android.permission.FOREGROUND_SERVICE" ${BUILD_DIR}/packages/apps/DeskClock/AndroidManifest.xml; then
-    sed -i '/<uses-permission android:name="android.permission.READ_EXTERNAL_STORAGE" \/>/a <uses-permission android:name="android.permission.FOREGROUND_SERVICE" \/>' ${BUILD_DIR}/packages/apps/DeskClock/AndroidManifest.xml
-    sed -i 's@<uses-sdk android:minSdkVersion="19" android:targetSdkVersion="28" />@<uses-sdk android:minSdkVersion="19" android:targetSdkVersion="25" />@' ${BUILD_DIR}/packages/apps/DeskClock/AndroidManifest.xml
-  fi
-}
-
-# TODO: remove once this once fix from upstream makes it into release branch
-# https://android.googlesource.com/platform/packages/apps/Messaging/+/8e71d1b707123e1b48b5529b1661d53762922400%5E%21/
-patch_broken_messaging() {
-  log_header ${FUNCNAME}
-
-  if ! grep -q "android:targetSdkVersion=\"24\"" ${BUILD_DIR}/packages/apps/Messaging/AndroidManifest.xml; then
-    sed -i 's@<uses-sdk android:minSdkVersion="19" android:targetSdkVersion="28" />@<uses-sdk android:minSdkVersion="19" android:targetSdkVersion="24" />@' ${BUILD_DIR}/packages/apps/Messaging/AndroidManifest.xml
-  fi
-}
-
-patch_aosp_removals() {
-  log_header ${FUNCNAME}
-
-  # loop over all make files as these keep changing and remove components
-  for mk_file in ${BUILD_DIR}/build/make/target/product/*.mk; do
-    # remove Browser2
-    sed -i '/Browser2/d' ${mk_file}
-
-    # remove Calendar
-    sed -i '/Calendar \\/d' ${mk_file}
-    sed -i '/Calendar.apk/d' ${mk_file}
-
-    # remove QuickSearchBox
-    sed -i '/QuickSearchBox/d' ${mk_file}
-  done
-
 }
 
 # TODO: most of this is fragile and unforgiving
@@ -758,29 +696,14 @@ patch_custom() {
 patch_base_config() {
   log_header ${FUNCNAME}
 
-  # enable swipe up gesture functionality as option
-  sed -i 's@<bool name="config_swipe_up_gesture_setting_available">false</bool>@<bool name="config_swipe_up_gesture_setting_available">true</bool>@' ${BUILD_DIR}/frameworks/base/core/res/res/values/config.xml
-
   # enable doze and app standby
   sed -i 's@<bool name="config_enableAutoPowerModes">false</bool>@<bool name="config_enableAutoPowerModes">true</bool>@' ${BUILD_DIR}/frameworks/base/core/res/res/values/config.xml
-}
-
-patch_settings_app() {
-  log_header ${FUNCNAME}
-
-  # fix for cards not disappearing in settings app
-  sed -i 's@<bool name="config_use_legacy_suggestion">true</bool>@<bool name="config_use_legacy_suggestion">false</bool>@' ${BUILD_DIR}/packages/apps/Settings/res/values/config.xml
 }
 
 patch_device_config() {
   log_header ${FUNCNAME}
 
   # set proper model names
-  sed -i 's@PRODUCT_MODEL := AOSP on msm8996@PRODUCT_MODEL := Pixel XL@' ${BUILD_DIR}/device/google/marlin/aosp_marlin.mk
-  sed -i 's@PRODUCT_MANUFACTURER := google@PRODUCT_MANUFACTURER := Google@' ${BUILD_DIR}/device/google/marlin/aosp_marlin.mk
-  sed -i 's@PRODUCT_MODEL := AOSP on msm8996@PRODUCT_MODEL := Pixel@' ${BUILD_DIR}/device/google/marlin/aosp_sailfish.mk
-  sed -i 's@PRODUCT_MANUFACTURER := google@PRODUCT_MANUFACTURER := Google@' ${BUILD_DIR}/device/google/marlin/aosp_sailfish.mk
-
   sed -i 's@PRODUCT_MODEL := AOSP on taimen@PRODUCT_MODEL := Pixel 2 XL@' ${BUILD_DIR}/device/google/taimen/aosp_taimen.mk
   sed -i 's@PRODUCT_MODEL := AOSP on walleye@PRODUCT_MODEL := Pixel 2@' ${BUILD_DIR}/device/google/muskie/aosp_walleye.mk
 
@@ -796,23 +719,13 @@ patch_device_config() {
   sed -i 's@PRODUCT_MODEL := AOSP on sunfish@PRODUCT_MODEL := Pixel 4A@' ${BUILD_DIR}/device/google/sunfish/aosp_sunfish.mk || true
 }
 
-get_package_mk_file() {
-  mk_file=${BUILD_DIR}/build/make/target/product/handheld_system.mk
-  if [ ! -f ${mk_file} ]; then
-    log "Expected handheld_system.mk or core.mk do not exist"
-    exit 1
-  fi
-  echo ${mk_file}
-}
-
 patch_add_apps() {
   log_header ${FUNCNAME}
 
-  mk_file=$(get_package_mk_file)
+  mk_file=${BUILD_DIR}/build/make/target/product/handheld_system.mk
   sed -i "\$aPRODUCT_PACKAGES += Updater" ${mk_file}
   sed -i "\$aPRODUCT_PACKAGES += F-DroidPrivilegedExtension" ${mk_file}
   sed -i "\$aPRODUCT_PACKAGES += F-Droid" ${mk_file}
-  sed -i "\$aPRODUCT_PACKAGES += chromium" ${mk_file}
 
   # add any modules defined in custom manifest projects
   <% if .CustomManifestProjects %><% range $i, $r := .CustomManifestProjects %><% range $j, $q := .Modules %>
@@ -828,6 +741,209 @@ patch_updater() {
 
   cd "$BUILD_DIR"/packages/apps/Updater/res/values
   sed --in-place --expression "s@s3bucket@${RELEASE_URL}/@g" config.xml
+
+  # TODO: just a hack to get 11 up and running
+  # related commit: https://android.googlesource.com/platform/system/sepolicy/+/d61b0ce1bc8de2560f1fa173c8d01a09d039a12a%5E%21/#F0
+  cat << 'EOF' > $HOME/updater-selinux.patch
+From 33fa92c37dd0101164a55ea1584cef6450fa641b Mon Sep 17 00:00:00 2001
+From: Daniel Micay <danielmicay@gmail.com>
+Date: Tue, 15 Sep 2020 00:08:40 -0400
+Subject: [PATCH] add SELinux domain for Updater app
+
+---
+ prebuilts/api/30.0/private/app_neverallows.te   |  2 +-
+ .../30.0/private/compat/29.0/29.0.ignore.cil    |  1 +
+ prebuilts/api/30.0/private/seapp_contexts       |  9 +++++----
+ prebuilts/api/30.0/private/updater_app.te       | 17 +++++++++++++++++
+ prebuilts/api/30.0/public/update_engine.te      |  1 +
+ prebuilts/api/30.0/public/updater_app.te        |  5 +++++
+ private/app_neverallows.te                      |  2 +-
+ private/compat/29.0/29.0.ignore.cil             |  1 +
+ private/seapp_contexts                          |  1 +
+ private/updater_app.te                          | 17 +++++++++++++++++
+ public/update_engine.te                         |  1 +
+ public/updater_app.te                           |  5 +++++
+ 12 files changed, 56 insertions(+), 6 deletions(-)
+ create mode 100644 prebuilts/api/30.0/private/updater_app.te
+ create mode 100644 prebuilts/api/30.0/public/updater_app.te
+ create mode 100644 private/updater_app.te
+ create mode 100644 public/updater_app.te
+
+diff --git a/prebuilts/api/30.0/private/app_neverallows.te b/prebuilts/api/30.0/private/app_neverallows.te
+index 115718700..32980b354 100644
+--- a/prebuilts/api/30.0/private/app_neverallows.te
++++ b/prebuilts/api/30.0/private/app_neverallows.te
+@@ -130,7 +130,7 @@ neverallow { all_untrusted_apps -mediaprovider } { cache_file cache_recovery_fil
+ # World accessible data locations allow application to fill the device
+ # with unaccounted for data. This data will not get removed during
+ # application un-installation.
+-neverallow { all_untrusted_apps -mediaprovider } {
++neverallow { all_untrusted_apps -mediaprovider -updater_app } {
+   fs_type
+   -sdcard_type
+   file_type
+diff --git a/prebuilts/api/30.0/private/compat/29.0/29.0.ignore.cil b/prebuilts/api/30.0/private/compat/29.0/29.0.ignore.cil
+index fdea691ea..730695e8e 100644
+--- a/prebuilts/api/30.0/private/compat/29.0/29.0.ignore.cil
++++ b/prebuilts/api/30.0/private/compat/29.0/29.0.ignore.cil
+@@ -113,6 +113,7 @@
+     traced_perf_socket
+     timezonedetector_service
+     untrusted_app_29
++    updater_app
+     usb_serial_device
+     userspace_reboot_config_prop
+     userspace_reboot_exported_prop
+diff --git a/prebuilts/api/30.0/private/seapp_contexts b/prebuilts/api/30.0/private/seapp_contexts
+index a8c61be8f..e8951230d 100644
+--- a/prebuilts/api/30.0/private/seapp_contexts
++++ b/prebuilts/api/30.0/private/seapp_contexts
+@@ -162,10 +162,11 @@ user=_app isPrivApp=true name=com.android.providers.media.module domain=mediapro
+ user=_app isPrivApp=true name=com.google.android.providers.media.module domain=mediaprovider_app type=privapp_data_file levelFrom=all
+ user=_app seinfo=platform isPrivApp=true name=com.android.permissioncontroller domain=permissioncontroller_app type=privapp_data_file levelFrom=all
+ user=_app isPrivApp=true name=com.android.vzwomatrigger domain=vzwomatrigger_app type=privapp_data_file levelFrom=all
+ user=_app isPrivApp=true name=com.google.android.gms domain=gmscore_app type=privapp_data_file levelFrom=user
+ user=_app isPrivApp=true name=com.google.android.gms.* domain=gmscore_app type=privapp_data_file levelFrom=user
+ user=_app isPrivApp=true name=com.google.android.gms:* domain=gmscore_app type=privapp_data_file levelFrom=user
+ user=_app isPrivApp=true name=com.google.android.gsf domain=gmscore_app type=privapp_data_file levelFrom=user
++user=_app isPrivApp=true name=app.seamlessupdate.client domain=updater_app type=app_data_file levelFrom=user
+ user=_app minTargetSdkVersion=30 domain=untrusted_app type=app_data_file levelFrom=all
+ user=_app minTargetSdkVersion=29 domain=untrusted_app_29 type=app_data_file levelFrom=all
+ user=_app minTargetSdkVersion=28 domain=untrusted_app_27 type=app_data_file levelFrom=all
+diff --git a/prebuilts/api/30.0/private/updater_app.te b/prebuilts/api/30.0/private/updater_app.te
+new file mode 100644
+index 000000000..0ce047b97
+--- /dev/null
++++ b/prebuilts/api/30.0/private/updater_app.te
+@@ -0,0 +1,17 @@
++###
++### Updater app
++###
++
++typeattribute updater_app coredomain;
++
++app_domain(updater_app)
++untrusted_app_domain(updater_app)
++net_domain(updater_app)
++
++# Write to /data/ota_package for OTA packages.
++allow updater_app ota_package_file:dir rw_dir_perms;
++allow updater_app ota_package_file:file create_file_perms;
++
++# Allow Updater to communicate with update_engine for A/B update.
++binder_call(updater_app, update_engine)
++allow updater_app update_engine_service:service_manager find;
+diff --git a/prebuilts/api/30.0/public/update_engine.te b/prebuilts/api/30.0/public/update_engine.te
+index 8b767bea0..4dd951c9d 100644
+--- a/prebuilts/api/30.0/public/update_engine.te
++++ b/prebuilts/api/30.0/public/update_engine.te
+@@ -46,6 +46,7 @@ userdebug_or_eng(` + "`" + `
+ ')
+ 
+ binder_call(update_engine, gmscore_app)
++binder_call(update_engine, updater_app)
+ 
+ # Allow update_engine to call the callback function provided by system_server.
+ binder_call(update_engine, system_server)
+diff --git a/prebuilts/api/30.0/public/updater_app.te b/prebuilts/api/30.0/public/updater_app.te
+new file mode 100644
+index 000000000..97a850ba1
+--- /dev/null
++++ b/prebuilts/api/30.0/public/updater_app.te
+@@ -0,0 +1,5 @@
++###
++### Updater app
++###
++
++type updater_app, domain;
+diff --git a/private/app_neverallows.te b/private/app_neverallows.te
+index 115718700..32980b354 100644
+--- a/private/app_neverallows.te
++++ b/private/app_neverallows.te
+@@ -130,7 +130,7 @@ neverallow { all_untrusted_apps -mediaprovider } { cache_file cache_recovery_fil
+ # World accessible data locations allow application to fill the device
+ # with unaccounted for data. This data will not get removed during
+ # application un-installation.
+-neverallow { all_untrusted_apps -mediaprovider } {
++neverallow { all_untrusted_apps -mediaprovider -updater_app } {
+   fs_type
+   -sdcard_type
+   file_type
+diff --git a/private/compat/29.0/29.0.ignore.cil b/private/compat/29.0/29.0.ignore.cil
+index fdea691ea..730695e8e 100644
+--- a/private/compat/29.0/29.0.ignore.cil
++++ b/private/compat/29.0/29.0.ignore.cil
+@@ -113,6 +113,7 @@
+     traced_perf_socket
+     timezonedetector_service
+     untrusted_app_29
++    updater_app
+     usb_serial_device
+     userspace_reboot_config_prop
+     userspace_reboot_exported_prop
+diff --git a/private/seapp_contexts b/private/seapp_contexts
+index d0898bd16..e8951230d 100644
+--- a/private/seapp_contexts
++++ b/private/seapp_contexts
+@@ -166,6 +166,7 @@ user=_app isPrivApp=true name=com.android.vzwomatrigger domain=vzwomatrigger_app
+ user=_app isPrivApp=true name=com.google.android.gms.* domain=gmscore_app type=privapp_data_file levelFrom=user
+ user=_app isPrivApp=true name=com.google.android.gms:* domain=gmscore_app type=privapp_data_file levelFrom=user
+ user=_app isPrivApp=true name=com.google.android.gsf domain=gmscore_app type=privapp_data_file levelFrom=user
++user=_app isPrivApp=true name=app.seamlessupdate.client domain=updater_app type=app_data_file levelFrom=user
+ user=_app minTargetSdkVersion=30 domain=untrusted_app type=app_data_file levelFrom=all
+ user=_app minTargetSdkVersion=29 domain=untrusted_app_29 type=app_data_file levelFrom=all
+ user=_app minTargetSdkVersion=28 domain=untrusted_app_27 type=app_data_file levelFrom=all
+diff --git a/private/updater_app.te b/private/updater_app.te
+new file mode 100644
+index 000000000..0ce047b97
+--- /dev/null
++++ b/private/updater_app.te
+@@ -0,0 +1,17 @@
++###
++### Updater app
++###
++
++typeattribute updater_app coredomain;
++
++app_domain(updater_app)
++untrusted_app_domain(updater_app)
++net_domain(updater_app)
++
++# Write to /data/ota_package for OTA packages.
++allow updater_app ota_package_file:dir rw_dir_perms;
++allow updater_app ota_package_file:file create_file_perms;
++
++# Allow Updater to communicate with update_engine for A/B update.
++binder_call(updater_app, update_engine)
++allow updater_app update_engine_service:service_manager find;
+diff --git a/public/update_engine.te b/public/update_engine.te
+index 8b767bea0..4dd951c9d 100644
+--- a/public/update_engine.te
++++ b/public/update_engine.te
+@@ -46,6 +46,7 @@ userdebug_or_eng(` + "`" + `
+ ')
+ 
+ binder_call(update_engine, gmscore_app)
++binder_call(update_engine, updater_app)
+ 
+ # Allow update_engine to call the callback function provided by system_server.
+ binder_call(update_engine, system_server)
+diff --git a/public/updater_app.te b/public/updater_app.te
+new file mode 100644
+index 000000000..97a850ba1
+--- /dev/null
++++ b/public/updater_app.te
+@@ -0,0 +1,5 @@
++###
++### Updater app
++###
++
++type updater_app, domain;
+-- 
+EOF
+  pushd $BUILD_DIR/system/sepolicy
+  git apply $HOME/updater-selinux.patch
+  popd
 }
 
 fdpe_hash() {
@@ -844,87 +960,6 @@ patch_priv_ext() {
   unofficial_platform_hash=$(fdpe_hash "${KEYS_DIR}/${DEVICE}/platform.x509.pem")
   sed -i 's/'${OFFICIAL_FDROID_KEY}'")/'${unofficial_releasekey_hash}'"),\n            new Pair<>("org.fdroid.fdroid", "'${unofficial_platform_hash}'")/' \
       "${BUILD_DIR}/packages/apps/F-DroidPrivilegedExtension/app/src/main/java/org/fdroid/fdroid/privileged/ClientWhitelist.java"
-}
-
-patch_launcher() {
-  log_header ${FUNCNAME}
-
-  # disable QuickSearchBox widget on home screen
-  sed -i.original "s/QSB_ON_FIRST_SCREEN = true;/QSB_ON_FIRST_SCREEN = false;/" "${BUILD_DIR}/packages/apps/Launcher3/src/com/android/launcher3/config/BaseFlags.java"
-  # fix compile error with uninitialized variable
-  sed -i.original "s/boolean createEmptyRowOnFirstScreen;/boolean createEmptyRowOnFirstScreen = false;/" "${BUILD_DIR}/packages/apps/Launcher3/src/com/android/launcher3/provider/ImportDataTask.java"
-}
-
-rebuild_kernel() {
-  log_header ${FUNCNAME}
-
-  # checkout kernel source on proper commit
-  mkdir -p "${KERNEL_SOURCE_DIR}"
-  retry git clone "${KERNEL_SOURCE_URL}" "${KERNEL_SOURCE_DIR}"
-  
-  if [ "${KERNEL_FAMILY}" == "marlin" ] || [ "${KERNEL_FAMILY}" == "wahoo" ]; then
-    kernel_image="${BUILD_DIR}/device/google/${KERNEL_FAMILY}-kernel/Image.lz4-dtb"
-  else
-    kernel_image="${BUILD_DIR}/device/google/${KERNEL_FAMILY}-kernel/Image.lz4"
-  fi
-
-  # TODO: make this a bit more robust
-  kernel_commit_id=$(lz4cat "${kernel_image}" | strings | grep -a 'Linux version [0-9]' | cut -d ' ' -f3 | cut -d'-' -f2 | sed 's/^g//g')
-  cd "${KERNEL_SOURCE_DIR}"
-  log "Checking out kernel commit ${kernel_commit_id}"
-  git checkout ${kernel_commit_id}
-
-  # TODO: kernel patch hooks should be added here 
-
-  # run in another shell to avoid it mucking with environment variables for normal AOSP build
-  (
-      set -e;
-      export PATH="${BUILD_DIR}/prebuilts/gcc/linux-x86/aarch64/aarch64-linux-android-4.9/bin:${PATH}";
-      export PATH="${BUILD_DIR}/prebuilts/gcc/linux-x86/arm/arm-linux-androideabi-4.9/bin:${PATH}";
-      export PATH="${BUILD_DIR}/prebuilts/misc/linux-x86/lz4:${PATH}";
-      export PATH="${BUILD_DIR}/prebuilts/misc/linux-x86/dtc:${PATH}";
-      export PATH="${BUILD_DIR}/prebuilts/misc/linux-x86/libufdt:${PATH}";
-      cd ${KERNEL_SOURCE_DIR};
-
-      if [ "${KERNEL_FAMILY}" == "marlin" ]; then
-        ln --verbose --symbolic ${KEYS_DIR}/${DEVICE}/verity_user.der.x509 ${KERNEL_SOURCE_DIR}/verity_user.der.x509;
-        make O=out ARCH=arm64 ${KERNEL_DEFCONFIG}_defconfig;
-        make -j$(nproc --all) \
-          O=out \
-          ARCH=arm64 \
-          CROSS_COMPILE=aarch64-linux-android- \
-          CROSS_COMPILE_ARM32=arm-linux-androideabi-
-        
-        cp -f out/arch/arm64/boot/Image.lz4-dtb ${BUILD_DIR}/device/google/${KERNEL_FAMILY}-kernel/;
-      fi
-
-      # TODO: haven't tested kernel build for coral
-      if [ "${KERNEL_FAMILY}" == "wahoo" ] || [ "${KERNEL_FAMILY}" == "crosshatch" ] || [ "${KERNEL_FAMILY}" == "bonito" ] || [ "${KERNEL_FAMILY}" == "coral" ]; then
-        export PATH="${BUILD_DIR}/prebuilts/clang/host/linux-x86/clang-r353983c/bin:${PATH}";
-        export LD_LIBRARY_PATH="${BUILD_DIR}/prebuilts/clang/host/linux-x86/clang-r353983c/lib64:${LD_LIBRARY_PATH}";
-        make O=out ARCH=arm64 ${KERNEL_DEFCONFIG}_defconfig;
-        make -j$(nproc --all) \
-          O=out \
-          ARCH=arm64 \
-          CC=clang \
-          CLANG_TRIPLE=aarch64-linux-gnu- \
-          CROSS_COMPILE=aarch64-linux-android- \
-          CROSS_COMPILE_ARM32=arm-linux-androideabi-
-        
-        cp -f out/arch/arm64/boot/{dtbo.img,Image.lz4-dtb} ${BUILD_DIR}/device/google/${KERNEL_FAMILY}-kernel/;
-
-        if [ "${KERNEL_FAMILY}" == "crosshatch" ]; then
-          cp -f out/arch/arm64/boot/dts/qcom/{sdm845-v2.dtb,sdm845-v2.1.dtb} ${BUILD_DIR}/device/google/${KERNEL_FAMILY}-kernel/;
-        fi
-
-        if [ "${KERNEL_FAMILY}" == "bonito" ]; then
-          cp -f out/arch/arm64/boot/dts/qcom/sdm670.dtb ${BUILD_DIR}/device/google/${KERNEL_FAMILY}-kernel/;
-        fi
-      
-      fi
-      
-      rm -rf ${BUILD_DIR}/out/build_*;
-  )
 }
 
 build_aosp() {
@@ -944,7 +979,7 @@ build_aosp() {
   source build/envsetup.sh
   export LANG=C
   export _JAVA_OPTIONS=-XX:-UsePerfData
-  export BUILD_NUMBER=$(cat out/build_number.txt 2>/dev/null || date --utc +%Y.%m.%d.%H)
+  export BUILD_NUMBER=$(cat out/soong/build_number.txt 2>/dev/null || date --utc +%Y.%m.%d.%H)
   log "BUILD_NUMBER=$BUILD_NUMBER"
   export DISPLAY_BUILD_NUMBER=true
   chrt -b -p 0 $$
@@ -954,6 +989,12 @@ build_aosp() {
   retry make -j $(nproc) target-files-package
   log "Running brillo_update_payload"
   retry make -j $(nproc) brillo_update_payload
+
+  log "Running m otatools-package"
+  m otatools-package
+  rm -rf $HOME/release
+  mkdir -p $HOME/release
+  unzip $BUILD_DIR/out/target/product/$DEVICE/otatools.zip -d $HOME/release
 }
 
 get_radio_image() {
@@ -971,7 +1012,7 @@ release() {
   source build/envsetup.sh
   export LANG=C
   export _JAVA_OPTIONS=-XX:-UsePerfData
-  export BUILD_NUMBER=$(cat out/build_number.txt 2>/dev/null || date --utc +%Y.%m.%d.%H)
+  export BUILD_NUMBER=$(cat out/soong/build_number.txt 2>/dev/null || date --utc +%Y.%m.%d.%H)
   log "BUILD_NUMBER=$BUILD_NUMBER"
   export DISPLAY_BUILD_NUMBER=true
   chrt -b -p 0 $$
@@ -1024,20 +1065,23 @@ release() {
       ;;
   esac
 
-  export PATH=$BUILD_DIR/prebuilts/build-tools/linux-x86/bin:$PATH
+  export PATH=$HOME/release/bin:$PATH
+  export PATH="$BUILD_DIR/prebuilts/jdk/jdk9/linux-x86/bin:$PATH"
 
   log "Running sign_target_files_apks"
-  build/tools/releasetools/sign_target_files_apks -o -d "$KEY_DIR" -k "build/target/product/security/networkstack=${KEY_DIR}/networkstack" "${AVB_SWITCHES[@]}" \
-    out/target/product/$DEVICE/obj/PACKAGING/target_files_intermediates/$PREFIX$DEVICE-target_files-$BUILD_NUMBER.zip \
-    $OUT/$TARGET_FILES
+  $HOME/release/releasetools/sign_target_files_apks \
+	-o -d "$KEY_DIR" \
+	-k "${BUILD_DIR}/build/target/product/security/networkstack=${KEY_DIR}/networkstack" "${AVB_SWITCHES[@]}" \
+	${BUILD_DIR}/out/target/product/$DEVICE/obj/PACKAGING/target_files_intermediates/$PREFIX$DEVICE-target_files-$BUILD_NUMBER.zip \
+	$OUT/$TARGET_FILES
 
   log "Running ota_from_target_files"
-  build/tools/releasetools/ota_from_target_files --block -k "$KEY_DIR/releasekey" "${EXTRA_OTA[@]}" $OUT/$TARGET_FILES \
+  $HOME/release/releasetools/ota_from_target_files --block -k "$KEY_DIR/releasekey" "${EXTRA_OTA[@]}" $OUT/$TARGET_FILES \
       $OUT/$DEVICE-ota_update-$BUILD.zip
 
   log "Running img_from_target_files"
-  sed -i 's/zipfile\.ZIP_DEFLATED/zipfile\.ZIP_STORED/' build/tools/releasetools/img_from_target_files.py
-  build/tools/releasetools/img_from_target_files $OUT/$TARGET_FILES $OUT/$DEVICE-img-$BUILD.zip
+  sed -i 's/zipfile\.ZIP_DEFLATED/zipfile\.ZIP_STORED/' $HOME/release/releasetools/img_from_target_files.py
+  $HOME/release/releasetools/img_from_target_files $OUT/$TARGET_FILES $OUT/$DEVICE-img-$BUILD.zip
 
   log "Running generate-factory-images"
   cd $OUT
@@ -1057,7 +1101,7 @@ aws_upload() {
   log_header ${FUNCNAME}
 
   cd "${BUILD_DIR}/out"
-  build_date="$(< build_number.txt)"
+  build_date="$(< soong/build_number.txt)"
   build_timestamp="$(unzip -p "release-${DEVICE}-${build_date}/${DEVICE}-ota_update-${build_date}.zip" META-INF/com/android/metadata | grep 'post-timestamp' | cut --delimiter "=" --fields 2)"
 
   # copy ota file to s3, update file metadata used by updater app, and remove old ota files
@@ -1162,24 +1206,6 @@ aws_import_keys() {
       aws s3 sync "s3://${AWS_KEYS_BUCKET}" "${KEYS_DIR}"
     fi
   fi
-
-  # handle migration with new networkstack key for 10.0
-  pushd "${KEYS_DIR}/${DEVICE}"
-  if [ ! -f "${KEYS_DIR}/${DEVICE}/networkstack.pk8" ]; then
-    log "Did not find networkstack key - generating one"
-    ! "${BUILD_DIR}/development/tools/make_key" "networkstack" "$CERTIFICATE_SUBJECT"
-
-    if [ "$ENCRYPTED_KEYS" = true ]; then
-      log "Encrypting and uploading new networkstack key to s3://${AWS_ENCRYPTED_KEYS_BUCKET}"
-      gpg --symmetric --batch --passphrase "$ENCRYPTION_KEY" --cipher-algo AES256 networkstack.pk8
-      gpg --symmetric --batch --passphrase "$ENCRYPTION_KEY" --cipher-algo AES256 networkstack.x509.pem
-      aws s3 sync "${KEYS_DIR}" "s3://${AWS_ENCRYPTED_KEYS_BUCKET}" --exclude "*" --include "*.gpg"
-    else
-      log "Uploading new networkstack key to s3://${AWS_KEYS_BUCKET}"
-      aws s3 sync "${KEYS_DIR}" "s3://${AWS_KEYS_BUCKET}"
-    fi
-  fi
-  popd
 }
 
 gen_keys() {
