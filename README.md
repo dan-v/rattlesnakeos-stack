@@ -46,7 +46,7 @@ Rather than providing random binaries of RattlesnakeOS to install on your phone,
 ```
 keypair_name="rattlesnakeos"
 ssh-keygen -t rsa -b 4096 -f ${keypair_name}
-for region in $(aws ec2 describe-regions --output text | awk '{print $4}'); do
+for region in $(aws ec2 describe-regions --query "Regions[*].RegionName" --output text); do
   echo "Importing keypair ${keypair_name} to region ${region}..."
   aws ec2 import-key-pair --key-name "${keypair_name}" --public-key-material "file://${keypair_name}.pub" --region $region;
 done
