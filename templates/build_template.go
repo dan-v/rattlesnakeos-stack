@@ -602,6 +602,7 @@ apply_patches() {
   log_header ${FUNCNAME}
 
   patch_11_issues
+  patch_launcher
   patch_disable_apex
   patch_custom
   patch_base_config
@@ -628,6 +629,13 @@ patch_11_issues() {
   else
     sed 's@<!-- <item>0:2:15</item>  ID0:Fingerprint:Strong -->@    <item>0:2:15</item>@' ${BUILD_DIR}/frameworks/base/core/res/res/values/config.xml
   fi
+}
+
+patch_launcher() {
+  log_header ${FUNCNAME}
+
+  # disable QuickSearchBox widget on home screen
+  sed -i "s/QSB_ON_FIRST_SCREEN = true;/QSB_ON_FIRST_SCREEN = false;/" "${BUILD_DIR}/packages/apps/Launcher3/src/com/android/launcher3/config/FeatureFlags.java"
 }
 
 # currently don't have a need for apex updates (https://source.android.com/devices/tech/ota/apex)
