@@ -148,6 +148,7 @@ ssh-key = "rattlesnakeos"
         "<community patches need to be upgraded to 11.0>.patch",
   ]
   repo = "https://github.com/RattlesnakeOS/community_patches"
+  branch = "11.0"
 ```
 
 #### All Options

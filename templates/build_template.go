@@ -658,7 +658,7 @@ patch_custom() {
   patches_dir="$HOME/patches"
   <% if .CustomPatches %>
   <% range $i, $r := .CustomPatches %>
-    retry git clone <% $r.Repo %> ${patches_dir}/<% $i %>
+    retry git clone <% if $r.Branch %>--branch <% $r.Branch %><% end %> <% $r.Repo %> ${patches_dir}/<% $i %>
     <% range $r.Patches %>
       log "Applying patch <% . %>"
       patch -p1 --no-backup-if-mismatch < ${patches_dir}/<% $i %>/<% . %>
@@ -670,7 +670,7 @@ patch_custom() {
   scripts_dir="$HOME/scripts"
   <% if .CustomScripts %>
   <% range $i, $r := .CustomScripts %>
-    retry git clone <% $r.Repo %> ${scripts_dir}/<% $i %>
+    retry git clone <% if $r.Branch %>--branch <% $r.Branch %><% end %> <% $r.Repo %> ${scripts_dir}/<% $i %>
     <% range $r.Scripts %>
       log "Applying shell script <% . %>"
       . ${scripts_dir}/<% $i %>/<% . %>
