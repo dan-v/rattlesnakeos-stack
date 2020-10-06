@@ -1018,7 +1018,7 @@ EOF
 }
 
 fdpe_hash() {
-  keytool -list -printcert -file "$1" | grep 'SHA256:' | tr --delete ':' | cut --delimiter ' ' --fields 3
+  keytool -printcert -file "$1" | grep 'SHA256:' | tr --delete ':' | cut --delimiter ' ' --fields 3
 }
 
 patch_priv_ext() {
