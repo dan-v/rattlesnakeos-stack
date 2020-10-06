@@ -16,7 +16,7 @@ import (
 )
 
 const defaultInstanceRegions = "us-west-2,us-west-1,us-east-2"
-const minimumChromiumVersion = 80
+const minimumChromiumVersion = 86
 
 var name, region, email, device, sshKey, maxPrice, skipPrice, schedule string
 var instanceType, instanceRegions, hostsFile, chromiumVersion string
