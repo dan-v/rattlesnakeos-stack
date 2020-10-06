@@ -144,8 +144,7 @@ ssh-key = "rattlesnakeos"
 
 [[custom-patches]]
   patches = [
-        "<community patches need to be upgraded to 11.0>.patch",
-        "<community patches need to be upgraded to 11.0>.patch",
+    "00001-global-internet-permission-toggle.patch",
   ]
   repo = "https://github.com/RattlesnakeOS/community_patches"
   branch = "11.0"
@@ -279,8 +278,9 @@ There is an option to execute patches and shell scripts against the AOSP build t
 [[custom-patches]]
   repo = "https://github.com/RattlesnakeOS/community_patches"
   patches = [
-      "<community patches need to be upgraded to 11.0>.patch", "<community patches need to be upgraded to 11.0>.patch",
+    "00001-global-internet-permission-toggle.patch",
   ]
+  branch = "11.0"
 
 [[custom-scripts]]
   repo = "https://github.com/RattlesnakeOS/example_patch_shellscript"
