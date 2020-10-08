@@ -737,13 +737,15 @@ patch_custom() {
 
   # allow prebuilt applications to be added to build tree
   prebuilt_dir="${BUILD_DIR}/packages/apps/Custom"
+  # TODO: should be able to specify where to add PRODUCT_PACKAGES
+  mk_file="${BUILD_DIR}/build/make/target/product/handheld_system.mk"
   <% if .CustomPrebuilts %>
   <% range $i, $r := .CustomPrebuilts %>
     log "Putting custom prebuilts from <% $r.Repo %> in build tree location ${prebuilt_dir}/<% $i %>"
     retry git clone <% $r.Repo %> ${prebuilt_dir}/<% $i %>
     <% range .Modules %>
-      log "Adding custom PRODUCT_PACKAGES += <% . %> to $(get_package_mk_file)"
-      sed -i "\$aPRODUCT_PACKAGES += <% . %>" $(get_package_mk_file)
+      log "Adding custom PRODUCT_PACKAGES += <% . %> to ${mk_file}"
+      sed -i "\$aPRODUCT_PACKAGES += <% . %>" "${mk_file}"
     <% end %>
   <% end %>
   <% end %>
