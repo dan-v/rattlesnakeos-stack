@@ -681,11 +681,21 @@ patch_11_issues() {
 
   # biometrics was disabled (https://cs.android.com/android/_/android/platform/frameworks/base/+/ede919cace2a32ec235eefe86e04a75848bd1d5f)
   # but never added upstream to device specific overlays
+
+  # ID0:Fingerprint:Strong
+  biometric_sensors="0:2:15"
   if [ "${DEVICE_FAMILY}" == "coral" ]; then
-    sed 's@<!-- <item>0:8:15</item>  ID0:Fingerprint:Strong -->@    <item>0:2:15</item>@' "${BUILD_DIR}/frameworks/base/core/res/res/values/config.xml"
-  else
-    sed 's@<!-- <item>0:2:15</item>  ID0:Fingerprint:Strong -->@    <item>0:2:15</item>@' "${BUILD_DIR}/frameworks/base/core/res/res/values/config.xml"
+    # ID0:Face:Strong
+    biometric_sensors="0:8:15"
   fi
+  sed -i '$ s/^<\/resources>//' "${BUILD_DIR}/device/google/${DEVICE_FAMILY}/overlay/frameworks/base/core/res/res/values/config.xml"
+  cat <<EOF >> "${BUILD_DIR}/device/google/${DEVICE_FAMILY}/overlay/frameworks/base/core/res/res/values/config.xml"
+    <string-array name="config_biometric_sensors" translatable="false" >
+        <item>${biometric_sensors}</item>
+    </string-array>
+</resources>
+EOF
+
 }
 
 patch_launcher() {
