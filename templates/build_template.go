@@ -12,28 +12,34 @@ DEVICE=$1
 case "${DEVICE}" in
   taimen)
     DEVICE_FAMILY=taimen
+    DEVICE_COMMON=wahoo
     AVB_MODE=vbmeta_simple
     ;;
   walleye)
     DEVICE_FAMILY=muskie
+    DEVICE_COMMON=wahoo
     AVB_MODE=vbmeta_simple
     ;;
   crosshatch|blueline)
     DEVICE_FAMILY=crosshatch
+    DEVICE_COMMON=crosshatch
     AVB_MODE=vbmeta_chained
     EXTRA_OTA=(--retrofit_dynamic_partitions)
     ;;
   sargo|bonito)
     DEVICE_FAMILY=bonito
+    DEVICE_COMMON=bonito
     AVB_MODE=vbmeta_chained
     EXTRA_OTA=(--retrofit_dynamic_partitions)
     ;;
   flame|coral)
     DEVICE_FAMILY=coral
+    DEVICE_COMMON=coral
     AVB_MODE=vbmeta_chained_v2
     ;;
   sunfish)
     DEVICE_FAMILY=sunfish
+    DEVICE_COMMON=sunfish
     AVB_MODE=vbmeta_chained_v2
     ;;
   *)
@@ -684,12 +690,12 @@ patch_11_issues() {
 
   # ID0:Fingerprint:Strong
   biometric_sensors="0:2:15"
-  if [ "${DEVICE_FAMILY}" == "coral" ]; then
+  if [ "${DEVICE_COMMON}" == "coral" ]; then
     # ID0:Face:Strong
     biometric_sensors="0:8:15"
   fi
-  sed -i '$ s/^<\/resources>//' "${BUILD_DIR}/device/google/${DEVICE_FAMILY}/overlay/frameworks/base/core/res/res/values/config.xml"
-  cat <<EOF >> "${BUILD_DIR}/device/google/${DEVICE_FAMILY}/overlay/frameworks/base/core/res/res/values/config.xml"
+  sed -i '$ s/^<\/resources>//' "${BUILD_DIR}/device/google/${DEVICE_COMMON}/overlay/frameworks/base/core/res/res/values/config.xml"
+  cat <<EOF >> "${BUILD_DIR}/device/google/${DEVICE_COMMON}/overlay/frameworks/base/core/res/res/values/config.xml"
     <string-array name="config_biometric_sensors" translatable="false" >
         <item>${biometric_sensors}</item>
     </string-array>
