@@ -295,25 +295,32 @@ There is also an option to add prebuilt applications to the AOSP build tree usin
   repo = "https://github.com/RattlesnakeOS/example_prebuilts"
 ```
 
-##### Manifest Customizations
+##### Example for Manifest Customizations: Seedvault
 It's also possible to add remotes and projects to the AOSP build manifest file. These will get added to the manifest and get pulled into the AOSP build tree as part of normal build process.
 
 ```toml
-# to add a remote line to manifest like this: <remote name="rattlesnakeos" fetch="https://github.com/RattlesnakeOS/" revision="master" />
+# to add a remote line to manifest like this: <remote name="seedvault-app" fetch="https://github.com/seedvault-app/" revision="master" />
 [[custom-manifest-remotes]]
-  name = "rattlesnakeos"
-  fetch = "https://github.com/RattlesnakeOS/"
+  name = "seedvault-app"
+  fetch = "https://github.com/seedvault-app/"
   revision = "master"
 
-# to add a project line to manifest like this: <project path="packages/apps/Backup" name="backup" remote="rattlesnakeos" />
+# to add a project line to manifest like this: <project path="packages/apps/Seedvault" name="backup" remote="seedvault-app" />
 # you can also add modules here that you want to include into the build process
-# in this example it is adding a really great backup app (https://github.com/stevesoltys/backup)
+# in this example it is adding a really great backup app (https://github.com/seedvault-app/seedvault)
 [[custom-manifest-projects]]
-  path = "packages/apps/Backup"
-  name = "backup"
-  remote = "rattlesnakeos"
-  modules = [ "Backup" ]
+  path = "packages/apps/Seedvault"
+  name = "seedvault"
+  remote = "seedvault-app"
+  modules = [ "Seedvault" ]
 ```
+In this special example further changes to the source code are needed to ensure that the Seevault app can be used. This can be either achieved by a [patch](https://github.com/davze/ros-patches/blob/11/0007-set-seedvault-as-dftl-bkp-provider.patch) or you can do it manually by selecting Seedvault as backup provider via adb:
+
+```
+# adb shell bmgr enable true
+# adb shell bmgr transport com.stevesoltys.seedvault.transport.ConfigurableBackupTransport
+```
+
 
 #### Can I change the boot animation?
 It is possible to change the boot animation using patches, there is an example repo [here](https://github.com/RattlesnakeOS/example_patch_shellscript).
