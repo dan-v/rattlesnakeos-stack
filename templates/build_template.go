@@ -457,10 +457,14 @@ setup_env() {
 
   # install required packages
   sudo apt-get update
-  sudo DEBIAN_FRONTEND=noninteractive apt-get -y install repo gperf jq default-jdk git-core gnupg \
+  sudo DEBIAN_FRONTEND=noninteractive apt-get -y install python3 repo gperf jq default-jdk git-core gnupg \
       flex bison build-essential zip curl zlib1g-dev gcc-multilib g++-multilib libc6-dev-i386 lib32ncurses5-dev \
       x11proto-core-dev libx11-dev lib32z-dev ccache libgl1-mesa-dev libxml2-utils xsltproc unzip python-networkx liblz4-tool pxz
   sudo DEBIAN_FRONTEND=noninteractive apt-get -y build-dep "linux-image-$(uname --kernel-release)"
+
+  retry curl --fail -s https://storage.googleapis.com/git-repo-downloads/repo > /tmp/repo
+  chmod +x /tmp/repo
+  sudo mv /tmp/repo /usr/local/bin/
 
   # setup git
   git config --get --global user.name || git config --global user.name 'aosp'
@@ -555,7 +559,7 @@ EOF
   gn gen out/Default
 
   log "Building trichrome"
-  autoninja -C out/Default/ trichrome_webview_64_32_apk trichrome_chrome_64_32_bundle trichrome_library_64_32_apk
+  autoninja -C out/Default/ trichrome_webview_apk trichrome_chrome_bundle trichrome_library_apk
 
   log "Signing trichrome"
   BUNDLETOOL="${HOME}/chromium/src/build/android/gyp/bundletool.py"
@@ -566,12 +570,12 @@ EOF
   rm -rf release
   mkdir release
   cd release
-  "${BUNDLETOOL}" build-apks --aapt2 "${AAPT2}" --bundle "../TrichromeChrome6432.aab" --output "TrichromeChrome.apks" \
+  "${BUNDLETOOL}" build-apks --aapt2 "${AAPT2}" --bundle "../TrichromeChrome.aab" --output "TrichromeChrome.apks" \
       --mode=universal --ks "${KEYSTORE}" --ks-pass pass:chromium --ks-key-alias chromium
   unzip "TrichromeChrome.apks" "universal.apk"
   mv "universal.apk" "TrichromeChrome.apk"
   for app in TrichromeLibrary TrichromeWebView; do
-    "${APKSIGNER}" sign --ks "${KEYSTORE}" --ks-pass pass:chromium --ks-key-alias chromium --in "../${app}6432.apk" --out "${app}.apk"
+    "${APKSIGNER}" sign --ks "${KEYSTORE}" --ks-pass pass:chromium --ks-key-alias chromium --in "../${app}.apk" --out "${app}.apk"
   done
 
   log "Uploading trichrome apks to s3"
@@ -716,7 +720,7 @@ patch_disable_apex() {
   log_header "${FUNCNAME[0]}"
 
   # pixel 2 devices opt in here
-  sed -i 's@$(call inherit-product, $(SRC_TARGET_DIR)/product/updatable_apex.mk)@@' "${BUILD_DIR}/device/google/wahoo/device.mk"
+  sed -i 's@$(call inherit-product, $(SRC_TARGET_DIR)/product/updatable_apex.mk)@@' "${BUILD_DIR}/device/google/wahoo/device.mk" || true
   # all other devices use mainline and opt in here
   sed -i 's@$(call inherit-product, $(SRC_TARGET_DIR)/product/updatable_apex.mk)@@' "${BUILD_DIR}/build/make/target/product/mainline_system.mk"
 }
