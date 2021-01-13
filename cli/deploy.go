@@ -34,11 +34,11 @@ var supportedRegions = []string{"ap-northeast-1", "ap-northeast-2", "ap-northeas
 var supportedDevicesFriendly = []string{
 	"Pixel 2", "Pixel 2 XL",
 	"Pixel 3", "Pixel 3 XL", "Pixel 3a", "Pixel 3a XL",
-	"Pixel 4", "Pixel 4 XL", "Pixel 4a"}
+	"Pixel 4", "Pixel 4 XL", "Pixel 4a", "Pixel 5"}
 var supportedDevicesCodename = []string{
 	"walleye", "taimen",
 	"blueline", "crosshatch", "sargo", "bonito",
-	"flame", "coral", "sunfish"}
+	"flame", "coral", "sunfish", "redfin"}
 var supportDevicesOutput string
 
 func init() {
