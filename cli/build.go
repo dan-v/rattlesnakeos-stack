@@ -16,10 +16,8 @@ import (
 	"github.com/spf13/viper"
 )
 
-// TODO: this command is very happy path at the moment
-
-var listBuilds, startBuild, forceBuild bool
-var terminateInstanceID, terminateRegion, listRegions, listName, buildName string
+var startBuild, forceBuild bool
+var terminateInstanceID, terminateRegion, listRegions, buildName string
 var aospBuild, aospBranch string
 
 func init() {

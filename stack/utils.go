@@ -47,7 +47,10 @@ func unzip(src, dest string) error {
 
 		fpath := filepath.Join(dest, f.Name)
 		if f.FileInfo().IsDir() {
-			os.MkdirAll(fpath, f.Mode())
+			err := os.MkdirAll(fpath, f.Mode())
+			if err != nil {
+				return err
+			}
 		} else {
 			var fdir string
 			if lastIndex := strings.LastIndex(fpath, string(os.PathSeparator)); lastIndex > -1 {

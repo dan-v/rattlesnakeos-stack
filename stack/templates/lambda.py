@@ -1,6 +1,3 @@
-package templates
-
-const LambdaTemplate = `
 #!/usr/bin/env python3
 import boto3
 import base64
@@ -47,7 +44,7 @@ MAX_PRICE = '<% .MaxPrice %>'
 SKIP_PRICE = '<% .SkipPrice %>'
 REGIONS = '<% .InstanceRegions %>'
 AMI_OVERRIDE = '<% .AMI %>'
-ENCRYPTED_KEYS = '<% .EncryptedKeys %>' 
+ENCRYPTED_KEYS = '<% .EncryptedKeys %>'
 
 def send_sns_message(subject, message):
     account_id = boto3.client('sts').get_caller_identity().get('Account')
@@ -69,7 +66,7 @@ def lambda_handler(event, context):
     if "AOSPBranch" in event:
         aosp_branch = event['AOSPBranch']
 
-    try: 
+    try:
         cheapest_price = 0
         cheapest_region = ""
         cheapest_az = ""
@@ -117,10 +114,10 @@ def lambda_handler(event, context):
 
     # create ec2 client for cheapest region
     client = boto3.client('ec2', region_name=cheapest_region)
-    
+
     # get a subnet in cheapest az to request spot instance in
     subnets = client.describe_subnets(Filters=[{'Name': 'availabilityZone','Values': [cheapest_az]}])['Subnets'][0]['SubnetId']
-    
+
     # userdata to deploy with spot instance
     userdata = base64.b64encode("""
 #cloud-config
@@ -200,4 +197,3 @@ runcmd:
 
 if __name__ == '__main__':
    lambda_handler("", "")
-`

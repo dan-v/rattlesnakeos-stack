@@ -2,6 +2,7 @@ package stack
 
 import (
 	"bytes"
+	_ "embed"
 	"fmt"
 	"io"
 	"io/ioutil"
@@ -11,20 +12,22 @@ import (
 	"runtime"
 	"strings"
 
-	"github.com/dan-v/rattlesnakeos-stack/templates"
 	log "github.com/sirupsen/logrus"
 )
-
-const terraformVersion = "0.11.8"
-
-var darwinBinaryURL = fmt.Sprintf("https://releases.hashicorp.com/terraform/%s/terraform_%s_darwin_amd64.zip", terraformVersion, terraformVersion)
-var linuxBinaryURL = fmt.Sprintf("https://releases.hashicorp.com/terraform/%s/terraform_%s_linux_amd64.zip", terraformVersion, terraformVersion)
-var windowsBinaryURL = fmt.Sprintf("https://releases.hashicorp.com/terraform/%s/terraform_%s_windows_amd64.zip", terraformVersion, terraformVersion)
 
 const (
 	lambdaFunctionFilename = "lambda_spot_function.py"
 	lambdaZipFilename      = "lambda_spot.zip"
 	buildScriptFilename    = "build.sh"
+	terraformVersion       = "0.11.8"
+)
+
+var (
+	//go:embed templates/terraform.tf
+	terraformTemplate string
+	darwinBinaryURL   = fmt.Sprintf("https://releases.hashicorp.com/terraform/%s/terraform_%s_darwin_amd64.zip", terraformVersion, terraformVersion)
+	linuxBinaryURL    = fmt.Sprintf("https://releases.hashicorp.com/terraform/%s/terraform_%s_linux_amd64.zip", terraformVersion, terraformVersion)
+	windowsBinaryURL  = fmt.Sprintf("https://releases.hashicorp.com/terraform/%s/terraform_%s_windows_amd64.zip", terraformVersion, terraformVersion)
 )
 
 type terraformClient struct {
@@ -75,7 +78,7 @@ func newTerraformClient(config *AWSStack, stdout, stderr io.Writer) (*terraformC
 	}
 
 	// render terraform template
-	renderedTerraform, err := renderTemplate(templates.TerraformTemplate, config)
+	renderedTerraform, err := renderTemplate(terraformTemplate, config)
 	if err != nil {
 		return nil, fmt.Errorf("Failed to render terraform template: %v", err)
 	}
@@ -97,18 +100,21 @@ func newTerraformClient(config *AWSStack, stdout, stderr io.Writer) (*terraformC
 	}
 	devNull := bytes.NewBuffer(nil)
 	if err := client.terraform([]string{"init"}, devNull); err != nil {
-		io.Copy(stdout, devNull)
+		_, _ = io.Copy(stdout, devNull)
 		return nil, err
 	}
 	return client, nil
 }
 
 func (client *terraformClient) Apply() error {
-	client.terraform([]string{
+	err := client.terraform([]string{
 		"plan",
 		"-input=false",
 		"-out=tfplan",
 	}, client.stdout)
+	if err != nil {
+		return err
+	}
 	return client.terraform([]string{
 		"apply",
 		"tfplan",

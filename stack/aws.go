@@ -1,6 +1,7 @@
 package stack
 
 import (
+	_ "embed"
 	"fmt"
 	"os"
 	"strings"
@@ -11,7 +12,6 @@ import (
 	"github.com/aws/aws-sdk-go/service/iam"
 	"github.com/aws/aws-sdk-go/service/s3"
 	"github.com/aws/aws-sdk-go/service/sns"
-	"github.com/dan-v/rattlesnakeos-stack/templates"
 	log "github.com/sirupsen/logrus"
 )
 
@@ -19,6 +19,12 @@ const (
 	awsErrCodeNoSuchBucket = "NoSuchBucket"
 	awsErrCodeNotFound     = "NotFound"
 )
+
+//go:embed templates/build.sh
+var buildTemplate string
+
+//go:embed templates/lambda.py
+var lambdaTemplate string
 
 type CustomPatches []struct {
 	Repo    string
@@ -95,12 +101,12 @@ func NewAWSStack(config *AWSStackConfig) (*AWSStack, error) {
 		return nil, err
 	}
 
-	renderedLambdaFunction, err := renderTemplate(templates.LambdaTemplate, config)
+	renderedLambdaFunction, err := renderTemplate(lambdaTemplate, config)
 	if err != nil {
 		return nil, fmt.Errorf("Failed to render Lambda function: %v", err)
 	}
 
-	renderedBuildScript, err := renderTemplate(templates.BuildTemplate, config)
+	renderedBuildScript, err := renderTemplate(buildTemplate, config)
 	if err != nil {
 		return nil, fmt.Errorf("Failed to render build script: %v", err)
 	}
@@ -121,7 +127,9 @@ func NewAWSStack(config *AWSStackConfig) (*AWSStack, error) {
 }
 
 func (s *AWSStack) Apply() error {
-	defer s.terraformClient.Cleanup()
+	defer func() {
+		_ = s.terraformClient.Cleanup()
+	}()
 
 	sess, err := session.NewSession(aws.NewConfig().WithCredentialsChainVerboseErrors(true))
 	if err != nil {
@@ -188,7 +196,9 @@ func (s *AWSStack) Apply() error {
 }
 
 func (s *AWSStack) Destroy() error {
-	defer s.terraformClient.Cleanup()
+	defer func() {
+		_ = s.terraformClient.Cleanup()
+	}()
 
 	log.Info("Destroying AWS resources")
 	err := s.terraformClient.Destroy()

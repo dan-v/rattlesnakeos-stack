@@ -54,66 +54,66 @@ func init() {
 	flags := deployCmd.Flags()
 	flags.StringVarP(&name, "name", "n", "",
 		"name for stack. note: this must be a valid/unique S3 bucket name.")
-	viper.BindPFlag("name", flags.Lookup("name"))
+	_ = viper.BindPFlag("name", flags.Lookup("name"))
 
 	flags.StringVarP(&region, "region", "r", "",
 		"aws region for stack deployment (e.g. us-west-2)")
-	viper.BindPFlag("region", flags.Lookup("region"))
+	_ = viper.BindPFlag("region", flags.Lookup("region"))
 
 	flags.StringVarP(&device, "device", "d", "",
 		"device you want to build for (e.g. crosshatch): to list supported devices use '-d list'")
-	viper.BindPFlag("device", flags.Lookup("device"))
+	_ = viper.BindPFlag("device", flags.Lookup("device"))
 
 	flags.StringVarP(&email, "email", "e", "",
 		"email address you want to use for build notifications")
-	viper.BindPFlag("email", flags.Lookup("email"))
+	_ = viper.BindPFlag("email", flags.Lookup("email"))
 
 	flags.StringVar(&sshKey, "ssh-key", "",
 		"aws ssh key to add to ec2 spot instances. this is optional but is useful for debugging build issues on the instance.")
-	viper.BindPFlag("ssh-key", flags.Lookup("ssh-key"))
+	_ = viper.BindPFlag("ssh-key", flags.Lookup("ssh-key"))
 
 	flags.StringVar(&skipPrice, "skip-price", "0.68",
 		"skip requesting ec2 spot instance if price is above this value to begin with.")
-	viper.BindPFlag("skip-price", flags.Lookup("skip-price"))
+	_ = viper.BindPFlag("skip-price", flags.Lookup("skip-price"))
 
 	flags.StringVar(&maxPrice, "max-price", "1.00",
 		"max ec2 spot instance price. if this value is too low, you may not obtain an instance or it may terminate during a build.")
-	viper.BindPFlag("max-price", flags.Lookup("max-price"))
+	_ = viper.BindPFlag("max-price", flags.Lookup("max-price"))
 
 	flags.StringVar(&instanceType, "instance-type", "c5.4xlarge", "EC2 instance type (e.g. c4.4xlarge) to use for the build.")
-	viper.BindPFlag("instance-type", flags.Lookup("instance-type"))
+	_ = viper.BindPFlag("instance-type", flags.Lookup("instance-type"))
 
 	flags.StringVar(&instanceRegions, "instance-regions", defaultInstanceRegions,
 		"possible regions to launch spot instance. the region with cheapest spot instance price will be used.")
-	viper.BindPFlag("instance-regions", flags.Lookup("instance-regions"))
+	_ = viper.BindPFlag("instance-regions", flags.Lookup("instance-regions"))
 
 	flags.StringVar(&schedule, "schedule", "cron(0 0 10 * ? *)",
 		"cron expression that defines when to kick off builds. by default this is set to build on the 10th of every month. "+
 			"note: if you give an invalid expression it will fail to deploy the stack. "+
 			"see this for cron format details: https://docs.aws.amazon.com/AmazonCloudWatch/latest/events/ScheduledEvents.html#CronExpressions")
-	viper.BindPFlag("schedule", flags.Lookup("schedule"))
+	_ = viper.BindPFlag("schedule", flags.Lookup("schedule"))
 
 	flags.StringVar(&hostsFile, "hosts-file", "",
 		"an advanced option that allows you to specify a replacement /etc/hosts file to enable global dns adblocking "+
 			"(e.g. https://raw.githubusercontent.com/StevenBlack/hosts/master/hosts). note: be careful with this, as you "+
 			"1) won't get any sort of notification on blocking 2) if you need to unblock something you'll have to rebuild the OS")
-	viper.BindPFlag("hosts-file", flags.Lookup("hosts-file"))
+	_ = viper.BindPFlag("hosts-file", flags.Lookup("hosts-file"))
 
 	flags.StringVar(&chromiumVersion, "chromium-version", "",
 		"specify the version of Chromium you want (e.g. 80.0.3971.4) to pin to. if not specified, the latest stable "+
 			"version of Chromium is used.")
-	viper.BindPFlag("chromium-version", flags.Lookup("chromium-version"))
+	_ = viper.BindPFlag("chromium-version", flags.Lookup("chromium-version"))
 
 	flags.BoolVar(&encryptedKeys, "encrypted-keys", false, "an advanced option that allows signing keys to "+
 		"be stored with symmetric gpg encryption and decrypted into memory during the build process. this option requires "+
 		"manual intervention during builds where you will be sent a notification and need to provide the key required for "+
 		"decryption over SSH to continue the build process. important: if you have an existing stack - please see the FAQ for how to "+
 		"migrate your keys")
-	viper.BindPFlag("encrypted-keys", flags.Lookup("encrypted-keys"))
+	_ = viper.BindPFlag("encrypted-keys", flags.Lookup("encrypted-keys"))
 
 	flags.BoolVar(&ignoreVersionChecks, "ignore-version-checks", false,
 		"ignore the versions checks for stack, AOSP, Chromium, and F-Droid and always do a build.")
-	viper.BindPFlag("ignore-version-checks", flags.Lookup("ignore-version-checks"))
+	_ = viper.BindPFlag("ignore-version-checks", flags.Lookup("ignore-version-checks"))
 
 	flags.BoolVar(&saveConfig, "save-config", false, "allows you to save all passed CLI flags to config file")
 

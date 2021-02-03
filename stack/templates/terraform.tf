@@ -1,15 +1,12 @@
-package templates
-
-const TerraformTemplate = `
 ######################
 # S3 Terraform Backend
 ######################
 terraform {
-    backend "s3" {
-        bucket = "<% .Config.Name %>"
-        key    = "terraform.state"
-        region = "<% .Config.Region %>"
-    }
+  backend "s3" {
+    bucket = "<% .Config.Name %>"
+    key    = "terraform.state"
+    region = "<% .Config.Region %>"
+  }
 }
 
 ###################
@@ -26,33 +23,33 @@ variable "region" {
 }
 
 variable "device" {
-    description = "Device type"
-    default     = "<% .Config.Device %>"
+  description = "Device type"
+  default     = "<% .Config.Device %>"
 }
 
 variable "lambda_build_zip_file" {
-    description = "Lambda build zip file"
-    default     = "<% .LambdaZipFileLocation %>"
+  description = "Lambda build zip file"
+  default     = "<% .LambdaZipFileLocation %>"
 }
 
 variable "shell_script_file" {
-    description = "Shell script file"
-    default     = "<% .BuildScriptFileLocation %>"
+  description = "Shell script file"
+  default     = "<% .BuildScriptFileLocation %>"
 }
 
 ###################
 # Provider
 ###################
 provider "aws" {
-    region = "${var.region}"
+  region = "${var.region}"
 }
 
 ###################
 # IAM
 ###################
 resource "aws_iam_role" "rattlesnake_ec2_role" {
-    name = "${var.name}-ec2"
-    assume_role_policy = <<EOF
+  name = "${var.name}-ec2"
+  assume_role_policy = <<EOF
 {
 "Version": "2012-10-17",
 "Statement": [
@@ -68,11 +65,11 @@ resource "aws_iam_role" "rattlesnake_ec2_role" {
 }
 EOF
 }
-  
+
 resource "aws_iam_role_policy" "rattlesnake_ec2_policy" {
-    name = "${var.name}-ec2-policy"
-    role = "${aws_iam_instance_profile.rattlesnake_ec2_role.id}"
-    policy = <<EOF
+  name = "${var.name}-ec2-policy"
+  role = "${aws_iam_instance_profile.rattlesnake_ec2_role.id}"
+  policy = <<EOF
 {
 "Version": "2012-10-17",
 "Statement": [
@@ -177,8 +174,8 @@ EOF
 }
 
 resource "aws_iam_instance_profile" "rattlesnake_ec2_role" {
-    name = "${var.name}-ec2"
-    role = "${aws_iam_role.rattlesnake_ec2_role.name}"
+  name = "${var.name}-ec2"
+  role = "${aws_iam_role.rattlesnake_ec2_role.name}"
 }
 
 resource "aws_iam_role" "rattlesnake_lambda_role" {
@@ -201,9 +198,9 @@ EOF
 }
 
 resource "aws_iam_role_policy" "rattlesnake_lambda_policy" {
-    name = "${var.name}-lambda-policy"
-    role = "${aws_iam_role.rattlesnake_lambda_role.id}"
-    policy = <<EOF
+  name = "${var.name}-lambda-policy"
+  role = "${aws_iam_role.rattlesnake_lambda_role.id}"
+  policy = <<EOF
 {
 "Version": "2012-10-17",
 "Statement": [
@@ -232,8 +229,8 @@ EOF
 # S3
 ###################
 resource "aws_s3_bucket" "rattlesnake_s3_keys" {
-    bucket = "${var.name}-keys"
-    force_destroy = true
+  bucket = "${var.name}-keys"
+  force_destroy = true
   acl    = "private"
 
   server_side_encryption_configuration {
@@ -245,8 +242,8 @@ resource "aws_s3_bucket" "rattlesnake_s3_keys" {
   }
 }
 resource "aws_s3_bucket" "rattlesnake_s3_keys_enc" {
-    bucket = "${var.name}-keys-encrypted"
-    force_destroy = true
+  bucket = "${var.name}-keys-encrypted"
+  force_destroy = true
   acl    = "private"
 
   server_side_encryption_configuration {
@@ -258,8 +255,8 @@ resource "aws_s3_bucket" "rattlesnake_s3_keys_enc" {
   }
 }
 resource "aws_s3_bucket" "rattlesnake_s3_logs" {
-    bucket = "${var.name}-logs"
-    force_destroy = true
+  bucket = "${var.name}-logs"
+  force_destroy = true
   acl    = "private"
 
   server_side_encryption_configuration {
@@ -271,8 +268,8 @@ resource "aws_s3_bucket" "rattlesnake_s3_logs" {
   }
 }
 resource "aws_s3_bucket" "rattlesnake_s3_release" {
-    bucket = "${var.name}-release"
-    force_destroy = true
+  bucket = "${var.name}-release"
+  force_destroy = true
   acl    = "private"
 
   server_side_encryption_configuration {
@@ -284,8 +281,8 @@ resource "aws_s3_bucket" "rattlesnake_s3_release" {
   }
 }
 resource "aws_s3_bucket" "rattlesnake_s3_script" {
-    bucket = "${var.name}-script"
-    force_destroy = true
+  bucket = "${var.name}-script"
+  force_destroy = true
   acl    = "private"
 
   server_side_encryption_configuration {
@@ -317,43 +314,42 @@ resource "aws_sns_topic" "rattlesnake" {
 # Lambda
 ###################
 resource "aws_lambda_function" "rattlesnake_lambda_build" {
-    filename         = "${var.lambda_build_zip_file}"
-    function_name    = "${var.name}-build"
-    role             = "${aws_iam_role.rattlesnake_lambda_role.arn}"
-    handler          = "lambda_spot_function.lambda_handler"
-    source_code_hash = "${base64sha256(file("${var.lambda_build_zip_file}"))}"
-    runtime          = "python3.6"
-    timeout          = "60"
+  filename         = "${var.lambda_build_zip_file}"
+  function_name    = "${var.name}-build"
+  role             = "${aws_iam_role.rattlesnake_lambda_role.arn}"
+  handler          = "lambda_spot_function.lambda_handler"
+  source_code_hash = "${base64sha256(file("${var.lambda_build_zip_file}"))}"
+  runtime          = "python3.6"
+  timeout          = "60"
 }
 
 ###################
 # Cloudwatch Event
 ###################
 resource "aws_cloudwatch_event_rule" "build_schedule" {
-    name = "${var.name}-build-schedule"
-    description = "RattlesnakeOS build"
-    schedule_expression = "<% .Config.Schedule %>"
+  name = "${var.name}-build-schedule"
+  description = "RattlesnakeOS build"
+  schedule_expression = "<% .Config.Schedule %>"
 }
 
 resource "aws_cloudwatch_event_target" "check_build_schedule" {
-    rule = "${aws_cloudwatch_event_rule.build_schedule.name}"
-    target_id = "${var.name}-build"
-    arn = "${aws_lambda_function.rattlesnake_lambda_build.arn}"
+  rule = "${aws_cloudwatch_event_rule.build_schedule.name}"
+  target_id = "${var.name}-build"
+  arn = "${aws_lambda_function.rattlesnake_lambda_build.arn}"
 }
 
 resource "aws_lambda_permission" "allow_cloudwatch_to_call_build_schedule" {
-    statement_id = "AllowExecutionFromCloudWatch"
-    action = "lambda:InvokeFunction"
-    function_name = "${aws_lambda_function.rattlesnake_lambda_build.function_name}"
-    principal = "events.amazonaws.com"
-    source_arn = "${aws_cloudwatch_event_rule.build_schedule.arn}"
+  statement_id = "AllowExecutionFromCloudWatch"
+  action = "lambda:InvokeFunction"
+  function_name = "${aws_lambda_function.rattlesnake_lambda_build.function_name}"
+  principal = "events.amazonaws.com"
+  source_arn = "${aws_cloudwatch_event_rule.build_schedule.arn}"
 }
 
 ###################
 # Outputs
 ###################
 output "sns_topic_arn" {
-    description = "The SNS ARN"
-    value = "${aws_sns_topic.rattlesnake.arn}"
+  description = "The SNS ARN"
+  value = "${aws_sns_topic.rattlesnake.arn}"
 }
-`

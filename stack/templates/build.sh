@@ -1,6 +1,4 @@
-package templates
-
-const BuildTemplate = `#!/bin/bash
+#!/bin/bash
 
 if [ $# -lt 1 ]; then
   echo "Need to specify device name as argument"
@@ -66,6 +64,7 @@ AOSP_BRANCH=$4
 AOSP_VENDOR_BUILD=
 
 # set region
+# shellcheck disable=SC1073
 REGION=<% .Region %>
 export AWS_DEFAULT_REGION=${REGION}
 
@@ -655,7 +654,7 @@ setup_vendor() {
   # get vendor files (with timeout)
   timeout 30m "${BUILD_DIR}/vendor/android-prepare-vendor/execute-all.sh" --debugfs --yes --device "${DEVICE}" \
       --buildID "${AOSP_VENDOR_BUILD}" --output "${BUILD_DIR}/vendor/android-prepare-vendor"
-  
+
   # copy vendor files to build tree
   mkdir --parents "${BUILD_DIR}/vendor/google_devices" || true
   rm -rf "${BUILD_DIR}/vendor/google_devices/${DEVICE}" || true
@@ -951,10 +950,10 @@ index 8b767bea0..4dd951c9d 100644
 +++ b/prebuilts/api/30.0/public/update_engine.te
 @@ -46,6 +46,7 @@ userdebug_or_eng(` + "`" + `
  ')
- 
+
  binder_call(update_engine, gmscore_app)
 +binder_call(update_engine, updater_app)
- 
+
  # Allow update_engine to call the callback function provided by system_server.
  binder_call(update_engine, system_server)
 diff --git a/prebuilts/api/30.0/public/updater_app.te b/prebuilts/api/30.0/public/updater_app.te
@@ -1034,10 +1033,10 @@ index 8b767bea0..4dd951c9d 100644
 +++ b/public/update_engine.te
 @@ -46,6 +46,7 @@ userdebug_or_eng(` + "`" + `
  ')
- 
+
  binder_call(update_engine, gmscore_app)
 +binder_call(update_engine, updater_app)
- 
+
  # Allow update_engine to call the callback function provided by system_server.
  binder_call(update_engine, system_server)
 diff --git a/public/updater_app.te b/public/updater_app.te
@@ -1051,7 +1050,7 @@ index 000000000..97a850ba1
 +###
 +
 +type updater_app, domain;
--- 
+--
 EOF
   pushd "${BUILD_DIR}/system/sepolicy"
   git apply "${HOME}/updater-selinux.patch"
@@ -1260,10 +1259,10 @@ checkpoint_versions() {
   # checkpoint f-droid
   echo "${FDROID_PRIV_EXT_VERSION}" | aws s3 cp - "s3://${AWS_RELEASE_BUCKET}/fdroid-priv/revision"
   echo "${FDROID_CLIENT_VERSION}" | aws s3 cp - "s3://${AWS_RELEASE_BUCKET}/fdroid/revision"
-  
+
   # checkpoint aosp
   aws s3 cp - "s3://${AWS_RELEASE_BUCKET}/${DEVICE}-vendor" --acl public-read <<< "${AOSP_VENDOR_BUILD}" || true
-  
+
   # checkpoint chromium
   echo "yes" | aws s3 cp - "s3://${AWS_RELEASE_BUCKET}/chromium/included"
 }
@@ -1425,4 +1424,3 @@ trap cleanup 0
 set -e
 
 full_run
-`
