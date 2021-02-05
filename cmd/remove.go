@@ -1,9 +1,9 @@
-package cli
+package cmd
 
 import (
 	"fmt"
+	"github.com/dan-v/rattlesnakeos-stack/internal/stack"
 
-	"github.com/dan-v/rattlesnakeos-stack/stack"
 	"github.com/fatih/color"
 	"github.com/manifoldco/promptui"
 	log "github.com/sirupsen/logrus"
@@ -57,10 +57,10 @@ var removeCmd = &cobra.Command{
 			log.Fatalf("Exiting %v", err)
 		}
 
-		s, err := stack.NewAWSStack(&stack.AWSStackConfig{
+		s, err := stack.New(&stack.Config{
 			Name:   name,
 			Region: region,
-		})
+		}, buildTemplate, lambdaTemplate, terraformTemplate)
 		if err != nil {
 			log.Fatal(err)
 		}

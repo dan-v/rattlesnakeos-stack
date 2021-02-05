@@ -1,9 +1,19 @@
 package main
 
 import (
-	"github.com/dan-v/rattlesnakeos-stack/cli"
+	_ "embed"
+	"github.com/dan-v/rattlesnakeos-stack/cmd"
 )
 
+//go:embed templates/build.sh
+var buildTemplate string
+
+//go:embed templates/lambda.py
+var lambdaTemplate string
+
+//go:embed templates/terraform.tf
+var terraformTemplate string
+
 func main() {
-	cli.Execute()
+	cmd.Execute(buildTemplate, lambdaTemplate, terraformTemplate)
 }

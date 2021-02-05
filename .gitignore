@@ -30,9 +30,10 @@
 
 # End of https://www.gitignore.io/api/go,terraform
 
-artifacts
+build
 rattlesnakeos-stack
 .vscode/
 *.toml
 .DS_Store
 .idea/
+output

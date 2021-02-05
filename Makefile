@@ -64,7 +64,7 @@ clean: clean-artifacts
 	rm -vf $(CURDIR)/coverage.*
 
 clean-artifacts:
-	rm -Rf artifacts
+	rm -Rf build
 
 clean-vendor:
 	find $(CURDIR)/vendor -type d -print0 2>/dev/null | xargs -0 rm -Rf
@@ -110,12 +110,12 @@ build:
 	go build -race -ldflags "-X github.com/dan-v/rattlesnakeos-stack/cli.version=$(VERSION)" -v -o "$(TARGET)" .
 
 build-all:
-	mkdir -v -p $(CURDIR)/artifacts/$(VERSION)
+	mkdir -v -p $(CURDIR)/build/$(VERSION)
 	gox -verbose -ldflags "-X github.com/dan-v/rattlesnakeos-stack/cli.version=$(VERSION)" \
 	    -os "$(OS)" -arch "$(ARCH)" \
-	    -output "$(CURDIR)/artifacts/$(VERSION)/{{.OS}}/$(TARGET)" .
+	    -output "$(CURDIR)/build/$(VERSION)/{{.OS}}/$(TARGET)" .
 	cp -v -f \
-	   $(CURDIR)/artifacts/$(VERSION)/$$(go env GOOS)/$(TARGET) .
+	   $(CURDIR)/build/$(VERSION)/$$(go env GOOS)/$(TARGET) .
 
 doc:
 	godoc -http=:8080 -index
@@ -132,7 +132,7 @@ version:
 	@go version
 
 zip: all
-	mkdir -p artifacts/zips
-	pushd artifacts/$(VERSION)/darwin && zip -r ../../../artifacts/zips/rattlesnakeos-stack-osx-${VERSION}.zip $(TARGET) && popd
-	pushd artifacts/$(VERSION)/windows && zip -r ../../../artifacts/zips/rattlesnakeos-stack-windows-${VERSION}.zip $(TARGET).exe && popd
-	pushd artifacts/$(VERSION)/linux && zip -r ../../../artifacts/zips/rattlesnakeos-stack-linux-${VERSION}.zip $(TARGET) && popd
+	mkdir -p build/zips
+	pushd build/$(VERSION)/darwin && zip -r ../../../build/zips/rattlesnakeos-stack-osx-${VERSION}.zip $(TARGET) && popd
+	pushd build/$(VERSION)/windows && zip -r ../../../build/zips/rattlesnakeos-stack-windows-${VERSION}.zip $(TARGET).exe && popd
+	pushd build/$(VERSION)/linux && zip -r ../../../build/zips/rattlesnakeos-stack-linux-${VERSION}.zip $(TARGET) && popd

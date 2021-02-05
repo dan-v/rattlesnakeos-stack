@@ -10,4 +10,4 @@ jobs:
       - run: make tools && make zip
 
       - store_artifacts:
-          path: artifacts/zips
+          path: build/zips

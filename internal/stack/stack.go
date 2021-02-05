@@ -1,30 +1,33 @@
 package stack
 
 import (
-	_ "embed"
+	"archive/zip"
+	"bytes"
 	"fmt"
-	"os"
-	"strings"
-
 	"github.com/aws/aws-sdk-go/aws"
 	"github.com/aws/aws-sdk-go/aws/awserr"
 	"github.com/aws/aws-sdk-go/aws/session"
 	"github.com/aws/aws-sdk-go/service/iam"
 	"github.com/aws/aws-sdk-go/service/s3"
 	"github.com/aws/aws-sdk-go/service/sns"
+	"github.com/dan-v/rattlesnakeos-stack/internal/terraform"
 	log "github.com/sirupsen/logrus"
+	"io"
+	"io/ioutil"
+	"os"
+	"path/filepath"
+	"strings"
+	"text/template"
 )
 
 const (
 	awsErrCodeNoSuchBucket = "NoSuchBucket"
 	awsErrCodeNotFound     = "NotFound"
+	lambdaFunctionFilename = "lambda_spot_function.py"
+	lambdaZipFilename      = "lambda_spot.zip"
+	buildScriptFilename    = "build.sh"
+	outputDir              = "output"
 )
-
-//go:embed templates/build.sh
-var buildTemplate string
-
-//go:embed templates/lambda.py
-var lambdaTemplate string
 
 type CustomPatches []struct {
 	Repo    string
@@ -56,7 +59,7 @@ type CustomManifestProjects []struct {
 	Modules []string
 }
 
-type AWSStackConfig struct {
+type Config struct {
 	Name                   string
 	Region                 string
 	Device                 string
@@ -81,16 +84,13 @@ type AWSStackConfig struct {
 	AMI                    string
 }
 
-type AWSStack struct {
-	Config                  *AWSStackConfig
-	terraformClient         *terraformClient
-	renderedBuildScript     []byte
-	renderedLambdaFunction  []byte
-	LambdaZipFileLocation   string
-	BuildScriptFileLocation string
+type Stack struct {
+	config                  *Config
+	terraformClient         *terraform.Client
+	terraformOutput         string
 }
 
-func NewAWSStack(config *AWSStackConfig) (*AWSStack, error) {
+func New(config *Config, buildTemplate, lambdaTemplate, terraformTemplate string) (*Stack, error) {
 	err := checkAWSCreds(config.Region)
 	if err != nil {
 		return nil, err
@@ -101,36 +101,90 @@ func NewAWSStack(config *AWSStackConfig) (*AWSStack, error) {
 		return nil, err
 	}
 
-	renderedLambdaFunction, err := renderTemplate(lambdaTemplate, config)
+	buildScriptFilePath, err := filepath.Abs(filepath.Join(outputDir, buildScriptFilename))
 	if err != nil {
-		return nil, fmt.Errorf("Failed to render Lambda function: %v", err)
+		return nil, err
+	}
+	lambdaFunctionFilePath, err := filepath.Abs(filepath.Join(outputDir, lambdaFunctionFilename))
+	if err != nil {
+		return nil, err
+	}
+	lambdaZipFilePath, err := filepath.Abs(filepath.Join(outputDir, lambdaZipFilename))
+	if err != nil {
+		return nil, err
 	}
 
 	renderedBuildScript, err := renderTemplate(buildTemplate, config)
 	if err != nil {
-		return nil, fmt.Errorf("Failed to render build script: %v", err)
+		return nil, fmt.Errorf("failed to render build script: %w", err)
 	}
 
-	stack := &AWSStack{
-		Config:                 config,
-		renderedBuildScript:    renderedBuildScript,
-		renderedLambdaFunction: renderedLambdaFunction,
-	}
-
-	terraformClient, err := newTerraformClient(stack, os.Stdout, os.Stdin)
+	renderedLambdaFunction, err := renderTemplate(lambdaTemplate, config)
 	if err != nil {
-		return nil, fmt.Errorf("Failed to create terraform client: %v", err)
+		return nil, fmt.Errorf("failed to render lambda function: %w", err)
 	}
-	stack.terraformClient = terraformClient
 
-	return stack, nil
+	terraformConfig := struct {
+		Config Config
+		LambdaZipFileLocation   string
+		BuildScriptFileLocation string
+	} {
+		*config,
+		lambdaZipFilePath,
+		buildScriptFilePath,
+	}
+
+	renderedTerraform, err := renderTemplate(terraformTemplate, terraformConfig)
+	if err != nil {
+		return nil, fmt.Errorf("failed to render terraform script: %w", err)
+	}
+
+	err = os.MkdirAll(outputDir, os.ModePerm)
+	if err != nil {
+		return nil, err
+	}
+
+	// write out shell script
+	err = ioutil.WriteFile(buildScriptFilePath, renderedBuildScript, 0644)
+	if err != nil {
+		return nil, err
+	}
+
+	// write out lambda function and zip it up
+	err = ioutil.WriteFile(lambdaFunctionFilePath, renderedLambdaFunction, 0644)
+	if err != nil {
+		return nil, err
+	}
+	if err = os.Chmod(lambdaFunctionFilePath, 0644); err != nil {
+		return nil, err
+	}
+
+	err = zipFiles(filepath.Join(outputDir, lambdaZipFilename), []string{lambdaFunctionFilePath})
+	if err != nil {
+		return nil, err
+	}
+
+	if err := os.MkdirAll(filepath.Join(outputDir, "tf"), 0777); err != nil {
+		return nil, err
+	}
+
+	// write out terraform
+	if err := ioutil.WriteFile(filepath.Join(outputDir, "tf/main.tf"), renderedTerraform, 0777); err != nil {
+		return nil, err
+	}
+
+	terraformClient, err := terraform.New(outputDir)
+	if err != nil {
+		return nil, fmt.Errorf("failed to create terraform client: %w", err)
+	}
+
+	return &Stack{
+		config:                 config,
+		terraformClient: 		terraformClient,
+	}, nil
 }
 
-func (s *AWSStack) Apply() error {
-	defer func() {
-		_ = s.terraformClient.Cleanup()
-	}()
-
+func (s *Stack) Apply() error {
 	sess, err := session.NewSession(aws.NewConfig().WithCredentialsChainVerboseErrors(true))
 	if err != nil {
 		return err
@@ -152,17 +206,22 @@ func (s *AWSStack) Apply() error {
 	}
 
 	log.Info("Creating/updating AWS resources")
-	err = s.terraformClient.Apply()
+	tfDir := filepath.Join(s.terraformOutput, "tf")
+	_, err = s.terraformClient.Init([]string{tfDir})
 	if err != nil {
 		return err
 	}
-	log.Infof("Successfully deployed/updated AWS resources for stack %v", s.Config.Name)
+	_, err = s.terraformClient.Apply([]string{"-auto-approve", tfDir})
+	if err != nil {
+		return err
+	}
+	log.Infof("Successfully deployed/updated AWS resources for stack %v", s.config.Name)
 
-	snsClient := sns.New(sess, &aws.Config{Region: &s.Config.Region})
+	snsClient := sns.New(sess, &aws.Config{Region: &s.config.Region})
 	resp, err := snsClient.ListTopics(&sns.ListTopicsInput{NextToken: aws.String("")})
 	for _, topic := range resp.Topics {
 		topicName := strings.Split(*topic.TopicArn, ":")[5]
-		if topicName == s.Config.Name {
+		if topicName == s.config.Name {
 			// check if subscription exists
 			resp, err := snsClient.ListSubscriptionsByTopic(&sns.ListSubscriptionsByTopicInput{
 				NextToken: aws.String(""),
@@ -172,7 +231,7 @@ func (s *AWSStack) Apply() error {
 				return fmt.Errorf("Failed to list SNS subscriptions for topic %v: %v", *topic.TopicArn, err)
 			}
 			for _, subscription := range resp.Subscriptions {
-				if *subscription.Endpoint == s.Config.Email {
+				if *subscription.Endpoint == s.config.Email {
 					return nil
 				}
 			}
@@ -181,13 +240,13 @@ func (s *AWSStack) Apply() error {
 			_, err = snsClient.Subscribe(&sns.SubscribeInput{
 				Protocol: aws.String("email"),
 				TopicArn: aws.String(*topic.TopicArn),
-				Endpoint: aws.String(s.Config.Email),
+				Endpoint: aws.String(s.config.Email),
 			})
 			if err != nil {
 				return fmt.Errorf("Failed to setup email notifications: %v", err)
 			}
 			log.Infof("Successfully setup email notifications for %v - you'll "+
-				"need to click link in confirmation email to get notifications.", s.Config.Email)
+				"need to click link in confirmation email to get notifications.", s.config.Email)
 			break
 		}
 	}
@@ -195,18 +254,33 @@ func (s *AWSStack) Apply() error {
 	return nil
 }
 
-func (s *AWSStack) Destroy() error {
-	defer func() {
-		_ = s.terraformClient.Cleanup()
-	}()
-
+func (s *Stack) Destroy() error {
 	log.Info("Destroying AWS resources")
-	err := s.terraformClient.Destroy()
+	_, err := s.terraformClient.Destroy([]string{})
 	if err != nil {
 		return err
 	}
 	log.Info("Successfully removed AWS resources")
 	return nil
+}
+
+func renderTemplate(templateStr string, params interface{}) ([]byte, error) {
+	templ, err := template.New("template").Delims("<%", "%>").Parse(templateStr)
+	if err != nil {
+		return nil, err
+	}
+
+	buffer := new(bytes.Buffer)
+
+	if err = templ.Execute(buffer, params); err != nil {
+		return nil, err
+	}
+
+	outputBytes, err := ioutil.ReadAll(buffer)
+	if err != nil {
+		return nil, err
+	}
+	return outputBytes, nil
 }
 
 func s3BucketSetup(name, region string) error {
@@ -249,10 +323,54 @@ func checkAWSCreds(region string) error {
 	if err != nil {
 		return fmt.Errorf("Failed to create new AWS session: %v", err)
 	}
+
 	s3Client := s3.New(sess, &aws.Config{Region: &region})
 	_, err = s3Client.ListBuckets(&s3.ListBucketsInput{})
 	if err != nil {
 		return fmt.Errorf("Unable to list S3 buckets - make sure you have valid admin AWS credentials: %v", err)
+	}
+	return nil
+}
+
+func zipFiles(filename string, files []string) error {
+	newfile, err := os.Create(filename)
+	if err != nil {
+		return err
+	}
+	defer newfile.Close()
+
+	zipWriter := zip.NewWriter(newfile)
+	defer zipWriter.Close()
+
+	// Add files to zip
+	for _, file := range files {
+
+		zipfile, err := os.Open(file)
+		if err != nil {
+			return err
+		}
+		defer zipfile.Close()
+
+		info, err := zipfile.Stat()
+		if err != nil {
+			return err
+		}
+
+		header, err := zip.FileInfoHeader(info)
+		if err != nil {
+			return err
+		}
+
+		header.Method = zip.Deflate
+
+		writer, err := zipWriter.CreateHeader(header)
+		if err != nil {
+			return err
+		}
+		_, err = io.Copy(writer, zipfile)
+		if err != nil {
+			return err
+		}
 	}
 	return nil
 }

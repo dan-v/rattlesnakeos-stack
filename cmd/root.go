@@ -1,4 +1,4 @@
-package cli
+package cmd
 
 import (
 	"errors"
@@ -19,10 +19,16 @@ var (
 	defaultConfigFile         = fmt.Sprintf("%v.%v", defaultConfigFileBase, defaultConfigFileFormat)
 	defaultConfigFileFullPath string
 	configFileFullPath        string
+	buildTemplate 			  string
+	lambdaTemplate 			  string
+	terraformTemplate         string
 )
 
 // Execute the CLI
-func Execute() {
+func Execute(build, lambda, terraform string) {
+	buildTemplate = build
+	lambdaTemplate = lambda
+	terraformTemplate = terraform
 	if err := rootCmd.Execute(); err != nil {
 		fmt.Println(err)
 		os.Exit(1)

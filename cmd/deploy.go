@@ -1,13 +1,13 @@
-package cli
+package cmd
 
 import (
 	"errors"
 	"fmt"
+	"github.com/dan-v/rattlesnakeos-stack/internal/stack"
 	"os"
 	"strconv"
 	"strings"
 
-	"github.com/dan-v/rattlesnakeos-stack/stack"
 	"github.com/manifoldco/promptui"
 	log "github.com/sirupsen/logrus"
 	"github.com/spf13/cobra"
@@ -213,7 +213,7 @@ var deployCmd = &cobra.Command{
 			log.Fatalf("Exiting %v", err)
 		}
 
-		s, err := stack.NewAWSStack(&stack.AWSStackConfig{
+		s, err := stack.New(&stack.Config{
 			Name:                   viper.GetString("name"),
 			Region:                 viper.GetString("region"),
 			Device:                 viper.GetString("device"),
@@ -235,7 +235,7 @@ var deployCmd = &cobra.Command{
 			CustomManifestProjects: manifestProjects,
 			PreventShutdown:        preventShutdown,
 			Version:                version,
-		})
+		}, buildTemplate, lambdaTemplate, terraformTemplate)
 		if err != nil {
 			log.Fatal(err)
 		}

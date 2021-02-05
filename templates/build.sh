@@ -64,7 +64,6 @@ AOSP_BRANCH=$4
 AOSP_VENDOR_BUILD=
 
 # set region
-# shellcheck disable=SC1073
 REGION=<% .Region %>
 export AWS_DEFAULT_REGION=${REGION}
 
@@ -461,14 +460,18 @@ setup_env() {
 
   # install required packages
   sudo apt-get update
-  sudo DEBIAN_FRONTEND=noninteractive apt-get -y install python3 repo gperf jq default-jdk git-core gnupg \
+  sudo DEBIAN_FRONTEND=noninteractive apt-get -y install python2 python3 gperf jq default-jdk git-core gnupg \
       flex bison build-essential zip curl zlib1g-dev gcc-multilib g++-multilib libc6-dev-i386 lib32ncurses5-dev \
-      x11proto-core-dev libx11-dev lib32z-dev ccache libgl1-mesa-dev libxml2-utils xsltproc unzip python-networkx liblz4-tool pxz
-  sudo DEBIAN_FRONTEND=noninteractive apt-get -y build-dep "linux-image-$(uname --kernel-release)"
+      x11proto-core-dev libx11-dev lib32z-dev ccache libgl1-mesa-dev libxml2-utils xsltproc unzip liblz4-tool libncurses5
 
   retry curl --fail -s https://storage.googleapis.com/git-repo-downloads/repo > /tmp/repo
   chmod +x /tmp/repo
   sudo mv /tmp/repo /usr/local/bin/
+
+  # still some scripts that expect python2 as default
+  sudo update-alternatives --install /usr/bin/python python /usr/bin/python2 1
+  sudo update-alternatives --install /usr/bin/python python /usr/bin/python3 2
+  sudo update-alternatives --config python <<< 1
 
   # setup git
   git config --get --global user.name || git config --global user.name 'aosp'
@@ -518,6 +521,7 @@ build_chromium() {
   # install dependencies
   echo ttf-mscorefonts-installer msttcorefonts/accepted-mscorefonts-eula select true | sudo debconf-set-selections
   log "Installing chromium build dependencies"
+
   sudo ./build/install-build-deps-android.sh
 
   # run gclient sync (runhooks will run as part of this)
@@ -647,7 +651,6 @@ setup_vendor() {
   log_header "${FUNCNAME[0]}"
 
   # new dependency to extract ota partitions
-  # one of the scripts depends on python2, the other on python3
   sudo DEBIAN_FRONTEND=noninteractive apt-get -y install python-protobuf python3-protobuf python3-pip
   pip3 install --user protobuf -U
 
@@ -1194,20 +1197,12 @@ release() {
       "${OUT}/${DEVICE}-ota_update-${BUILD}.zip"
 
   log "Running img_from_target_files"
-  sed -i 's/zipfile\.ZIP_DEFLATED/zipfile\.ZIP_STORED/' "${HOME}/release/releasetools/img_from_target_files.py"
   "${HOME}/release/releasetools/img_from_target_files" "${OUT}/${TARGET_FILES}" "${OUT}/${DEVICE}-img-${BUILD}.zip"
 
   log "Running generate-factory-images"
   cd "${OUT}"
-  sed -i 's/zip -r/tar cvf/' "../../device/common/generate-factory-images-common.sh"
-  sed -i 's/factory\.zip/factory\.tar/' "../../device/common/generate-factory-images-common.sh"
-  sed -i '/^mv / d' "../../device/common/generate-factory-images-common.sh"
   source "../../device/common/generate-factory-images-common.sh"
-  mv "${DEVICE}-${VERSION}-factory.tar" "${DEVICE}-factory-${BUILD_NUMBER}.tar"
-  rm -f "${DEVICE}-factory-${BUILD_NUMBER}.tar.xz"
-
-  log "Running compress of factory image with pxz"
-  time pxz -v -T0 -9 -z "${DEVICE}-factory-${BUILD_NUMBER}.tar"
+  mv "${DEVICE}"-*-factory-*.zip "${DEVICE}-factory-${BUILD_NUMBER}.zip"
 }
 
 # TODO: cleanup this function
@@ -1228,7 +1223,7 @@ aws_upload() {
   ) && ( aws s3 rm "s3://${AWS_RELEASE_BUCKET}/${DEVICE}-ota_update-${old_date}.zip" || true )
 
   # upload factory image
-  retry aws s3 cp "${BUILD_DIR}/out/release-${DEVICE}-${build_date}/${DEVICE}-factory-${build_date}.tar.xz" "s3://${AWS_RELEASE_BUCKET}/${DEVICE}-factory-latest.tar.xz"
+  retry aws s3 cp "${BUILD_DIR}/out/release-${DEVICE}-${build_date}/${DEVICE}-factory-${build_date}.zip" "s3://${AWS_RELEASE_BUCKET}/${DEVICE}-factory-latest.zip"
 
   # cleanup old target files if some exist
   if [ "$(aws s3 ls "s3://${AWS_RELEASE_BUCKET}/${DEVICE}-target" | wc -l)" != '0' ]; then
