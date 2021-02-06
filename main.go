@@ -6,7 +6,10 @@ import (
 )
 
 //go:embed templates/build.sh
-var buildTemplate string
+var buildScript string
+
+//go:embed templates/build_vars.sh
+var buildScriptTemplate string
 
 //go:embed templates/lambda.py
 var lambdaTemplate string
@@ -15,5 +18,5 @@ var lambdaTemplate string
 var terraformTemplate string
 
 func main() {
-	cmd.Execute(buildTemplate, lambdaTemplate, terraformTemplate)
+	cmd.Execute(buildScript, buildScriptTemplate, lambdaTemplate, terraformTemplate)
 }

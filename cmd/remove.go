@@ -60,7 +60,7 @@ var removeCmd = &cobra.Command{
 		s, err := stack.New(&stack.Config{
 			Name:   name,
 			Region: region,
-		}, buildTemplate, lambdaTemplate, terraformTemplate)
+		}, buildScript, buildTemplate, lambdaTemplate, terraformTemplate)
 		if err != nil {
 			log.Fatal(err)
 		}

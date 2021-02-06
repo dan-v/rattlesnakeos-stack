@@ -1,137 +1,15 @@
-#!/bin/bash
+#!/usr/bin/env bash
 
-if [ $# -lt 1 ]; then
-  echo "Need to specify device name as argument"
-  exit 1
-fi
-
-# check if supported device
-DEVICE=$1
-case "${DEVICE}" in
-  taimen)
-    DEVICE_FAMILY=taimen
-    DEVICE_COMMON=wahoo
-    AVB_MODE=vbmeta_simple
-    ;;
-  walleye)
-    DEVICE_FAMILY=muskie
-    DEVICE_COMMON=wahoo
-    AVB_MODE=vbmeta_simple
-    ;;
-  crosshatch|blueline)
-    DEVICE_FAMILY=crosshatch
-    DEVICE_COMMON=crosshatch
-    AVB_MODE=vbmeta_chained
-    EXTRA_OTA=(--retrofit_dynamic_partitions)
-    ;;
-  sargo|bonito)
-    DEVICE_FAMILY=bonito
-    DEVICE_COMMON=bonito
-    AVB_MODE=vbmeta_chained
-    EXTRA_OTA=(--retrofit_dynamic_partitions)
-    ;;
-  flame|coral)
-    DEVICE_FAMILY=coral
-    DEVICE_COMMON=coral
-    AVB_MODE=vbmeta_chained_v2
-    ;;
-  sunfish)
-    DEVICE_FAMILY=sunfish
-    DEVICE_COMMON=sunfish
-    AVB_MODE=vbmeta_chained_v2
-    ;;
-  redfin)
-    DEVICE_FAMILY=redfin
-    DEVICE_COMMON=redfin
-    AVB_MODE=vbmeta_chained_v2
-    ;;
-  *)
-    echo "error: unknown device ${DEVICE}"
-    exit 1
-    ;;
-esac
-
-# this is a build time option to override stack setting IGNORE_VERSION_CHECKS
 FORCE_BUILD=false
-if [ "$2" = true ]; then
-  echo "Setting FORCE_BUILD=true"
+if [ "$1" = true ]; then
   FORCE_BUILD=true
 fi
 
-# allow build and branch to be specified
-AOSP_BUILD=$3
-AOSP_BRANCH=$4
+AOSP_BUILD=$2
+AOSP_BRANCH=$3
 AOSP_VENDOR_BUILD=
 
-# set region
-REGION=<% .Region %>
-export AWS_DEFAULT_REGION=${REGION}
-
-# stack name
-STACK_NAME=<% .Name %>
-
-# version of stack running
-STACK_VERSION=<% .Version %>
-
-# prevent default action of shutting down on exit
-PREVENT_SHUTDOWN=<% .PreventShutdown %>
-
-# whether version checks should be ignored
-IGNORE_VERSION_CHECKS=<% .IgnoreVersionChecks %>
-
-# version of chromium to pin to if requested
-CHROMIUM_PINNED_VERSION=<% .ChromiumVersion %>
-
-# whether keys are client side encrypted or not
-ENCRYPTED_KEYS="<% .EncryptedKeys %>"
-ENCRYPTION_KEY=
-ENCRYPTION_PIPE="/tmp/key"
-
-# pin to specific version of android
-ANDROID_VERSION="11.0"
-
-# build type (user or userdebug)
-BUILD_TYPE="user"
-
-# build channel (stable or beta)
-BUILD_CHANNEL="stable"
-
-# user customizable things
-HOSTS_FILE=<% .HostsFile %>
-
-# aws settings
-AWS_KEYS_BUCKET="${STACK_NAME}-keys"
-AWS_ENCRYPTED_KEYS_BUCKET="${STACK_NAME}-keys-encrypted"
-AWS_RELEASE_BUCKET="${STACK_NAME}-release"
-AWS_LOGS_BUCKET="${STACK_NAME}-logs"
-AWS_SNS_ARN=$(aws --region ${REGION} sns list-topics --query 'Topics[0].TopicArn' --output text | cut -d":" -f1,2,3,4,5)":${STACK_NAME}"
-INSTANCE_TYPE=$(curl -s http://169.254.169.254/latest/meta-data/instance-type)
-INSTANCE_REGION=$(curl -s http://169.254.169.254/latest/dynamic/instance-identity/document | awk -F\" '/region/ {print $4}')
-INSTANCE_IP=$(curl -s http://169.254.169.254/latest/meta-data/public-ipv4)
-
-# build settings
-SECONDS=0
-BUILD_TARGET="release aosp_${DEVICE} ${BUILD_TYPE}"
-RELEASE_URL="https://${AWS_RELEASE_BUCKET}.s3.amazonaws.com"
-RELEASE_CHANNEL="${DEVICE}-${BUILD_CHANNEL}"
-BUILD_DATE=$(date +%Y.%m.%d.%H)
-BUILD_TIMESTAMP=$(date +%s)
-BUILD_DIR="${HOME}/rattlesnake-os"
-KEYS_DIR="${BUILD_DIR}/keys"
-CERTIFICATE_SUBJECT='/CN=RattlesnakeOS'
-OFFICIAL_FDROID_KEY="43238d512c1e5eb2d6569f4a3afbf5523418b82e0a3ed1552770abb9a9c9ccab"
-BUILD_REASON=""
-
-# urls
-MANIFEST_URL="https://android.googlesource.com/platform/manifest"
-STACK_URL_LATEST="https://api.github.com/repos/dan-v/rattlesnakeos-stack/releases/latest"
-RATTLESNAKEOS_LATEST_JSON="https://raw.githubusercontent.com/RattlesnakeOS/latest/${ANDROID_VERSION}/latest.json"
-
-STACK_UPDATE_MESSAGE=
-LATEST_STACK_VERSION=
-LATEST_CHROMIUM=
-FDROID_CLIENT_VERSION=
-FDROID_PRIV_EXT_VERSION=
+####REPLACE-VARS####
 
 full_run() {
   log_header "${FUNCNAME[0]}"
@@ -217,7 +95,6 @@ get_latest_versions() {
     fi
   fi
   log "AOSP_BRANCH=${AOSP_BRANCH}"
-
 }
 
 check_for_new_versions() {
@@ -291,10 +168,6 @@ check_for_new_versions() {
   else
     if [ "${FORCE_BUILD}" = true ]; then
       message="No build is required, but FORCE_BUILD=true"
-      log "${message}"
-      BUILD_REASON="${message}"
-    elif [ "${IGNORE_VERSION_CHECKS}" = true ]; then
-      message="No build is required, but IGNORE_VERSION_CHECKS=true"
       log "${message}"
       BUILD_REASON="${message}"
     else
@@ -382,7 +255,7 @@ get_encryption_key() {
 
     log "Waiting for encryption passphrase (with ${wait_time} timeout) to be provided over named pipe ${ENCRYPTION_PIPE}"
     set +e
-    ENCRYPTION_KEY=$(timeout ${wait_time} cat ${ENCRYPTION_PIPE})
+    ENCRYPTION_KEY=$(timeout ${wait_time} cat "${ENCRYPTION_PIPE}")
     if [ $? -ne 0 ]; then
       set -e
       log "Timeout (${wait_time}) waiting for encryption passphrase"
@@ -621,16 +494,8 @@ aosp_repo_modifications() {
   <remove-project name="platform/external/chromium-webview" />
   <remove-project name="platform/packages/apps/Browser2" />
 
-  <% if .CustomManifestRemotes %>
-  <% range $i, $r := .CustomManifestRemotes %>
-  <remote name="<% .Name %>" fetch="<% .Fetch %>" revision="<% .Revision %>" />
-  <% end %>
-  <% end %>
-  <% if .CustomManifestProjects %><% range $i, $r := .CustomManifestProjects %>
-  <project path="<% .Path %>" name="<% .Name %>" remote="<% .Remote %>" />
-  <% end %>
-  <% end %>
-
+  ${CUSTOM_MANIFEST_REMOTES}
+  ${CUSTOM_MANIFEST_PROJECTS}
 </manifest>
 EOF
 
@@ -744,61 +609,6 @@ patch_disable_apex() {
   sed -i 's@$(call inherit-product, $(SRC_TARGET_DIR)/product/updatable_apex.mk)@@' "${BUILD_DIR}/build/make/target/product/mainline_system.mk"
 }
 
-# TODO: most of this is fragile and unforgiving
-patch_custom() {
-  log_header "${FUNCNAME[0]}"
-
-  cd "${BUILD_DIR}"
-
-  # allow custom patches to be applied
-  patches_dir="${HOME}/patches"
-  <% if .CustomPatches %>
-  <% range $i, $r := .CustomPatches %>
-    retry git clone <% if $r.Branch %>--branch <% $r.Branch %><% end %> <% $r.Repo %> ${patches_dir}/<% $i %>
-    <% range $r.Patches %>
-      log "Applying patch <% . %>"
-      patch -p1 --no-backup-if-mismatch < ${patches_dir}/<% $i %>/<% . %>
-    <% end %>
-  <% end %>
-  <% end %>
-
-  # allow custom scripts to be applied
-  scripts_dir="${HOME}/scripts"
-  <% if .CustomScripts %>
-  <% range $i, $r := .CustomScripts %>
-    retry git clone <% if $r.Branch %>--branch <% $r.Branch %><% end %> <% $r.Repo %> ${scripts_dir}/<% $i %>
-    <% range $r.Scripts %>
-      log "Applying shell script <% . %>"
-      . ${scripts_dir}/<% $i %>/<% . %>
-    <% end %>
-  <% end %>
-  <% end %>
-
-  # allow prebuilt applications to be added to build tree
-  prebuilt_dir="${BUILD_DIR}/packages/apps/Custom"
-  # TODO: should be able to specify where to add PRODUCT_PACKAGES
-  mk_file="${BUILD_DIR}/build/make/target/product/handheld_system.mk"
-  <% if .CustomPrebuilts %>
-  <% range $i, $r := .CustomPrebuilts %>
-    log "Putting custom prebuilts from <% $r.Repo %> in build tree location ${prebuilt_dir}/<% $i %>"
-    retry git clone <% $r.Repo %> ${prebuilt_dir}/<% $i %>
-    <% range .Modules %>
-      log "Adding custom PRODUCT_PACKAGES += <% . %> to ${mk_file}"
-      sed -i "\$aPRODUCT_PACKAGES += <% . %>" "${mk_file}"
-    <% end %>
-  <% end %>
-  <% end %>
-
-  # allow custom hosts file
-  hosts_file_location="${BUILD_DIR}/system/core/rootdir/etc/hosts"
-  if [ -z "${HOSTS_FILE}" ]; then
-    log "No custom hosts file requested"
-  else
-    log "Replacing hosts file with ${HOSTS_FILE}"
-    retry wget -q -O "${hosts_file_location}" "${HOSTS_FILE}"
-  fi
-}
-
 patch_base_config() {
   log_header "${FUNCNAME[0]}"
 
@@ -825,29 +635,6 @@ patch_device_config() {
   sed -i 's@PRODUCT_MODEL := AOSP on sunfish@PRODUCT_MODEL := Pixel 4A@' "${BUILD_DIR}/device/google/sunfish/aosp_sunfish.mk" || true
 
   sed -i 's@PRODUCT_MODEL := AOSP on redfin@PRODUCT_MODEL := Pixel 5@' "${BUILD_DIR}/device/google/redfin/aosp_redfin.mk" || true
-}
-
-patch_add_apps() {
-  log_header "${FUNCNAME[0]}"
-
-  handheld_system_mk="${BUILD_DIR}/build/make/target/product/handheld_system.mk"
-  sed -i "\$aPRODUCT_PACKAGES += Updater" "${handheld_system_mk}"
-  sed -i "\$aPRODUCT_PACKAGES += F-DroidPrivilegedExtension" "${handheld_system_mk}"
-  sed -i "\$aPRODUCT_PACKAGES += F-Droid" "${handheld_system_mk}"
-
-  handheld_product_mk="${BUILD_DIR}/build/make/target/product/handheld_product.mk"
-  sed -i 's/Browser2 \\/TrichromeChrome \\/' "${handheld_product_mk}"
-
-  media_product_mk="${BUILD_DIR}/build/make/target/product/media_product.mk"
-  sed -i 's/webview \\/TrichromeWebView \\/' "${media_product_mk}"
-
-  # add any modules defined in custom manifest projects
-  <% if .CustomManifestProjects %><% range $i, $r := .CustomManifestProjects %><% range $j, $q := .Modules %>
-  log "Adding custom PRODUCT_PACKAGES += <% $q %> to ${handheld_system_mk}"
-  sed -i "\$aPRODUCT_PACKAGES += <% $q %>" "${handheld_system_mk}"
-  <% end %>
-  <% end %>
-  <% end %>
 }
 
 patch_updater() {

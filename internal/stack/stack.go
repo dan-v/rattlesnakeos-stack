@@ -10,6 +10,7 @@ import (
 	"github.com/aws/aws-sdk-go/service/iam"
 	"github.com/aws/aws-sdk-go/service/s3"
 	"github.com/aws/aws-sdk-go/service/sns"
+	"github.com/dan-v/rattlesnakeos-stack/internal/devices"
 	"github.com/dan-v/rattlesnakeos-stack/internal/terraform"
 	log "github.com/sirupsen/logrus"
 	"io"
@@ -21,58 +22,33 @@ import (
 )
 
 const (
+	DefaultTrustedRepoBase = "https://github.com/rattlesnakeos/"
+ 	MinimumChromiumVersion = 86
+)
+
+const (
 	awsErrCodeNoSuchBucket = "NoSuchBucket"
 	awsErrCodeNotFound     = "NotFound"
 	lambdaFunctionFilename = "lambda_spot_function.py"
 	lambdaZipFilename      = "lambda_spot.zip"
 	buildScriptFilename    = "build.sh"
+	buildScriptVarsFilename    = "build_vars.sh"
 	outputDir              = "output"
 )
-
-type CustomPatches []struct {
-	Repo    string
-	Patches []string
-	Branch  string
-}
-
-type CustomScripts []struct {
-	Repo    string
-	Scripts []string
-	Branch  string
-}
-
-type CustomPrebuilts []struct {
-	Repo    string
-	Modules []string
-}
-
-type CustomManifestRemotes []struct {
-	Name     string
-	Fetch    string
-	Revision string
-}
-
-type CustomManifestProjects []struct {
-	Path    string
-	Name    string
-	Remote  string
-	Modules []string
-}
 
 type Config struct {
 	Name                   string
 	Region                 string
 	Device                 string
+	DeviceDetails          devices.Device
 	Email                  string
 	InstanceType           string
 	InstanceRegions        string
 	SkipPrice              string
 	MaxPrice               string
 	SSHKey                 string
-	PreventShutdown        bool
 	Version                string
 	Schedule               string
-	IgnoreVersionChecks    bool
 	ChromiumVersion        string
 	CustomPatches          *CustomPatches
 	CustomScripts          *CustomScripts
@@ -90,7 +66,7 @@ type Stack struct {
 	terraformOutput         string
 }
 
-func New(config *Config, buildTemplate, lambdaTemplate, terraformTemplate string) (*Stack, error) {
+func New(config *Config, buildScript, buildScriptTemplate, lambdaTemplate, terraformTemplate string) (*Stack, error) {
 	err := checkAWSCreds(config.Region)
 	if err != nil {
 		return nil, err
@@ -114,7 +90,7 @@ func New(config *Config, buildTemplate, lambdaTemplate, terraformTemplate string
 		return nil, err
 	}
 
-	renderedBuildScript, err := renderTemplate(buildTemplate, config)
+	renderedBuildScriptTemplate, err := renderTemplate(buildScriptTemplate, config)
 	if err != nil {
 		return nil, fmt.Errorf("failed to render build script: %w", err)
 	}
@@ -145,7 +121,8 @@ func New(config *Config, buildTemplate, lambdaTemplate, terraformTemplate string
 	}
 
 	// write out shell script
-	err = ioutil.WriteFile(buildScriptFilePath, renderedBuildScript, 0644)
+	updatedBuildScript := strings.Replace(buildScript, "####REPLACE-VARS####", string(renderedBuildScriptTemplate), 1)
+	err = ioutil.WriteFile(buildScriptFilePath, []byte(updatedBuildScript), 0644)
 	if err != nil {
 		return nil, err
 	}
@@ -164,11 +141,10 @@ func New(config *Config, buildTemplate, lambdaTemplate, terraformTemplate string
 		return nil, err
 	}
 
+	// write out terraform
 	if err := os.MkdirAll(filepath.Join(outputDir, "tf"), 0777); err != nil {
 		return nil, err
 	}
-
-	// write out terraform
 	if err := ioutil.WriteFile(filepath.Join(outputDir, "tf/main.tf"), renderedTerraform, 0777); err != nil {
 		return nil, err
 	}
@@ -333,13 +309,13 @@ func checkAWSCreds(region string) error {
 }
 
 func zipFiles(filename string, files []string) error {
-	newfile, err := os.Create(filename)
+	newFile, err := os.Create(filename)
 	if err != nil {
 		return err
 	}
-	defer newfile.Close()
+	defer newFile.Close()
 
-	zipWriter := zip.NewWriter(newfile)
+	zipWriter := zip.NewWriter(newFile)
 	defer zipWriter.Close()
 
 	// Add files to zip

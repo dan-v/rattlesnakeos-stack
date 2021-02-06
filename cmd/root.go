@@ -19,19 +19,20 @@ var (
 	defaultConfigFile         = fmt.Sprintf("%v.%v", defaultConfigFileBase, defaultConfigFileFormat)
 	defaultConfigFileFullPath string
 	configFileFullPath        string
+	buildScript 			  string
 	buildTemplate 			  string
 	lambdaTemplate 			  string
 	terraformTemplate         string
 )
 
 // Execute the CLI
-func Execute(build, lambda, terraform string) {
-	buildTemplate = build
-	lambdaTemplate = lambda
-	terraformTemplate = terraform
+func Execute(bScript, bTemplate, lTemplate, tTempalte string) {
+	buildScript = bScript
+	buildTemplate = bTemplate
+	lambdaTemplate = lTemplate
+	terraformTemplate = tTempalte
 	if err := rootCmd.Execute(); err != nil {
-		fmt.Println(err)
-		os.Exit(1)
+		log.Fatal(err)
 	}
 }
 

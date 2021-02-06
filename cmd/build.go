@@ -16,8 +16,8 @@ import (
 	"github.com/spf13/viper"
 )
 
-var startBuild, forceBuild bool
-var terminateInstanceID, terminateRegion, listRegions, buildName string
+var forceBuild bool
+var terminateInstanceID, terminateRegion, listRegions string
 var aospBuild, aospBranch string
 
 func init() {
@@ -30,7 +30,7 @@ func init() {
 	buildCmd.AddCommand(buildStartCmd)
 	buildStartCmd.Flags().StringVar(&name, "name", "", "name for stack")
 	buildStartCmd.Flags().BoolVar(&forceBuild, "force-build", false, "force build even if there are no changes in "+
-		"available version of AOSP, Chromium, or F-Droid. this will override stack setting ignore-version-checks.")
+		"available version of AOSP, Chromium, or F-Droid.")
 	buildStartCmd.Flags().StringVar(&aospBuild, "aosp-build", "", "advanced option - specify the specific factory image build number (e.g. PQ3A.190505.002)")
 	buildStartCmd.Flags().StringVar(&aospBranch, "aosp-branch", "", "advanced option - specify the corresponding AOSP branch to use for build (e.g. android-9.0.0_r37)")
 

@@ -3,6 +3,8 @@ package cmd
 import (
 	"errors"
 	"fmt"
+	"github.com/dan-v/rattlesnakeos-stack/internal/aws"
+	"github.com/dan-v/rattlesnakeos-stack/internal/devices"
 	"math/rand"
 	"strings"
 	"time"
@@ -27,14 +29,7 @@ var configCmd = &cobra.Command{
 			if len(input) < 1 {
 				return errors.New("Device name is too short")
 			}
-			found := false
-			for _, d := range supportedDevicesCodename {
-				if input == d {
-					found = true
-					break
-				}
-			}
-			if !found {
+			if !devices.IsSupportedDevice(input){
 				return errors.New("Invalid device")
 			}
 			return nil
@@ -73,19 +68,12 @@ var configCmd = &cobra.Command{
 		viper.Set("name", result)
 
 		color.Cyan(fmt.Sprintf("Stack region is the AWS region where you would like to deploy your stack. Valid options: %v\n",
-			strings.Join(supportedRegions, ", ")))
+			strings.Join(aws.SupportedRegions(), ", ")))
 		validate = func(input string) error {
 			if len(input) < 1 {
 				return errors.New("Stack region is too short")
 			}
-			found := false
-			for _, region := range supportedRegions {
-				if input == region {
-					found = true
-					break
-				}
-			}
-			if !found {
+			if !aws.IsSupportedRegion(input) {
 				return errors.New("Invalid region")
 			}
 			return nil

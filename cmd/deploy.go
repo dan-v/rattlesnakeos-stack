@@ -3,6 +3,8 @@ package cmd
 import (
 	"errors"
 	"fmt"
+	"github.com/dan-v/rattlesnakeos-stack/internal/aws"
+	"github.com/dan-v/rattlesnakeos-stack/internal/devices"
 	"github.com/dan-v/rattlesnakeos-stack/internal/stack"
 	"os"
 	"strconv"
@@ -15,30 +17,17 @@ import (
 	yaml "gopkg.in/yaml.v2"
 )
 
-const defaultInstanceRegions = "us-west-2,us-west-1,us-east-2"
-const minimumChromiumVersion = 86
-
 var name, region, email, device, sshKey, maxPrice, skipPrice, schedule string
 var instanceType, instanceRegions, hostsFile, chromiumVersion string
-var preventShutdown, ignoreVersionChecks, encryptedKeys, saveConfig bool
+var encryptedKeys, saveConfig bool
 var patches = &stack.CustomPatches{}
 var scripts = &stack.CustomScripts{}
 var prebuilts = &stack.CustomPrebuilts{}
 var manifestRemotes = &stack.CustomManifestRemotes{}
 var manifestProjects = &stack.CustomManifestProjects{}
-var trustedRepoBase = "https://github.com/rattlesnakeos/"
-var supportedRegions = []string{"ap-northeast-1", "ap-northeast-2", "ap-northeast-3", "ap-south-1", "ap-southeast-1",
-	"ap-southeast-2", "ca-central-1", "eu-central-1", "eu-north-1", "eu-west-1", "eu-west-2", "eu-west-3", "sa-east-1",
-	"us-east-1", "us-east-2", "us-west-1", "us-west-2", "cn-northwest-1", "cn-north-1"}
 
-var supportedDevicesFriendly = []string{
-	"Pixel 2", "Pixel 2 XL",
-	"Pixel 3", "Pixel 3 XL", "Pixel 3a", "Pixel 3a XL",
-	"Pixel 4", "Pixel 4 XL", "Pixel 4a", "Pixel 5"}
-var supportedDevicesCodename = []string{
-	"walleye", "taimen",
-	"blueline", "crosshatch", "sargo", "bonito",
-	"flame", "coral", "sunfish", "redfin"}
+var supportedDevicesFriendly = devices.SupportedDevices.GetDeviceFriendlyNames()
+var supportedDevicesCodename = devices.SupportedDevices.GetDeviceNames()
 var supportDevicesOutput string
 
 func init() {
@@ -83,7 +72,7 @@ func init() {
 	flags.StringVar(&instanceType, "instance-type", "c5.4xlarge", "EC2 instance type (e.g. c4.4xlarge) to use for the build.")
 	_ = viper.BindPFlag("instance-type", flags.Lookup("instance-type"))
 
-	flags.StringVar(&instanceRegions, "instance-regions", defaultInstanceRegions,
+	flags.StringVar(&instanceRegions, "instance-regions", aws.DefaultInstanceRegions,
 		"possible regions to launch spot instance. the region with cheapest spot instance price will be used.")
 	_ = viper.BindPFlag("instance-regions", flags.Lookup("instance-regions"))
 
@@ -110,15 +99,6 @@ func init() {
 		"decryption over SSH to continue the build process. important: if you have an existing stack - please see the FAQ for how to "+
 		"migrate your keys")
 	_ = viper.BindPFlag("encrypted-keys", flags.Lookup("encrypted-keys"))
-
-	flags.BoolVar(&ignoreVersionChecks, "ignore-version-checks", false,
-		"ignore the versions checks for stack, AOSP, Chromium, and F-Droid and always do a build.")
-	_ = viper.BindPFlag("ignore-version-checks", flags.Lookup("ignore-version-checks"))
-
-	flags.BoolVar(&saveConfig, "save-config", false, "allows you to save all passed CLI flags to config file")
-
-	flags.BoolVar(&preventShutdown, "prevent-shutdown", false,
-		"for debugging purposes only - will prevent ec2 instance from shutting down after build.")
 }
 
 var deployCmd = &cobra.Command{
@@ -149,12 +129,9 @@ var deployCmd = &cobra.Command{
 			if err != nil {
 				return fmt.Errorf("unable to parse specified chromium-version: %v", err)
 			}
-			if chromiumMajorNumber < minimumChromiumVersion {
-				return fmt.Errorf("pinned chromium-version must have major version of at least %v", minimumChromiumVersion)
+			if chromiumMajorNumber < stack.MinimumChromiumVersion {
+				return fmt.Errorf("pinned chromium-version must have major version of at least %v", stack.MinimumChromiumVersion)
 			}
-		}
-		if viper.GetString("force-build") != "" {
-			log.Warnf("The force-build setting has been deprecated and can be removed from your config file. it has been replaced with ignore-version-checks.")
 		}
 		if device == "list" {
 			fmt.Printf("Valid devices are: %v\n", supportDevicesOutput)
@@ -182,24 +159,20 @@ var deployCmd = &cobra.Command{
 		log.Println("Current settings:")
 		fmt.Println(string(bs))
 
-		if saveConfig {
-			log.Printf("These settings will be saved to config file %v.", configFileFullPath)
-		}
-
 		for _, r := range *patches {
-			if !strings.Contains(strings.ToLower(r.Repo), trustedRepoBase) {
+			if !strings.Contains(strings.ToLower(r.Repo), stack.DefaultTrustedRepoBase) {
 				log.Warnf("You are using an untrusted repository (%v) for patches - this is risky unless you own the repository", r.Repo)
 			}
 		}
 
 		for _, r := range *scripts {
-			if !strings.Contains(strings.ToLower(r.Repo), trustedRepoBase) {
+			if !strings.Contains(strings.ToLower(r.Repo), stack.DefaultTrustedRepoBase) {
 				log.Warnf("You are using an untrusted repository (%v) for scripts - this is risky unless you own the repository", r.Repo)
 			}
 		}
 
 		for _, r := range *prebuilts {
-			if !strings.Contains(strings.ToLower(r.Repo), trustedRepoBase) {
+			if !strings.Contains(strings.ToLower(r.Repo), stack.DefaultTrustedRepoBase) {
 				log.Warnf("You are using an untrusted repository (%v) for prebuilts - this is risky unless you own the repository", r.Repo)
 			}
 		}
@@ -217,6 +190,7 @@ var deployCmd = &cobra.Command{
 			Name:                   viper.GetString("name"),
 			Region:                 viper.GetString("region"),
 			Device:                 viper.GetString("device"),
+			DeviceDetails:          devices.GetDeviceDetails(viper.GetString("device")),
 			Email:                  viper.GetString("email"),
 			InstanceType:           viper.GetString("instance-type"),
 			InstanceRegions:        viper.GetString("instance-regions"),
@@ -227,28 +201,18 @@ var deployCmd = &cobra.Command{
 			ChromiumVersion:        viper.GetString("chromium-version"),
 			HostsFile:              viper.GetString("hosts-file"),
 			EncryptedKeys:          viper.GetBool("encrypted-keys"),
-			IgnoreVersionChecks:    viper.GetBool("ignore-version-checks"),
 			CustomPatches:          patches,
 			CustomScripts:          scripts,
 			CustomPrebuilts:        prebuilts,
 			CustomManifestRemotes:  manifestRemotes,
 			CustomManifestProjects: manifestProjects,
-			PreventShutdown:        preventShutdown,
 			Version:                version,
-		}, buildTemplate, lambdaTemplate, terraformTemplate)
+		}, buildScript, buildTemplate, lambdaTemplate, terraformTemplate)
 		if err != nil {
 			log.Fatal(err)
 		}
 		if err := s.Apply(); err != nil {
 			log.Fatal(err)
-		}
-
-		if saveConfig {
-			log.Printf("Saved settings to config file %v.", configFileFullPath)
-			err := viper.WriteConfigAs(configFileFullPath)
-			if err != nil {
-				log.Fatalf("Failed to write config file %v", configFileFullPath)
-			}
 		}
 	},
 }

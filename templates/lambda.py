@@ -134,8 +134,8 @@ packages:
 
 runcmd:
 - [ bash, -c, "sudo -u ubuntu aws s3 --region <% .Region %> cp {0} /home/ubuntu/build.sh" ]
-- [ bash, -c, "sudo -u ubuntu bash /home/ubuntu/build.sh {1} {2} {3} {4}" ]
-    """.format(SRC_PATH, DEVICE, str(force_build).lower(), aosp_build, aosp_branch).encode('ascii')).decode('ascii')
+- [ bash, -c, "sudo -u ubuntu bash /home/ubuntu/build.sh {1} {2} {3}" ]
+    """.format(SRC_PATH, str(force_build).lower(), aosp_build, aosp_branch).encode('ascii')).decode('ascii')
 
     # make spot fleet request config
     now_utc = datetime.utcnow().replace(microsecond=0)
