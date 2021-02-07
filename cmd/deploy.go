@@ -27,7 +27,7 @@ var manifestRemotes = &stack.CustomManifestRemotes{}
 var manifestProjects = &stack.CustomManifestProjects{}
 
 var supportedDevicesFriendly = devices.SupportedDevices.GetDeviceFriendlyNames()
-var supportedDevicesCodename = devices.SupportedDevices.GetDeviceNames()
+var supportedDevicesCodename = devices.SupportedDevices.GetDeviceCodeNames()
 var supportDevicesOutput string
 
 func init() {

@@ -37,3 +37,4 @@ rattlesnakeos-stack
 .DS_Store
 .idea/
 output
+venv/

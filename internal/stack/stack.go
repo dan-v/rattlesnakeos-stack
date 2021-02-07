@@ -3,6 +3,7 @@ package stack
 import (
 	"archive/zip"
 	"bytes"
+	"encoding/json"
 	"fmt"
 	"github.com/aws/aws-sdk-go/aws"
 	"github.com/aws/aws-sdk-go/aws/awserr"
@@ -10,6 +11,7 @@ import (
 	"github.com/aws/aws-sdk-go/service/iam"
 	"github.com/aws/aws-sdk-go/service/s3"
 	"github.com/aws/aws-sdk-go/service/sns"
+	stackaws "github.com/dan-v/rattlesnakeos-stack/internal/aws"
 	"github.com/dan-v/rattlesnakeos-stack/internal/devices"
 	"github.com/dan-v/rattlesnakeos-stack/internal/terraform"
 	log "github.com/sirupsen/logrus"
@@ -32,7 +34,6 @@ const (
 	lambdaFunctionFilename = "lambda_spot_function.py"
 	lambdaZipFilename      = "lambda_spot.zip"
 	buildScriptFilename    = "build.sh"
-	buildScriptVarsFilename    = "build_vars.sh"
 	outputDir              = "output"
 )
 
@@ -95,7 +96,16 @@ func New(config *Config, buildScript, buildScriptTemplate, lambdaTemplate, terra
 		return nil, fmt.Errorf("failed to render build script: %w", err)
 	}
 
-	renderedLambdaFunction, err := renderTemplate(lambdaTemplate, config)
+	regionAMIs, _ := json.Marshal(stackaws.RegionAMIs)
+	lambdaConfig := struct {
+		Config Config
+		RegionAMIs   string
+	} {
+		*config,
+		string(regionAMIs),
+	}
+
+	renderedLambdaFunction, err := renderTemplate(lambdaTemplate, lambdaConfig)
 	if err != nil {
 		return nil, fmt.Errorf("failed to render lambda function: %w", err)
 	}

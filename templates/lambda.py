@@ -3,127 +3,99 @@ import boto3
 import base64
 import json
 from urllib.request import urlopen
-from urllib.request import HTTPError
 from datetime import datetime, timedelta
 
-# curl -s https://cloud-images.ubuntu.com/locator/ec2/releasesTable | grep '18.04' | grep 'amd64' | grep 'hvm:ebs-ssd' | awk -F'"' '{print $2, $15}'  | awk -F"launchAmi=" '{print $1,$2}' | awk '{print $1,$3}' | awk -F'\' '{print $1}' | awk '{printf "\"%s\": \"%s\",\n",$1,$2 }'
-# ubuntu 18.04 AMI hvm:ebs-ssd: https://cloud-images.ubuntu.com/locator/ec2/
-REGION_AMIS = {
-    "af-south-1": "ami-0f072aafc9dfcb24f",
-    "ap-east-1": "ami-04864d873127e4b0a",
-    "ap-northeast-1": "ami-0e039c7d64008bd84",
-    "ap-northeast-2": "ami-067abcae434ee508b",
-    "ap-northeast-3": "ami-08dfee60cf1895207",
-    "ap-south-1": "ami-073c8c0760395aab8",
-    "ap-southeast-1": "ami-09a6a7e49bd29554b",
-    "ap-southeast-2": "ami-0d767dd04ac152743",
-    "ca-central-1": "ami-0df58bd52157c6e83",
-    "eu-central-1": "ami-0932440befd74cdba",
-    "eu-north-1": "ami-09b44b5f46219ee86",
-    "eu-south-1": "ami-0e0812e2467b24796",
-    "eu-west-1": "ami-022e8cc8f0d3c52fd",
-    "eu-west-2": "ami-005383956f2e5fb96",
-    "eu-west-3": "ami-00f6fe7d6cbb56a78",
-    "me-south-1": "ami-07bf297712e054a41",
-    "sa-east-1": "ami-0e765cee959bcbfce",
-    "us-east-1": "ami-03d315ad33b9d49c4",
-    "us-east-2": "ami-0996d3051b72b5b2c",
-    "us-west-1": "ami-0ebef2838fb2605b7",
-    "us-west-2": "ami-0928f4202481dfdf6",
-    "cn-north-1": "ami-0592ccadb56e65f8d",
-    "cn-northwest-1": "ami-007d0f254ea0f8588",
-    "us-gov-west-1": "ami-a7edd7c6",
-    "us-gov-east-1": "ami-c39973b2",
-}
-
-NAME = '<% .Name %>'
-SRC_PATH = 's3://<% .Name %>-script/build.sh'
+NAME = '<% .Config.Name %>'
+SRC_PATH = 's3://<% .Config.Name %>-script/build.sh'
+RELEASE_BUCKET = '<% .Config.Name %>-release'
 FLEET_ROLE = 'arn:aws:iam::{0}:role/aws-service-role/spotfleet.amazonaws.com/AWSServiceRoleForEC2SpotFleet'
-IAM_PROFILE = 'arn:aws:iam::{0}:instance-profile/<% .Name %>-ec2'
-SNS_ARN = 'arn:aws:sns:<% .Region %>:{}:<% .Name %>'
-INSTANCE_TYPE = '<% .InstanceType %>'
-DEVICE = '<% .Device %>'
-SSH_KEY_NAME = '<% .SSHKey %>'
-MAX_PRICE = '<% .MaxPrice %>'
-SKIP_PRICE = '<% .SkipPrice %>'
-REGIONS = '<% .InstanceRegions %>'
-AMI_OVERRIDE = '<% .AMI %>'
-ENCRYPTED_KEYS = '<% .EncryptedKeys %>'
+IAM_PROFILE = 'arn:aws:iam::{0}:instance-profile/<% .Config.Name %>-ec2'
+SNS_ARN = 'arn:aws:sns:<% .Config.Region %>:{}:<% .Config.Name %>'
+INSTANCE_TYPE = '<% .Config.InstanceType %>'
+DEVICE = '<% .Config.Device %>'
+SSH_KEY_NAME = '<% .Config.SSHKey %>'
+MAX_PRICE = '<% .Config.MaxPrice %>'
+SKIP_PRICE = '<% .Config.SkipPrice %>'
+REGION = '<% .Config.Region %>'
+REGIONS = '<% .Config.InstanceRegions %>'
+REGION_AMIS = json.loads('<% .RegionAMIs %>')
+AMI_OVERRIDE = '<% .Config.AMI %>'
+ENCRYPTED_KEYS = '<% .Config.EncryptedKeys %>'
+CHROMIUM_PINNED_VERSION = '<% .Config.ChromiumVersion %>'
+LATEST_JSON = "https://raw.githubusercontent.com/RattlesnakeOS/latest/11.0/latest.json"
+STACK_URL_LATEST = "https://api.github.com/repos/dan-v/rattlesnakeos-stack/releases/latest"
+STACK_VERSION = '<% .Config.Version %>'
 
-def send_sns_message(subject, message):
-    account_id = boto3.client('sts').get_caller_identity().get('Account')
-    sns = boto3.client('sns')
-    resp = sns.publish(TopicArn=SNS_ARN.format(account_id), Subject=subject, Message=message)
-    print("Sent SNS message {} and got response: {}".format(message, resp))
 
 def lambda_handler(event, context):
-    # get account id to fill in fleet role and ec2 profile
-    account_id = boto3.client('sts').get_caller_identity().get('Account')
+    # get latest
+    latest_stack_json = json.loads(urlopen(STACK_URL_LATEST).read().decode())
+    latest_stack_version = latest_stack_json.get('name')
+    print("latest_stack_version", latest_stack_version)
+    latest_json = json.loads(urlopen(LATEST_JSON).read().decode())
+    latest_chromium_version = latest_json.get('chromium')
+    print("latest_chromium_version", latest_chromium_version)
+    latest_fdroid_client_version = latest_json.get('fdroid').get('client')
+    print("latest_fdroid_client_version", latest_fdroid_client_version)
+    latest_fdroid_priv_version = latest_json.get('fdroid').get('privilegedextention')
+    print("latest_fdroid_priv_version", latest_fdroid_priv_version)
+    latest_aosp_build_id = latest_json.get('devices').get(DEVICE).get('build_id')
+    print("latest_aosp_build_id", latest_aosp_build_id)
+    latest_aosp_tag = latest_json.get('devices').get(DEVICE).get('aosp_tag')
+    print("latest_aosp_tag", latest_aosp_tag)
 
-    force_build = False
-    if "ForceBuild" in event:
-        force_build = event['ForceBuild']
-    aosp_build = ""
-    if "AOSPBuild" in event:
-        aosp_build = event['AOSPBuild']
-    aosp_branch = ""
-    if "AOSPBranch" in event:
-        aosp_branch = event['AOSPBranch']
+    # build time overrides
+    force_build = event.get('ForceBuild', False)
+    print("force_build", force_build)
+    aosp_build_id = event.get('AOSPBuildID', latest_aosp_build_id)
+    print("aosp_build_id", aosp_build_id)
+    aosp_tag = event.get('AOSPTag', latest_aosp_tag)
+    print("aosp_tag", aosp_tag)
+    chromium_version = event.get('ChromiumVersion', CHROMIUM_PINNED_VERSION if CHROMIUM_PINNED_VERSION != "" else latest_chromium_version)
+    print("chromium_version", chromium_version)
+    fdroid_client_version = event.get('FDroidClientVersion', latest_fdroid_client_version)
+    print("fdroid_client_version", fdroid_client_version)
+    fdroid_priv_version = event.get('FDroidPrivVersion', latest_fdroid_priv_version)
+    print("fdroid_priv_version", fdroid_priv_version)
 
+    # check if build is required
+    needs_build, build_reasons = is_build_required(latest_stack_version, aosp_build_id, chromium_version, fdroid_client_version, fdroid_priv_version)
+    if not needs_build and not force_build:
+        message = "RattlesnakeOS build is already up to date."
+        send_sns_message("RattlesnakeOS Build Not Required", message)
+        return message
+    if not needs_build and force_build:
+        build_reasons.append("Build not required - but force build flag was specified.")
+    print("needs_build", needs_build)
+    print("build_reasons", build_reasons)
+
+    # find region and az with cheapest price
     try:
-        cheapest_price = 0
-        cheapest_region = ""
-        cheapest_az = ""
-        for region in REGIONS.split(","):
-            ec2_client = boto3.client('ec2', region_name=region)
-            spot_price_dict = ec2_client.describe_spot_price_history(
-                        StartTime=datetime.now() - timedelta(minutes=1),
-                        EndTime=datetime.now(),
-                        InstanceTypes=[
-                            INSTANCE_TYPE
-                        ],
-                        ProductDescriptions=[
-                            'Linux/UNIX (Amazon VPC)'
-                        ],
-                    )
-            for key, value in spot_price_dict.items():
-                if key == u'SpotPriceHistory':
-                    for i in value:
-                        az = i[u'AvailabilityZone']
-                        price = i[u'SpotPrice']
-                        if cheapest_price == 0:
-                            cheapest_price = price
-                            cheapest_region = region
-                            cheapest_az = az
-                        else:
-                            if price < cheapest_price:
-                                cheapest_price = price
-                                cheapest_region = region
-                                cheapest_az = az
-                        print("{} {}".format(az, price))
+        cheapest_price, cheapest_region, cheapest_az = find_cheapest_region()
+        if float(cheapest_price) > float(SKIP_PRICE):
+            message = f"Cheapest spot instance {INSTANCE_TYPE} price ${cheapest_price} in AZ {cheapest_az} is not lower than --skip-price ${SKIP_PRICE}."
+            send_sns_message("RattlesnakeOS Spot Instance SKIPPED", message)
+            return message
     except Exception as e:
-        send_sns_message("RattlesnakeOS Spot Instance FAILED", "There was a problem finding cheapest region for spot instance {}: {}".format(INSTANCE_TYPE, e))
+        message = f"There was a problem finding cheapest region for spot instance {INSTANCE_TYPE}: {e}"
+        send_sns_message("RattlesnakeOS Spot Instance FAILED", message)
         raise
 
-    if float(cheapest_price) > float(SKIP_PRICE):
-        message = "Cheapest spot instance {} price ${} in AZ {} is not lower than --skip-price ${}.".format(INSTANCE_TYPE, cheapest_price,
-                      cheapest_az, SKIP_PRICE)
-        send_sns_message("RattlesnakeOS Spot Instance SKIPPED", message)
-        return message
-
     # AMI to launch with
-    ami = REGION_AMIS[cheapest_region]
-    if AMI_OVERRIDE:
-        ami = AMI_OVERRIDE
+    ami = AMI_OVERRIDE if AMI_OVERRIDE else REGION_AMIS[cheapest_region]
 
     # create ec2 client for cheapest region
     client = boto3.client('ec2', region_name=cheapest_region)
 
     # get a subnet in cheapest az to request spot instance in
-    subnets = client.describe_subnets(Filters=[{'Name': 'availabilityZone','Values': [cheapest_az]}])['Subnets'][0]['SubnetId']
+    subnets = client.describe_subnets(Filters=[{'Name': 'availabilityZone', 'Values': [cheapest_az]}])['Subnets'][0][
+        'SubnetId']
 
     # userdata to deploy with spot instance
-    userdata = base64.b64encode("""
+    copy_build_command = f"sudo -u ubuntu aws s3 --region {REGION} cp {SRC_PATH} /home/ubuntu/build.sh"
+    build_args_command = f"echo \\\"aosp_build_id={aosp_build_id} aosp_tag={aosp_tag} chromium_version={chromium_version} fdroid_client_version={fdroid_client_version} fdroid_priv_version={fdroid_priv_version}\\\" > /home/ubuntu/build_args"
+    build_start_command = f"sudo -u ubuntu bash /home/ubuntu/build.sh \\\"{aosp_build_id}\\\" \\\"{aosp_tag}\\\" \\\"{chromium_version}\\\" \\\"{fdroid_client_version}\\\" \\\"{fdroid_priv_version}\\\""
+    userdata = base64.b64encode(f"""
 #cloud-config
 output : {{ all : '| tee -a /var/log/cloud-init-output.log' }}
 
@@ -133,11 +105,13 @@ packages:
 - awscli
 
 runcmd:
-- [ bash, -c, "sudo -u ubuntu aws s3 --region <% .Region %> cp {0} /home/ubuntu/build.sh" ]
-- [ bash, -c, "sudo -u ubuntu bash /home/ubuntu/build.sh {1} {2} {3}" ]
-    """.format(SRC_PATH, str(force_build).lower(), aosp_build, aosp_branch).encode('ascii')).decode('ascii')
+- [ bash, -c, "{copy_build_command}" ]
+- [ bash, -c, "{build_args_command}" ]
+- [ bash, -c, "{build_start_command}" ]
+    """.encode('ascii')).decode('ascii')
 
     # make spot fleet request config
+    account_id = boto3.client('sts').get_caller_identity().get('Account')
     now_utc = datetime.utcnow().replace(microsecond=0)
     valid_until = now_utc + timedelta(hours=12)
     spot_fleet_request_config = {
@@ -158,7 +132,7 @@ runcmd:
                 },
                 'BlockDeviceMappings': [
                     {
-                        'DeviceName' : '/dev/sda1',
+                        'DeviceName': '/dev/sda1',
                         'Ebs': {
                             'DeleteOnTermination': True,
                             'VolumeSize': 250,
@@ -178,26 +152,166 @@ runcmd:
         spot_fleet_request_config['LaunchSpecifications'][0]['KeyName'] = SSH_KEY_NAME
     except Exception as e:
         if ENCRYPTED_KEYS == "true":
-            message = "Encrypted keys is enabled, so properly configured SSH keys are mandatory. Unable to find an EC2 Key Pair named '{}' in region {}.".format(SSH_KEY_NAME, cheapest_region)
+            message = f"Encrypted keys is enabled, so properly configured SSH keys are mandatory. Unable to find an EC2 Key Pair named '{SSH_KEY_NAME}' in region {cheapest_region}."
             send_sns_message("RattlesnakeOS Spot Instance CONFIGURATION ERROR", message)
             return message
         else:
-            print("Not including SSH key in spot request as couldn't find a key in region {} with name {}: {}".format(cheapest_region, SSH_KEY_NAME, e))
+            print(f"not including SSH key in spot request as no key in region {cheapest_region} with name {SSH_KEY_NAME} found: {e}")
 
-    print("spot_fleet_request_config: ", spot_fleet_request_config)
+    print("spot_fleet_request_config: {}".format(spot_fleet_request_config))
 
     try:
-        print("Requesting spot instance in AZ {} with current price of {}".format(cheapest_az, cheapest_price))
+        print(f"requesting spot instance in AZ {cheapest_az} with current price of {cheapest_price}")
         response = client.request_spot_fleet(SpotFleetRequestConfig=spot_fleet_request_config)
-        print("Spot request response: {}".format(response))
+        print(f"spot request response: {response}")
     except Exception as e:
-        send_sns_message("RattlesnakeOS Spot Instance FAILED", "There was a problem requesting a spot instance {}: {}".format(INSTANCE_TYPE, e))
+        message = f"There was a problem requesting a spot instance {INSTANCE_TYPE}: {e}"
+        send_sns_message("RattlesnakeOS Spot Instance FAILED", message)
         raise
 
     subject = "RattlesnakeOS Spot Instance SUCCESS"
-    message = "Successfully requested a spot instance.\n\n Stack Name: {}\n Device: {}\n Force Build: {}\n Instance Type: {}\n Cheapest Region: {}\n Cheapest Hourly Price: ${} ".format(NAME, DEVICE, force_build, INSTANCE_TYPE, cheapest_region, cheapest_price)
+    message = f"Successfully requested a spot instance.\n\n Stack Name: {NAME}\n Device: {DEVICE}\n Instance Type: {INSTANCE_TYPE}\n Cheapest Region: {cheapest_region}\n Cheapest Hourly Price: ${cheapest_price}\n Reason: {build_reasons}"
     send_sns_message(subject, message)
     return message.replace('\n', ' ')
 
+
+def is_build_required(latest_stack_version, aosp_build_id, chromium_version, fdroid_client_version, fdroid_priv_version):
+    s3 = boto3.resource('s3')
+    needs_update = False
+    build_reasons = []
+
+    # STACK
+    existing_stack_version = ""
+    try:
+        existing_stack_version = s3.Object(RELEASE_BUCKET, "rattlesnakeos-stack/revision").get()[
+            'Body'].read().decode().strip("\n")
+    except Exception as e:
+        print("failed to get existing_stack_version: {}".format(e))
+        pass
+    if existing_stack_version == "":
+        needs_update = True
+        build_reasons.append("Initial build")
+        return needs_update, build_reasons
+    if existing_stack_version != latest_stack_version:
+        print("WARNING: existing stack version {} is not the latest {}", existing_stack_version, latest_stack_version)
+
+    # AOSP
+    existing_aosp_build_id = ""
+    try:
+        existing_aosp_build_id = s3.Object(RELEASE_BUCKET, "{}-vendor".format(DEVICE)).get()[
+            'Body'].read().decode().strip("\n")
+        print("existing_aosp_build_id='{}'".format(existing_aosp_build_id))
+    except Exception as e:
+        print("failed to get existing_aosp_build_id: {}".format(e))
+        pass
+    if existing_aosp_build_id != aosp_build_id:
+        needs_update = True
+        build_reasons.append("AOSP build id {} != {}".format(existing_aosp_build_id, aosp_build_id))
+
+    # CHROMIUM
+    existing_chromium_version = ""
+    try:
+        existing_chromium_version = s3.Object(RELEASE_BUCKET, "chromium/revision").get()['Body'].read().decode().strip(
+            "\n")
+        print("existing_chromium_version='{}'".format(existing_chromium_version))
+    except Exception as e:
+        print("failed to get existing_chromium_version: {}".format(e))
+        pass
+    chromium_included = False
+    try:
+        chromium_included_text = s3.Object(RELEASE_BUCKET, "chromium/included").get()['Body'].read().decode().strip(
+            "\n")
+        if chromium_included_text == "yes":
+            chromium_included = True
+    except:
+        print("failed to get chromium_included: {}".format(e))
+        pass
+
+    if existing_chromium_version == chromium_version and chromium_included:
+        print("chromium build {} is up to date".format(existing_chromium_version))
+    else:
+        needs_update = True
+        if existing_chromium_version == chromium_version:
+            print("chromium {} was built but not installed".format(existing_chromium_version))
+            build_reasons.append("Chromium version {} built but not installed".format(existing_chromium_version))
+        else:
+            print("chromium needs to be updated to {}".format(chromium_version))
+            build_reasons.append("Chromium version {} != {}".format(existing_chromium_version, chromium_version))
+
+    # FDROID
+    existing_fdroid_client_version = ""
+    try:
+        existing_fdroid_client_version = s3.Object(RELEASE_BUCKET, "fdroid/revision").get()[
+            'Body'].read().decode().strip("\n")
+        print("existing_fdroid_client_version='{}'".format(existing_chromium_version))
+    except:
+        print("failed to get existing_fdroid_client_version: {}".format(e))
+        pass
+    if existing_fdroid_client_version == fdroid_client_version:
+        print("fdroid client {} is up to date".format(existing_fdroid_client_version))
+    else:
+        print("fdroid needs to be updated to {}".format(fdroid_client_version))
+        needs_update = True
+        build_reasons.append("F-Droid version {} != {}".format(existing_fdroid_client_version, fdroid_client_version))
+
+    # FDROID PRIV
+    existing_fdroid_priv_version = ""
+    try:
+        existing_fdroid_priv_version = s3.Object(RELEASE_BUCKET, "fdroid-priv/revision").get()[
+            'Body'].read().decode().strip("\n")
+        print("existing_fdroid_priv_version='{}'".format(existing_fdroid_priv_version))
+    except Exception as e:
+        print("failed to get existing_fdroid_priv_version: {}".format(e))
+        pass
+    if existing_fdroid_priv_version == fdroid_priv_version:
+        print("fdroid priv {} is up to date".format(fdroid_priv_version))
+    else:
+        print("fdroid priv needs to be updated to {}".format(fdroid_priv_version))
+        needs_update = True
+        build_reasons.append(
+            "F-Droid priv ext version {} != {}".format(existing_fdroid_priv_version, fdroid_priv_version))
+
+    return needs_update, build_reasons
+
+def find_cheapest_region():
+    cheapest_price = 0
+    cheapest_region = ""
+    cheapest_az = ""
+    for region in REGIONS.split(","):
+        ec2_client = boto3.client('ec2', region_name=region)
+        spot_price_dict = ec2_client.describe_spot_price_history(
+            StartTime=datetime.now() - timedelta(minutes=1),
+            EndTime=datetime.now(),
+            InstanceTypes=[
+                INSTANCE_TYPE
+            ],
+            ProductDescriptions=[
+                'Linux/UNIX (Amazon VPC)'
+            ],
+        )
+        for key, value in spot_price_dict.items():
+            if key == u'SpotPriceHistory':
+                for i in value:
+                    az = i[u'AvailabilityZone']
+                    price = i[u'SpotPrice']
+                    if cheapest_price == 0:
+                        cheapest_price = price
+                        cheapest_region = region
+                        cheapest_az = az
+                    else:
+                        if price < cheapest_price:
+                            cheapest_price = price
+                            cheapest_region = region
+                            cheapest_az = az
+                    print("{} {}".format(az, price))
+    return cheapest_price, cheapest_region, cheapest_az
+
+def send_sns_message(subject, message):
+    account_id = boto3.client('sts').get_caller_identity().get('Account')
+    sns = boto3.client('sns')
+    resp = sns.publish(TopicArn=SNS_ARN.format(account_id), Subject=subject, Message=message)
+    print("Sent SNS message {} and got response: {}".format(message, resp))
+
+
 if __name__ == '__main__':
-   lambda_handler("", "")
+    lambda_handler("", "")

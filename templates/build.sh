@@ -1,184 +1,39 @@
 #!/usr/bin/env bash
 
-FORCE_BUILD=false
-if [ "$1" = true ]; then
-  FORCE_BUILD=true
-fi
-
-AOSP_BUILD=$2
-AOSP_BRANCH=$3
-AOSP_VENDOR_BUILD=
+AOSP_BUILD_ID=$1
+echo "AOSP_BUILD_ID=${AOSP_BUILD_ID}"
+AOSP_TAG=$2
+echo "AOSP_TAG=${AOSP_TAG}"
+CHROMIUM_VERSION=$3
+echo "CHROMIUM_VERSION=${CHROMIUM_VERSION}"
+FDROID_CLIENT_VERSION=$4
+echo "FDROID_CLIENT_VERSION=${FDROID_CLIENT_VERSION}"
+FDROID_PRIV_EXT_VERSION=$5
+echo "FDROID_PRIV_EXT_VERSION=${FDROID_PRIV_EXT_VERSION}"
 
 ####REPLACE-VARS####
 
 full_run() {
   log_header "${FUNCNAME[0]}"
 
-  get_latest_versions
-  check_for_new_versions
   initial_key_setup
   aws_notify "RattlesnakeOS Build STARTED"
   setup_env
   aws_import_keys
-  check_chromium
-  aosp_repo_init
-  aosp_repo_modifications
-  aosp_repo_sync
-  setup_vendor
-  build_fdroid
-  add_chromium
+  # TODO: not sure if this is a great idea, but does speed up build
+  check_chromium &
+  aosp_setup &
+  wait
+  setup_vendor &
+  build_fdroid &
+  add_chromium &
+  wait
   apply_patches
   build_aosp
   release
   aws_upload
   checkpoint_versions
   aws_notify "RattlesnakeOS Build SUCCESS"
-}
-
-get_latest_versions() {
-  log_header "${FUNCNAME[0]}"
-
-  sudo DEBIAN_FRONTEND=noninteractive apt-get -y install jq
-
-  # check if running latest stack
-  LATEST_STACK_VERSION=$(curl --fail -s "${STACK_URL_LATEST}" | jq -r '.name')
-  if [ -z "${LATEST_STACK_VERSION}" ]; then
-    aws_notify_simple "ERROR: Unable to get latest rattlesnakeos-stack version details. Stopping build."
-    exit 1
-  elif [ "${LATEST_STACK_VERSION}" == "${STACK_VERSION}" ]; then
-    log "Running the latest rattlesnakeos-stack version ${LATEST_STACK_VERSION}"
-  else
-    STACK_UPDATE_MESSAGE="WARNING: you should upgrade to the latest version: ${LATEST_STACK_VERSION}"
-  fi
-
-  # download latest.json and use for remaining checks
-  curl --fail -s "${RATTLESNAKEOS_LATEST_JSON}" > "${HOME}/latest.json"
-
-  # check for latest chromium version
-  LATEST_CHROMIUM=$(jq -r '.chromium' "${HOME}/latest.json")
-  if [ -z "${LATEST_CHROMIUM}" ]; then
-    aws_notify_simple "ERROR: Unable to get latest Chromium version details. Stopping build."
-    exit 1
-  fi
-  log "LATEST_CHROMIUM=${LATEST_CHROMIUM}"
-
-  FDROID_CLIENT_VERSION=$(jq -r '.fdroid.client' "${HOME}/latest.json")
-  if [ -z "${FDROID_CLIENT_VERSION}" ]; then
-    aws_notify_simple "ERROR: Unable to get latest F-Droid version details. Stopping build."
-    exit 1
-  fi
-  log "FDROID_CLIENT_VERSION=${FDROID_CLIENT_VERSION}"
-
-  FDROID_PRIV_EXT_VERSION=$(jq -r '.fdroid.privilegedextention' "${HOME}/latest.json")
-  if [ -z "${FDROID_PRIV_EXT_VERSION}" ]; then
-    aws_notify_simple "ERROR: Unable to get latest F-Droid privilege extension version details. Stopping build."
-    exit 1
-  fi
-  log "FDROID_PRIV_EXT_VERSION=${FDROID_PRIV_EXT_VERSION}"
-
-  AOSP_VENDOR_BUILD=$(jq -r ".devices.${DEVICE}.build_id" "${HOME}/latest.json")
-  if [ -z "${AOSP_VENDOR_BUILD}" ]; then
-    aws_notify_simple "ERROR: Unable to get latest AOSP build version details. Stopping build."
-    exit 1
-  fi
-  if [ -z "${AOSP_BUILD}" ]; then
-    AOSP_BUILD="${AOSP_VENDOR_BUILD}"
-  fi
-  log "AOSP_VENDOR_BUILD=${AOSP_VENDOR_BUILD}"
-  log "AOSP_BUILD=${AOSP_BUILD}"
-
-  if [ -z "${AOSP_BRANCH}" ]; then
-    AOSP_BRANCH=$(jq -r ".devices.${DEVICE}.aosp_tag" "${HOME}/latest.json")
-    if [ -z "${AOSP_BRANCH}" ]; then
-      aws_notify_simple "ERROR: Unable to get latest AOSP branch details. Stopping build."
-      exit 1
-    fi
-  fi
-  log "AOSP_BRANCH=${AOSP_BRANCH}"
-}
-
-check_for_new_versions() {
-  log_header "${FUNCNAME[0]}"
-
-  log "Checking if any new versions of software exist"
-  needs_update=false
-
-  # check stack version
-  existing_stack_version=$(aws s3 cp "s3://${AWS_RELEASE_BUCKET}/rattlesnakeos-stack/revision" - || true)
-  if [ "${existing_stack_version}" == "${STACK_VERSION}" ]; then
-    log "Stack version (${existing_stack_version}) is up to date"
-  else
-    log "Last successful build (if there was one) is not with current stack version ${STACK_VERSION}"
-    needs_update=true
-    BUILD_REASON="'Stack version ${existing_stack_version} != ${STACK_VERSION}'"
-  fi
-
-  # check aosp
-  existing_aosp_build=$(aws s3 cp "s3://${AWS_RELEASE_BUCKET}/${DEVICE}-vendor" - || true)
-  if [ "${existing_aosp_build}" == "${AOSP_VENDOR_BUILD}" ]; then
-    log "AOSP build (${existing_aosp_build}) is up to date"
-  else
-    log "AOSP needs to be updated to ${AOSP_VENDOR_BUILD}"
-    needs_update=true
-    BUILD_REASON="${BUILD_REASON} 'AOSP build ${existing_aosp_build} != ${AOSP_VENDOR_BUILD}'"
-  fi
-
-  # check chromium
-  if [ -n "${CHROMIUM_PINNED_VERSION}" ]; then
-    log "Setting LATEST_CHROMIUM to pinned version ${CHROMIUM_PINNED_VERSION}"
-    LATEST_CHROMIUM="${CHROMIUM_PINNED_VERSION}"
-  fi
-  existing_chromium=$(aws s3 cp "s3://${AWS_RELEASE_BUCKET}/chromium/revision" - || true)
-  chromium_included=$(aws s3 cp "s3://${AWS_RELEASE_BUCKET}/chromium/included" - || true)
-  if [ "${existing_chromium}" == "${LATEST_CHROMIUM}" ] && [ "${chromium_included}" == "yes" ]; then
-    log "Chromium build (${existing_chromium}) is up to date"
-  else
-    log "Chromium needs to be updated to ${LATEST_CHROMIUM}"
-    echo "no" | aws s3 cp - "s3://${AWS_RELEASE_BUCKET}/chromium/included"
-    needs_update=true
-    if [ "${existing_chromium}" == "${LATEST_CHROMIUM}" ]; then
-      BUILD_REASON="${BUILD_REASON} 'Chromium version ${existing_chromium} built but not installed'"
-    else
-      BUILD_REASON="${BUILD_REASON} 'Chromium version ${existing_chromium} != ${LATEST_CHROMIUM}'"
-    fi
-  fi
-
-  # check fdroid
-  existing_fdroid_client=$(aws s3 cp "s3://${AWS_RELEASE_BUCKET}/fdroid/revision" - || true)
-  if [ "${existing_fdroid_client}" == "${FDROID_CLIENT_VERSION}" ]; then
-    log "F-Droid build (${existing_fdroid_client}) is up to date"
-  else
-    log "F-Droid needs to be updated to ${FDROID_CLIENT_VERSION}"
-    needs_update=true
-    BUILD_REASON="${BUILD_REASON} 'F-Droid version ${existing_fdroid_client} != ${FDROID_CLIENT_VERSION}'"
-  fi
-
-  # check fdroid priv extension
-  existing_fdroid_priv_version=$(aws s3 cp "s3://${AWS_RELEASE_BUCKET}/fdroid-priv/revision" - || true)
-  if [ "${existing_fdroid_priv_version}" == "${FDROID_PRIV_EXT_VERSION}" ]; then
-    log "F-Droid privileged extension build (${existing_fdroid_priv_version}) is up to date"
-  else
-    log "F-Droid privileged extension needs to be updated to ${FDROID_PRIV_EXT_VERSION}"
-    needs_update=true
-    BUILD_REASON="${BUILD_REASON} 'F-Droid privileged extension ${existing_fdroid_priv_version} != ${FDROID_PRIV_EXT_VERSION}'"
-  fi
-
-  if [ "${needs_update}" = true ]; then
-    log "New build is required"
-  else
-    if [ "${FORCE_BUILD}" = true ]; then
-      message="No build is required, but FORCE_BUILD=true"
-      log "${message}"
-      BUILD_REASON="${message}"
-    else
-      aws_notify "RattlesnakeOS build not required as all components are already up to date."
-      exit 0
-    fi
-  fi
-
-  if [ -z "${existing_stack_version}" ]; then
-    BUILD_REASON="Initial build"
-  fi
 }
 
 add_chromium() {
@@ -350,6 +205,8 @@ setup_env() {
   git config --get --global user.name || git config --global user.name 'aosp'
   git config --get --global user.email || git config --global user.email 'aosp@localhost'
   git config --global color.ui true
+
+  sudo mount -t tmpfs tmpfs /tmp
 }
 
 check_chromium() {
@@ -358,12 +215,12 @@ check_chromium() {
   current=$(aws s3 cp "s3://${AWS_RELEASE_BUCKET}/chromium/revision" - || true)
   log "Chromium current: ${current}"
 
-  log "Chromium latest: ${LATEST_CHROMIUM}"
-  if [ "${LATEST_CHROMIUM}" == "${current}" ]; then
-    log "Chromium latest (${LATEST_CHROMIUM}) matches current (${current})"
+  log "Chromium requested: ${CHROMIUM_VERSION}"
+  if [ "${CHROMIUM_VERSION}" == "${current}" ]; then
+    log "Chromium requested (${CHROMIUM_VERSION}) matches current (${current})"
   else
-    log "Building chromium ${LATEST_CHROMIUM}"
-    build_chromium "${LATEST_CHROMIUM}"
+    log "Building chromium ${CHROMIUM_VERSION}"
+    build_chromium "${CHROMIUM_VERSION}"
   fi
 
   log "Deleting chromium directory ${HOME}/chromium"
@@ -466,11 +323,24 @@ EOF
   echo "${CHROMIUM_REVISION}" | aws s3 cp - "s3://${AWS_RELEASE_BUCKET}/chromium/revision"
 }
 
+aosp_setup() {
+  log_header "${FUNCNAME[0]}"
+  aosp_repo_init
+  log "Running aosp_repo_sync before modifications"
+  aosp_repo_sync
+  log "Running aosp_prebuild"
+  aosp_prebuild
+  log "Running aosp_repo_modifications"
+  aosp_repo_modifications
+  log "Running aosp_repo_sync after modifications"
+  aosp_repo_sync
+}
+
 aosp_repo_init() {
   log_header "${FUNCNAME[0]}"
   cd "${BUILD_DIR}"
 
-  retry repo init --manifest-url "${MANIFEST_URL}" --manifest-branch "${AOSP_BRANCH}" --depth 1 || true
+  retry repo init --manifest-url "${MANIFEST_URL}" --manifest-branch "${AOSP_TAG}" --depth 1 || true
 }
 
 aosp_repo_modifications() {
@@ -512,6 +382,25 @@ aosp_repo_sync() {
   done
 }
 
+aosp_prebuild() {
+  log_header "${FUNCNAME[0]}"
+
+  cd "${BUILD_DIR}"
+
+  source build/envsetup.sh
+  export LANG=C
+  export _JAVA_OPTIONS=-XX:-UsePerfData
+  export BUILD_NUMBER=$(cat out/soong/build_number.txt 2>/dev/null || date --utc +%Y.%m.%d.%H)
+  export DISPLAY_BUILD_NUMBER=true
+  chrt -b -p 0 $$
+
+  log "Running aosp_prebuild choosecombo ${BUILD_TARGET}"
+  choosecombo ${BUILD_TARGET}
+
+  log "Running aosp_prebuild target-files-package"
+  make -j "$(nproc)" target-files-package || true
+}
+
 setup_vendor() {
   log_header "${FUNCNAME[0]}"
 
@@ -521,17 +410,17 @@ setup_vendor() {
 
   # get vendor files (with timeout)
   timeout 30m "${BUILD_DIR}/vendor/android-prepare-vendor/execute-all.sh" --debugfs --yes --device "${DEVICE}" \
-      --buildID "${AOSP_VENDOR_BUILD}" --output "${BUILD_DIR}/vendor/android-prepare-vendor"
+      --buildID "${AOSP_BUILD_ID}" --output "${BUILD_DIR}/vendor/android-prepare-vendor"
 
   # copy vendor files to build tree
   mkdir --parents "${BUILD_DIR}/vendor/google_devices" || true
   rm -rf "${BUILD_DIR}/vendor/google_devices/${DEVICE}" || true
-  mv "${BUILD_DIR}/vendor/android-prepare-vendor/${DEVICE}/$(tr '[:upper:]' '[:lower:]' <<< "${AOSP_VENDOR_BUILD}")/vendor/google_devices/${DEVICE}" "${BUILD_DIR}/vendor/google_devices"
+  mv "${BUILD_DIR}/vendor/android-prepare-vendor/${DEVICE}/$(tr '[:upper:]' '[:lower:]' <<< "${AOSP_BUILD_ID}")/vendor/google_devices/${DEVICE}" "${BUILD_DIR}/vendor/google_devices"
 
   # smaller devices need big brother vendor files
   if [ "${DEVICE}" != "${DEVICE_FAMILY}" ]; then
     rm -rf "${BUILD_DIR}/vendor/google_devices/${DEVICE_FAMILY}" || true
-    mv "${BUILD_DIR}/vendor/android-prepare-vendor/${DEVICE}/$(tr '[:upper:]' '[:lower:]' <<< "${AOSP_VENDOR_BUILD}")/vendor/google_devices/${DEVICE_FAMILY}" "${BUILD_DIR}/vendor/google_devices"
+    mv "${BUILD_DIR}/vendor/android-prepare-vendor/${DEVICE}/$(tr '[:upper:]' '[:lower:]' <<< "${AOSP_BUILD_ID}")/vendor/google_devices/${DEVICE_FAMILY}" "${BUILD_DIR}/vendor/google_devices"
   fi
 
   # workaround for libsdsprpc and libadsprpc not specifying LOCAL_SHARED_LIBRARIES
@@ -868,15 +757,6 @@ build_aosp() {
 
   cd "${BUILD_DIR}"
 
-  if [ "${AOSP_BUILD}" != "${AOSP_VENDOR_BUILD}" ]; then
-    log "WARNING: Requested AOSP build does not match upstream vendor files. These images may not be functional."
-    log "Patching build_id to match ${AOSP_BUILD}"
-    echo "${AOSP_BUILD}" > "vendor/google_devices/${DEVICE}/build_id.txt"
-  fi
-
-  ############################
-  # from original setup.sh script
-  ############################
   source build/envsetup.sh
   export LANG=C
   export _JAVA_OPTIONS=-XX:-UsePerfData
@@ -890,9 +770,6 @@ build_aosp() {
 
   log "Running target-files-package"
   retry make -j "$(nproc)" target-files-package
-
-  log "Running brillo_update_payload"
-  retry make -j "$(nproc)" brillo_update_payload
 
   log "Running m otatools-package"
   m otatools-package
@@ -1005,7 +882,7 @@ aws_upload() {
   old_date="$(cut -d ' ' -f 1 <<< "${old_metadata}")"
   (
     aws s3 cp "${BUILD_DIR}/out/release-${DEVICE}-${build_date}/${DEVICE}-ota_update-${build_date}.zip" "s3://${AWS_RELEASE_BUCKET}" --acl public-read &&
-    echo "${build_date} ${build_timestamp} ${AOSP_BUILD}" | aws s3 cp - "s3://${AWS_RELEASE_BUCKET}/${RELEASE_CHANNEL}" --acl public-read &&
+    echo "${build_date} ${build_timestamp} ${AOSP_BUILD_ID}" | aws s3 cp - "s3://${AWS_RELEASE_BUCKET}/${RELEASE_CHANNEL}" --acl public-read &&
     echo "${BUILD_TIMESTAMP}" | aws s3 cp - "s3://${AWS_RELEASE_BUCKET}/${RELEASE_CHANNEL}-true-timestamp" --acl public-read
   ) && ( aws s3 rm "s3://${AWS_RELEASE_BUCKET}/${DEVICE}-ota_update-${old_date}.zip" || true )
 
@@ -1043,7 +920,7 @@ checkpoint_versions() {
   echo "${FDROID_CLIENT_VERSION}" | aws s3 cp - "s3://${AWS_RELEASE_BUCKET}/fdroid/revision"
 
   # checkpoint aosp
-  aws s3 cp - "s3://${AWS_RELEASE_BUCKET}/${DEVICE}-vendor" --acl public-read <<< "${AOSP_VENDOR_BUILD}" || true
+  aws s3 cp - "s3://${AWS_RELEASE_BUCKET}/${DEVICE}-vendor" --acl public-read <<< "${AOSP_BUILD_ID}" || true
 
   # checkpoint chromium
   echo "yes" | aws s3 cp - "s3://${AWS_RELEASE_BUCKET}/chromium/included"
@@ -1064,8 +941,8 @@ aws_notify() {
   fi
   ELAPSED="$((SECONDS / 3600))hrs $(((SECONDS / 60) % 60))min $((SECONDS % 60))sec"
   aws sns publish --region ${REGION} --topic-arn "${AWS_SNS_ARN}" \
-    --message="$(printf "$1\n  Device: %s\n  Stack Name: %s\n  Stack Version: %s %s\n  Stack Region: %s\n  Release Channel: %s\n  Instance Type: %s\n  Instance Region: %s\n  Instance IP: %s\n  Build Date: %s\n  Elapsed Time: %s\n  AOSP Build: %s\n  AOSP Vendor Build: %s\n  AOSP Branch: %s\n  Chromium Version: %s\n  F-Droid Version: %s\n  F-Droid Priv Extension Version: %s\n  Build Reason: %s\n%s" \
-      "${DEVICE}" "${STACK_NAME}" "${STACK_VERSION}" "${STACK_UPDATE_MESSAGE}" "${REGION}" "${RELEASE_CHANNEL}" "${INSTANCE_TYPE}" "${INSTANCE_REGION}" "${INSTANCE_IP}" "${BUILD_DATE}" "${ELAPSED}" "${AOSP_BUILD}" "${AOSP_VENDOR_BUILD}" "${AOSP_BRANCH}" "${LATEST_CHROMIUM}" "${FDROID_CLIENT_VERSION}" "${FDROID_PRIV_EXT_VERSION}" "${BUILD_REASON}" "${LOGOUTPUT}")" || true
+    --message="$(printf "$1\n  Device: %s\n  Stack Name: %s\n  Stack Version: %s\n  Stack Region: %s\n  Release Channel: %s\n  Instance Type: %s\n  Instance Region: %s\n  Instance IP: %s\n  Build Date: %s\n  Elapsed Time: %s\n  AOSP Build ID: %s\n  AOSP Tag: %s\n  Chromium Version: %s\n  F-Droid Version: %s\n  F-Droid Priv Extension Version: %s\n  %s" \
+      "${DEVICE}" "${STACK_NAME}" "${STACK_VERSION}" "${REGION}" "${RELEASE_CHANNEL}" "${INSTANCE_TYPE}" "${INSTANCE_REGION}" "${INSTANCE_IP}" "${BUILD_DATE}" "${ELAPSED}" "${AOSP_BUILD_ID}" "${AOSP_TAG}" "${CHROMIUM_VERSION}" "${FDROID_CLIENT_VERSION}" "${FDROID_PRIV_EXT_VERSION}" "${LOGOUTPUT}")" || true
 }
 
 aws_logging() {
@@ -1126,10 +1003,10 @@ gen_keys() {
 
   # download make_key and avbtool as aosp tree isn't downloaded yet
   make_key="${HOME}/make_key"
-  retry curl --fail -s "https://android.googlesource.com/platform/development/+/refs/tags/${AOSP_BRANCH}/tools/make_key?format=TEXT" | base64 --decode > "${make_key}"
+  retry curl --fail -s "https://android.googlesource.com/platform/development/+/refs/tags/${AOSP_TAG}/tools/make_key?format=TEXT" | base64 --decode > "${make_key}"
   chmod +x "${make_key}"
   avb_tool="${HOME}/avbtool"
-  retry curl --fail -s "https://android.googlesource.com/platform/external/avb/+/refs/tags/${AOSP_BRANCH}/avbtool?format=TEXT" | base64 --decode > "${avb_tool}"
+  retry curl --fail -s "https://android.googlesource.com/platform/external/avb/+/refs/tags/${AOSP_TAG}/avbtool?format=TEXT" | base64 --decode > "${avb_tool}"
   chmod +x "${avb_tool}"
 
   # generate releasekey,platform,shared,media,networkstack keys

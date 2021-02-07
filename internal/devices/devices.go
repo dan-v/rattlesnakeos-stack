@@ -101,6 +101,7 @@ var SupportedDevices = DeviceMap{
 	},
 	Redfin: {
 		Name: Redfin,
+		Friendly: "Pixel 5",
 		Family: "redfin",
 		Common: "redfin",
 		AVBMode: AVBModeChainedV2,
@@ -118,14 +119,14 @@ type Device struct {
 
 type DeviceMap map[string]Device
 
-func (d DeviceMap) GetDeviceNames() []string {
+func (d DeviceMap) GetDeviceCodeNames() []string {
 	return deviceSortOrder
 }
 
 func (d DeviceMap) GetDeviceFriendlyNames() []string {
 	var output []string
 	for _, device := range deviceSortOrder {
-		output = append(output, d[device].Name)
+		output = append(output, d[device].Friendly)
 	}
 	return output
 }

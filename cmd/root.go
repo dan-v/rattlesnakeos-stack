@@ -12,7 +12,8 @@ import (
 )
 
 var (
-	version                   string
+	// TODO: temporarily hardcoded
+	version                   = "11.0.6"
 	cfgFile                   string
 	defaultConfigFileBase     = ".rattlesnakeos"
 	defaultConfigFileFormat   = "toml"

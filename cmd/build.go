@@ -18,7 +18,7 @@ import (
 
 var forceBuild bool
 var terminateInstanceID, terminateRegion, listRegions string
-var aospBuild, aospBranch string
+var aospBuildID, aospTag string
 
 func init() {
 	rootCmd.AddCommand(buildCmd)
@@ -31,8 +31,8 @@ func init() {
 	buildStartCmd.Flags().StringVar(&name, "name", "", "name for stack")
 	buildStartCmd.Flags().BoolVar(&forceBuild, "force-build", false, "force build even if there are no changes in "+
 		"available version of AOSP, Chromium, or F-Droid.")
-	buildStartCmd.Flags().StringVar(&aospBuild, "aosp-build", "", "advanced option - specify the specific factory image build number (e.g. PQ3A.190505.002)")
-	buildStartCmd.Flags().StringVar(&aospBranch, "aosp-branch", "", "advanced option - specify the corresponding AOSP branch to use for build (e.g. android-9.0.0_r37)")
+	buildStartCmd.Flags().StringVar(&aospBuildID, "aosp-build-id", "", "advanced option - specify the specific the AOSP build id (e.g. PQ3A.190505.002)")
+	buildStartCmd.Flags().StringVar(&aospTag, "aosp-tag", "", "advanced option - specify the corresponding AOSP tag to use for build (e.g. android-9.0.0_r37)")
 
 	buildCmd.AddCommand(buildTerminateCmd)
 	buildTerminateCmd.Flags().StringVarP(&terminateInstanceID, "instance-id", "i", "", "EC2 instance id "+
@@ -80,12 +80,12 @@ var buildStartCmd = &cobra.Command{
 
 		lambdaPayload := struct {
 			ForceBuild bool
-			AOSPBuild  string
-			AOSPBranch string
+			AOSPBuildID  string
+			AOSPTag string
 		}{
 			ForceBuild: forceBuild,
-			AOSPBuild:  aospBuild,
-			AOSPBranch: aospBranch,
+			AOSPBuildID:  aospBuildID,
+			AOSPTag: aospTag,
 		}
 		payload, err := json.Marshal(lambdaPayload)
 		if err != nil {

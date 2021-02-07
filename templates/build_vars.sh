@@ -1,21 +1,20 @@
-DEVICE=<% .Device %>
-DEVICE_FAMILY=<% .DeviceDetails.Family %>
-DEVICE_COMMON=<% .DeviceDetails.Common %>
-AVB_MODE=<% .DeviceDetails.AVBMode %>
-EXTRA_OTA=<% .DeviceDetails.ExtraOTA %>
+DEVICE="<% .Device %>"
+DEVICE_FAMILY="<% .DeviceDetails.Family %>"
+DEVICE_COMMON="<% .DeviceDetails.Common %>"
+AVB_MODE="<% .DeviceDetails.AVBMode %>"
+EXTRA_OTA="<% .DeviceDetails.ExtraOTA %>"
 
 ANDROID_VERSION="11.0"
 
-REGION=<% .Region %>
-STACK_NAME=<% .Name %>
-STACK_VERSION=<% .Version %>
-CHROMIUM_PINNED_VERSION=<% .ChromiumVersion %>
+REGION="<% .Region %>"
+STACK_NAME="<% .Name %>"
+STACK_VERSION="<% .Version %>"
 ENCRYPTED_KEYS="<% .EncryptedKeys %>"
 ENCRYPTION_KEY=
 ENCRYPTION_PIPE="/tmp/key"
 BUILD_TYPE="user"
 BUILD_CHANNEL="stable"
-HOSTS_FILE=<% .HostsFile %>
+HOSTS_FILE="<% .HostsFile %>"
 
 AWS_KEYS_BUCKET="${STACK_NAME}-keys"
 AWS_ENCRYPTED_KEYS_BUCKET="${STACK_NAME}-keys-encrypted"
@@ -38,13 +37,6 @@ OFFICIAL_FDROID_KEY="43238d512c1e5eb2d6569f4a3afbf5523418b82e0a3ed1552770abb9a9c
 MANIFEST_URL="https://android.googlesource.com/platform/manifest"
 STACK_URL_LATEST="https://api.github.com/repos/dan-v/rattlesnakeos-stack/releases/latest"
 RATTLESNAKEOS_LATEST_JSON="https://raw.githubusercontent.com/RattlesnakeOS/latest/${ANDROID_VERSION}/latest.json"
-
-BUILD_REASON=""
-STACK_UPDATE_MESSAGE=
-LATEST_STACK_VERSION=
-LATEST_CHROMIUM=
-FDROID_CLIENT_VERSION=
-FDROID_PRIV_EXT_VERSION=
 SECONDS=0
 
 <% if gt (len .CustomManifestRemotes) 0 -%>

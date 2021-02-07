@@ -219,6 +219,22 @@ resource "aws_iam_role_policy" "rattlesnake_lambda_policy" {
             "ec2:DescribeKeyPairs"
         ],
         "Resource": "*"
+    },
+    {
+        "Effect": "Allow",
+        "Action": [
+            "s3:GetObject",
+            "s3:PutObject"
+        ],
+        "Resource": "arn:aws:s3:::${var.name}-release/*"
+    },
+    {
+        "Effect": "Allow",
+        "Action": [
+            "s3:ListBucket",
+            "s3:GetBucketLocation"
+        ],
+        "Resource": "arn:aws:s3:::${var.name}-release"
     }
 ]
 }
