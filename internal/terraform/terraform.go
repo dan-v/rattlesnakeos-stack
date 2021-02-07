@@ -38,13 +38,9 @@ func New(terraformDir string) (*Client, error) {
 		return nil, err
 	}
 
-	absolutePathTerraformBinary, err := filepath.Abs(terraformBinary)
-	if err != nil {
-		return nil, err
-	}
 	client := &Client{
 		terraformDir:    terraformDir,
-		terraformBinary: absolutePathTerraformBinary,
+		terraformBinary: terraformBinary,
 	}
 	return client, nil
 }
@@ -65,7 +61,6 @@ func (c *Client) Destroy(args []string) ([]byte, error) {
 }
 
 func (c *Client) setup(args []string) *exec.Cmd {
-	fmt.Printf("running %v %v\n", c.terraformBinary, args)
 	cmd := exec.Command(c.terraformBinary, args...)
 	cmd.Dir = c.terraformDir
 	return cmd
@@ -108,33 +103,43 @@ func getTerraformURL() (string, error) {
 }
 
 func setupBinary(outputDir string) (string, error) {
-	terraformZipFilename := filepath.Join(outputDir, "terraform.zip")
-	fileHandler, err := os.Create(terraformZipFilename)
-	if err != nil {
-		return "", err
-	}
-	defer fileHandler.Close()
+	terraformZipFilename := fmt.Sprintf("terraform-%v.zip", terraformVersion)
+	terraformZipFullPathFilename := filepath.Join(outputDir, terraformZipFilename)
 
-	url, err := getTerraformURL()
-	if err != nil {
-		return "", err
+	downloadRequired := true
+	if _, err := os.Stat(terraformZipFullPathFilename); err == nil {
+		downloadRequired = false
+		log.Infof("Skipping download of terraform zip as it already exists %v", terraformZipFullPathFilename)
 	}
 
-	log.Infoln("Downloading Terraform binary from URL:", url)
-	resp, err := http.Get(url)
-	if err != nil {
-		return "", err
-	}
-	defer resp.Body.Close()
+	if downloadRequired {
+		fileHandler, err := os.Create(terraformZipFullPathFilename)
+		if err != nil {
+			return "", err
+		}
+		defer fileHandler.Close()
 
-	if _, err := io.Copy(fileHandler, resp.Body); err != nil {
-		return "", err
-	}
-	if err := fileHandler.Sync(); err != nil {
-		return "", err
+		url, err := getTerraformURL()
+		if err != nil {
+			return "", err
+		}
+
+		log.Infoln("Downloading Terraform binary from URL:", url)
+		resp, err := http.Get(url)
+		if err != nil {
+			return "", err
+		}
+		defer resp.Body.Close()
+
+		if _, err := io.Copy(fileHandler, resp.Body); err != nil {
+			return "", err
+		}
+		if err := fileHandler.Sync(); err != nil {
+			return "", err
+		}
 	}
 
-	err = unzip(terraformZipFilename, outputDir)
+	err := unzip(terraformZipFullPathFilename, outputDir)
 	if err != nil {
 		return "", err
 	}
@@ -143,11 +148,12 @@ func setupBinary(outputDir string) (string, error) {
 	if runtime.GOOS == "windows" {
 		terraformBinary = "terraform.exe"
 	}
-	if err := os.Chmod(filepath.Join(outputDir, terraformBinary), 0700); err != nil {
+	terraformBinaryFullPath := filepath.Join(outputDir, terraformBinary)
+	if err := os.Chmod(terraformBinaryFullPath, 0700); err != nil {
 		return "", err
 	}
 
-	return filepath.Join(outputDir, terraformBinary), nil
+	return terraformBinaryFullPath, nil
 }
 
 func unzip(src, dest string) error {

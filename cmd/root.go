@@ -1,7 +1,6 @@
 package cmd
 
 import (
-	"errors"
 	"fmt"
 	"os"
 
@@ -13,13 +12,13 @@ import (
 
 var (
 	// TODO: temporarily hardcoded
-	version                   = "11.0.6"
 	cfgFile                   string
 	defaultConfigFileBase     = ".rattlesnakeos"
 	defaultConfigFileFormat   = "toml"
 	defaultConfigFile         = fmt.Sprintf("%v.%v", defaultConfigFileBase, defaultConfigFileFormat)
 	defaultConfigFileFullPath string
 	configFileFullPath        string
+	version                   string
 	buildScript 			  string
 	buildTemplate 			  string
 	lambdaTemplate 			  string
@@ -27,7 +26,8 @@ var (
 )
 
 // Execute the CLI
-func Execute(bScript, bTemplate, lTemplate, tTempalte string) {
+func Execute(ver, bScript, bTemplate, lTemplate, tTempalte string) {
+	version = ver
 	buildScript = bScript
 	buildTemplate = bTemplate
 	lambdaTemplate = lTemplate
@@ -64,8 +64,6 @@ func initConfig() {
 	if err := viper.ReadInConfig(); err != nil {
 		if viper.ConfigFileUsed() != "" {
 			log.Fatalf("Failed to parse config file %v. Error: %v", viper.ConfigFileUsed(), err)
-		} else {
-			log.Printf("No config file found. Using CLI options only.")
 		}
 	}
 	if viper.ConfigFileUsed() != "" {
@@ -82,12 +80,4 @@ var rootCmd = &cobra.Command{
 	Use: "rattlesnakeos-stack",
 	Short: "A cross platform tool that provisions all of the AWS infrastructure required to build your own privacy " +
 		"focused Android OS on a continuous basis with OTA updates.",
-	Version: version,
-	Args: func(cmd *cobra.Command, args []string) error {
-		if len(args) == 0 {
-			return errors.New("Need to specify a subcommand")
-		}
-		return nil
-	},
-	Run: func(cmd *cobra.Command, args []string) {},
 }

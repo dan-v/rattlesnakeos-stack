@@ -19,7 +19,7 @@ import (
 
 var name, region, email, device, sshKey, maxPrice, skipPrice, schedule string
 var instanceType, instanceRegions, hostsFile, chromiumVersion string
-var encryptedKeys, saveConfig bool
+var encryptedKeys, saveConfig, skipDeploy bool
 var patches = &stack.CustomPatches{}
 var scripts = &stack.CustomScripts{}
 var prebuilts = &stack.CustomPrebuilts{}
@@ -99,6 +99,8 @@ func init() {
 		"decryption over SSH to continue the build process. important: if you have an existing stack - please see the FAQ for how to "+
 		"migrate your keys")
 	_ = viper.BindPFlag("encrypted-keys", flags.Lookup("encrypted-keys"))
+
+	flags.BoolVar(&skipDeploy, "skip-deploy", false, "only generate the output, but do not deploy with terraform.")
 }
 
 var deployCmd = &cobra.Command{
@@ -177,13 +179,15 @@ var deployCmd = &cobra.Command{
 			}
 		}
 
-		prompt := promptui.Prompt{
-			Label:     "Do you want to continue ",
-			IsConfirm: true,
-		}
-		_, err = prompt.Run()
-		if err != nil {
-			log.Fatalf("Exiting %v", err)
+		if !skipDeploy {
+			prompt := promptui.Prompt{
+				Label:     "Do you want to continue ",
+				IsConfirm: true,
+			}
+			_, err = prompt.Run()
+			if err != nil {
+				log.Fatalf("Exiting %v", err)
+			}
 		}
 
 		s, err := stack.New(&stack.Config{
@@ -211,8 +215,12 @@ var deployCmd = &cobra.Command{
 		if err != nil {
 			log.Fatal(err)
 		}
-		if err := s.Apply(); err != nil {
-			log.Fatal(err)
+		if !skipDeploy {
+			if err := s.Apply(); err != nil {
+				log.Fatal(err)
+			}
+		} else {
+			log.Println("Skipping Terraform deployment as --skip-deploy was specified")
 		}
 	},
 }

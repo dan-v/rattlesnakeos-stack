@@ -1,11 +1,9 @@
+ANDROID_VERSION="11.0"
 DEVICE="<% .Device %>"
 DEVICE_FAMILY="<% .DeviceDetails.Family %>"
 DEVICE_COMMON="<% .DeviceDetails.Common %>"
 AVB_MODE="<% .DeviceDetails.AVBMode %>"
-EXTRA_OTA="<% .DeviceDetails.ExtraOTA %>"
-
-ANDROID_VERSION="11.0"
-
+EXTRA_OTA=<% .DeviceDetails.ExtraOTA %>
 REGION="<% .Region %>"
 STACK_NAME="<% .Name %>"
 STACK_VERSION="<% .Version %>"
@@ -30,14 +28,24 @@ RELEASE_URL="https://${AWS_RELEASE_BUCKET}.s3.amazonaws.com"
 RELEASE_CHANNEL="${DEVICE}-${BUILD_CHANNEL}"
 BUILD_DATE=$(date +%Y.%m.%d.%H)
 BUILD_TIMESTAMP=$(date +%s)
-BUILD_DIR="${HOME}/rattlesnake-os"
-KEYS_DIR="${BUILD_DIR}/keys"
+ROOT_DIR="${HOME}"
+AOSP_BUILD_DIR="${ROOT_DIR}/aosp"
+mkdir -p "${AOSP_BUILD_DIR}"
+FDROID_BUILD_DIR="${ROOT_DIR}/fdroid"
+mkdir -p "${FDROID_BUILD_DIR}"
+CHROMIUM_BUILD_DIR="${ROOT_DIR}/chromium"
+mkdir -p "${CHROMIUM_BUILD_DIR}"
+KEYS_DIR="${ROOT_DIR}/keys"
+mkdir -p "${KEYS_DIR}"
+MISC_DIR="${ROOT_DIR}/misc"
+mkdir -p "${MISC_DIR}"
+RELEASE_TOOLS_DIR="${MISC_DIR}/releasetools"
+mkdir -p "${RELEASE_TOOLS_DIR}"
 CERTIFICATE_SUBJECT='/CN=RattlesnakeOS'
 OFFICIAL_FDROID_KEY="43238d512c1e5eb2d6569f4a3afbf5523418b82e0a3ed1552770abb9a9c9ccab"
 MANIFEST_URL="https://android.googlesource.com/platform/manifest"
 STACK_URL_LATEST="https://api.github.com/repos/dan-v/rattlesnakeos-stack/releases/latest"
 RATTLESNAKEOS_LATEST_JSON="https://raw.githubusercontent.com/RattlesnakeOS/latest/${ANDROID_VERSION}/latest.json"
-SECONDS=0
 
 <% if gt (len .CustomManifestRemotes) 0 -%>
 CUSTOM_MANIFEST_REMOTES=$(cat <<-END
@@ -63,7 +71,7 @@ CUSTOM_MANIFEST_REMOTES=
 
 patch_custom() {
   log_header "${FUNCNAME[0]}"
-  cd "${BUILD_DIR}"
+  cd "${AOSP_BUILD_DIR}"
 
   <% if gt (len .CustomPatches) 0 -%>
   patches_dir="${HOME}/patches"
@@ -92,8 +100,8 @@ patch_custom() {
   <%- end %>
 
   <% if gt (len .CustomPrebuilts) 0 -%>
-  prebuilt_dir="${BUILD_DIR}/packages/apps/Custom"
-  mk_file="${BUILD_DIR}/build/make/target/product/handheld_system.mk"
+  prebuilt_dir="${AOSP_BUILD_DIR}/packages/apps/Custom"
+  mk_file="${AOSP_BUILD_DIR}/build/make/target/product/handheld_system.mk"
   <% range $i, $r := .CustomPrebuilts -%>
   log "Putting custom prebuilts from <% $r.Repo %> in build tree location ${prebuilt_dir}/<% $i %>"
   retry git clone <% $r.Repo %> ${prebuilt_dir}/<% $i %>
@@ -108,7 +116,7 @@ patch_custom() {
 
   <% if .HostsFile -%>
   log "Replacing hosts file with ${HOSTS_FILE}"
-  hosts_file_location="${BUILD_DIR}/system/core/rootdir/etc/hosts"
+  hosts_file_location="${AOSP_BUILD_DIR}/system/core/rootdir/etc/hosts"
   retry wget -q -O "${hosts_file_location}" "${HOSTS_FILE}"
   <%- else %>
   # no custom hosts file specified
@@ -118,15 +126,15 @@ patch_custom() {
 patch_add_apps() {
   log_header "${FUNCNAME[0]}"
 
-  handheld_system_mk="${BUILD_DIR}/build/make/target/product/handheld_system.mk"
+  handheld_system_mk="${AOSP_BUILD_DIR}/build/make/target/product/handheld_system.mk"
   sed -i "\$aPRODUCT_PACKAGES += Updater" "${handheld_system_mk}"
   sed -i "\$aPRODUCT_PACKAGES += F-DroidPrivilegedExtension" "${handheld_system_mk}"
   sed -i "\$aPRODUCT_PACKAGES += F-Droid" "${handheld_system_mk}"
 
-  handheld_product_mk="${BUILD_DIR}/build/make/target/product/handheld_product.mk"
+  handheld_product_mk="${AOSP_BUILD_DIR}/build/make/target/product/handheld_product.mk"
   sed -i 's/Browser2 \\/TrichromeChrome \\/' "${handheld_product_mk}"
 
-  media_product_mk="${BUILD_DIR}/build/make/target/product/media_product.mk"
+  media_product_mk="${AOSP_BUILD_DIR}/build/make/target/product/media_product.mk"
   sed -i 's/webview \\/TrichromeWebView \\/' "${media_product_mk}"
 
   <% if gt (len .CustomManifestProjects) 0 -%>

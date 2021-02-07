@@ -34,7 +34,6 @@ const (
 	lambdaFunctionFilename = "lambda_spot_function.py"
 	lambdaZipFilename      = "lambda_spot.zip"
 	buildScriptFilename    = "build.sh"
-	outputDir              = "output"
 )
 
 type Config struct {
@@ -78,24 +77,27 @@ func New(config *Config, buildScript, buildScriptTemplate, lambdaTemplate, terra
 		return nil, err
 	}
 
-	buildScriptFilePath, err := filepath.Abs(filepath.Join(outputDir, buildScriptFilename))
+	outputDirName := fmt.Sprintf("output_%v", config.Name)
+	outputDirFullPath, err := filepath.Abs(outputDirName)
 	if err != nil {
 		return nil, err
 	}
-	lambdaFunctionFilePath, err := filepath.Abs(filepath.Join(outputDir, lambdaFunctionFilename))
-	if err != nil {
-		return nil, err
-	}
-	lambdaZipFilePath, err := filepath.Abs(filepath.Join(outputDir, lambdaZipFilename))
+	buildScriptFilePath := filepath.Join(outputDirFullPath, buildScriptFilename)
+	lambdaFunctionFilePath := filepath.Join(outputDirFullPath, lambdaFunctionFilename)
+	lambdaZipFilePath := filepath.Join(outputDirFullPath, lambdaZipFilename)
+	tfDirFilePath := filepath.Join(outputDirFullPath, "tf")
+	err = os.MkdirAll(outputDirFullPath, os.ModePerm)
 	if err != nil {
 		return nil, err
 	}
 
+	// render build script
 	renderedBuildScriptTemplate, err := renderTemplate(buildScriptTemplate, config)
 	if err != nil {
 		return nil, fmt.Errorf("failed to render build script: %w", err)
 	}
 
+	// render lambda
 	regionAMIs, _ := json.Marshal(stackaws.RegionAMIs)
 	lambdaConfig := struct {
 		Config Config
@@ -104,12 +106,12 @@ func New(config *Config, buildScript, buildScriptTemplate, lambdaTemplate, terra
 		*config,
 		string(regionAMIs),
 	}
-
 	renderedLambdaFunction, err := renderTemplate(lambdaTemplate, lambdaConfig)
 	if err != nil {
 		return nil, fmt.Errorf("failed to render lambda function: %w", err)
 	}
 
+	// render terraform
 	terraformConfig := struct {
 		Config Config
 		LambdaZipFileLocation   string
@@ -119,15 +121,9 @@ func New(config *Config, buildScript, buildScriptTemplate, lambdaTemplate, terra
 		lambdaZipFilePath,
 		buildScriptFilePath,
 	}
-
 	renderedTerraform, err := renderTemplate(terraformTemplate, terraformConfig)
 	if err != nil {
 		return nil, fmt.Errorf("failed to render terraform script: %w", err)
-	}
-
-	err = os.MkdirAll(outputDir, os.ModePerm)
-	if err != nil {
-		return nil, err
 	}
 
 	// write out shell script
@@ -146,20 +142,20 @@ func New(config *Config, buildScript, buildScriptTemplate, lambdaTemplate, terra
 		return nil, err
 	}
 
-	err = zipFiles(filepath.Join(outputDir, lambdaZipFilename), []string{lambdaFunctionFilePath})
+	err = zipFiles(lambdaZipFilePath, []string{lambdaFunctionFilePath})
 	if err != nil {
 		return nil, err
 	}
 
 	// write out terraform
-	if err := os.MkdirAll(filepath.Join(outputDir, "tf"), 0777); err != nil {
+	if err := os.MkdirAll(tfDirFilePath, 0777); err != nil {
 		return nil, err
 	}
-	if err := ioutil.WriteFile(filepath.Join(outputDir, "tf/main.tf"), renderedTerraform, 0777); err != nil {
+	if err := ioutil.WriteFile(filepath.Join(tfDirFilePath, "main.tf"), renderedTerraform, 0777); err != nil {
 		return nil, err
 	}
 
-	terraformClient, err := terraform.New(outputDir)
+	terraformClient, err := terraform.New(outputDirFullPath)
 	if err != nil {
 		return nil, fmt.Errorf("failed to create terraform client: %w", err)
 	}

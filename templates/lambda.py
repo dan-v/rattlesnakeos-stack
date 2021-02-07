@@ -45,17 +45,17 @@ def lambda_handler(event, context):
     print("latest_aosp_tag", latest_aosp_tag)
 
     # build time overrides
-    force_build = event.get('ForceBuild', False)
+    force_build = event.get('ForceBuild') or False
     print("force_build", force_build)
-    aosp_build_id = event.get('AOSPBuildID', latest_aosp_build_id)
+    aosp_build_id = event.get('AOSPBuildID') or latest_aosp_build_id
     print("aosp_build_id", aosp_build_id)
-    aosp_tag = event.get('AOSPTag', latest_aosp_tag)
+    aosp_tag = event.get('AOSPTag') or latest_aosp_tag
     print("aosp_tag", aosp_tag)
-    chromium_version = event.get('ChromiumVersion', CHROMIUM_PINNED_VERSION if CHROMIUM_PINNED_VERSION != "" else latest_chromium_version)
+    chromium_version = event.get('ChromiumVersion') or CHROMIUM_PINNED_VERSION if CHROMIUM_PINNED_VERSION != "" else latest_chromium_version
     print("chromium_version", chromium_version)
-    fdroid_client_version = event.get('FDroidClientVersion', latest_fdroid_client_version)
+    fdroid_client_version = event.get('FDroidClientVersion') or latest_fdroid_client_version
     print("fdroid_client_version", fdroid_client_version)
-    fdroid_priv_version = event.get('FDroidPrivVersion', latest_fdroid_priv_version)
+    fdroid_priv_version = event.get('FDroidPrivVersion') or latest_fdroid_priv_version
     print("fdroid_priv_version", fdroid_priv_version)
 
     # check if build is required

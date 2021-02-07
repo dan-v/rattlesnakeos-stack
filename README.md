@@ -92,7 +92,6 @@ chromium-version: ""
 device: taimen
 email: user@domain.com
 encrypted-keys: false
-ignore-version-checks: false
 hosts-file: ""
 instance-regions: us-west-2,us-west-1,us-east-2
 instance-type: c5.4xlarge
@@ -131,7 +130,6 @@ chromium-version = "80.0.3971.4"
 device = "crosshatch"
 email = "user@domain.com"
 encrypted-keys = "false"
-ignore-version-checks = false
 hosts-file = "https://raw.githubusercontent.com/StevenBlack/hosts/master/hosts"
 instance-regions = "us-west-2,us-west-1,us-east-2"
 instance-type = "c5.18xlarge"
@@ -166,7 +164,6 @@ Flags:
       --encrypted-keys                     an advanced option that allows signing keys to be stored with symmetric gpg encryption and decrypted into memory during the build process. this option requires manual intervention during builds where you will be sent a notification and need to provide the key required for decryption over SSH to continue the build process. important: if you have an existing stack - please see the FAQ for how to migrate your keys
   -h, --help                               help for deploy
       --hosts-file string                  an advanced option that allows you to specify a replacement /etc/hosts file to enable global dns adblocking (e.g. https://raw.githubusercontent.com/StevenBlack/hosts/master/hosts). note: be careful with this, as you 1) won't get any sort of notification on blocking 2) if you need to unblock something you'll have to rebuild the OS
-      --ignore-version-checks              ignore the versions checks for stack, AOSP, Chromium, and F-Droid and always do a build.
       --instance-regions string            possible regions to launch spot instance. the region with cheapest spot instance price will be used. (default "us-west-2,us-west-1,us-east-2")
       --instance-type string               EC2 instance type (e.g. c4.4xlarge) to use for the build. (default "c5.4xlarge")
       --max-price string                   max ec2 spot instance bid. if this value is too low, you may not obtain an instance or it may terminate during a build. (default "1.00")

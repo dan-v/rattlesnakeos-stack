@@ -36,5 +36,5 @@ rattlesnakeos-stack
 *.toml
 .DS_Store
 .idea/
-output
+output*/
 venv/
