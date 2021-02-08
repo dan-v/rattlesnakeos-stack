@@ -20,7 +20,6 @@ REGION = '<% .Config.Region %>'
 REGIONS = '<% .Config.InstanceRegions %>'
 REGION_AMIS = json.loads('<% .RegionAMIs %>')
 AMI_OVERRIDE = '<% .Config.AMI %>'
-ENCRYPTED_KEYS = '<% .Config.EncryptedKeys %>'
 CHROMIUM_PINNED_VERSION = '<% .Config.ChromiumVersion %>'
 LATEST_JSON = "https://raw.githubusercontent.com/RattlesnakeOS/latest/11.0/latest.json"
 STACK_URL_LATEST = "https://api.github.com/repos/dan-v/rattlesnakeos-stack/releases/latest"
@@ -151,12 +150,7 @@ runcmd:
         client.describe_key_pairs(KeyNames=[SSH_KEY_NAME])
         spot_fleet_request_config['LaunchSpecifications'][0]['KeyName'] = SSH_KEY_NAME
     except Exception as e:
-        if ENCRYPTED_KEYS == "true":
-            message = f"Encrypted keys is enabled, so properly configured SSH keys are mandatory. Unable to find an EC2 Key Pair named '{SSH_KEY_NAME}' in region {cheapest_region}."
-            send_sns_message("RattlesnakeOS Spot Instance CONFIGURATION ERROR", message)
-            return message
-        else:
-            print(f"not including SSH key in spot request as no key in region {cheapest_region} with name {SSH_KEY_NAME} found: {e}")
+        print(f"not including SSH key in spot request as no key in region {cheapest_region} with name {SSH_KEY_NAME} found: {e}")
 
     print("spot_fleet_request_config: {}".format(spot_fleet_request_config))
 
@@ -170,7 +164,7 @@ runcmd:
         raise
 
     subject = "RattlesnakeOS Spot Instance SUCCESS"
-    message = f"Successfully requested a spot instance.\n\n Stack Name: {NAME}\n Device: {DEVICE}\n Instance Type: {INSTANCE_TYPE}\n Cheapest Region: {cheapest_region}\n Cheapest Hourly Price: ${cheapest_price}\n Reason: {build_reasons}"
+    message = f"Successfully requested a spot instance.\n\n Stack Name: {NAME}\n Device: {DEVICE}\n Instance Type: {INSTANCE_TYPE}\n Cheapest Region: {cheapest_region}\n Cheapest Hourly Price: ${cheapest_price}\n Build Reason: {build_reasons}"
     send_sns_message(subject, message)
     return message.replace('\n', ' ')
 

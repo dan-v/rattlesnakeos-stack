@@ -19,7 +19,7 @@ import (
 
 var name, region, email, device, sshKey, maxPrice, skipPrice, schedule string
 var instanceType, instanceRegions, hostsFile, chromiumVersion string
-var encryptedKeys, saveConfig, skipDeploy bool
+var skipDeploy bool
 var patches = &stack.CustomPatches{}
 var scripts = &stack.CustomScripts{}
 var prebuilts = &stack.CustomPrebuilts{}
@@ -92,13 +92,6 @@ func init() {
 		"specify the version of Chromium you want (e.g. 80.0.3971.4) to pin to. if not specified, the latest stable "+
 			"version of Chromium is used.")
 	_ = viper.BindPFlag("chromium-version", flags.Lookup("chromium-version"))
-
-	flags.BoolVar(&encryptedKeys, "encrypted-keys", false, "an advanced option that allows signing keys to "+
-		"be stored with symmetric gpg encryption and decrypted into memory during the build process. this option requires "+
-		"manual intervention during builds where you will be sent a notification and need to provide the key required for "+
-		"decryption over SSH to continue the build process. important: if you have an existing stack - please see the FAQ for how to "+
-		"migrate your keys")
-	_ = viper.BindPFlag("encrypted-keys", flags.Lookup("encrypted-keys"))
 
 	flags.BoolVar(&skipDeploy, "skip-deploy", false, "only generate the output, but do not deploy with terraform.")
 }
@@ -204,7 +197,6 @@ var deployCmd = &cobra.Command{
 			Schedule:               viper.GetString("schedule"),
 			ChromiumVersion:        viper.GetString("chromium-version"),
 			HostsFile:              viper.GetString("hosts-file"),
-			EncryptedKeys:          viper.GetBool("encrypted-keys"),
 			CustomPatches:          patches,
 			CustomScripts:          scripts,
 			CustomPrebuilts:        prebuilts,

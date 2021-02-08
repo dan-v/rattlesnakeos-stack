@@ -56,7 +56,6 @@ type Config struct {
 	CustomManifestRemotes  *CustomManifestRemotes
 	CustomManifestProjects *CustomManifestProjects
 	HostsFile              string
-	EncryptedKeys          bool
 	AMI                    string
 }
 

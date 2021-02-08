@@ -31,7 +31,6 @@ You can mask stack name and email from here.
 ```
 chromium-version = ""
 device = "crosshatch"
-encrypted-keys = true
 instance-regions = "us-west-2,us-west-1,us-east-1,us-east-2"
 instance-type = "c5.4xlarge"
 max-price = "1.00"

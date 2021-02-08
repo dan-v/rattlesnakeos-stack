@@ -17,10 +17,9 @@ SECONDS=0
 full_run() {
   log_header "${FUNCNAME[0]}"
 
-  initial_key_setup
-  aws_notify "RattlesnakeOS Build STARTED"
+  notify "RattlesnakeOS Build STARTED"
   setup_env
-  aws_import_keys
+  import_keys
   # TODO: not sure if this is a great idea, but does speed up build
   check_chromium &
   aosp_setup &
@@ -32,9 +31,9 @@ full_run() {
   apply_patches
   build_aosp
   release
-  aws_upload
+  upload
   checkpoint_versions
-  aws_notify "RattlesnakeOS Build SUCCESS"
+  notify "RattlesnakeOS Build SUCCESS"
 }
 
 setup_env() {
@@ -51,8 +50,8 @@ setup_env() {
   sudo mv /tmp/repo /usr/local/bin/
 
   # still some scripts that expect python2 as default
-  sudo update-alternatives --install /usr/bin/python python /usr/bin/python2 1
-  sudo update-alternatives --install /usr/bin/python python /usr/bin/python3 2
+  sudo update-alternatives --install /usr/bin/python python /usr/bin/python2 1 || true
+  sudo update-alternatives --install /usr/bin/python python /usr/bin/python3 2 || true
   sudo update-alternatives --config python <<< 1
 
   # setup git
@@ -60,13 +59,18 @@ setup_env() {
   git config --get --global user.email || git config --global user.email 'aosp@localhost'
   git config --global color.ui true
 
-  sudo mount -t tmpfs tmpfs /tmp
+  # mount /tmp filesystem as tmpfs
+  sudo mount -t tmpfs tmpfs /tmp || true
+
+  # mount keys directory as tmpfs
+  mkdir -p "${KEYS_DIR}"
+  sudo mount -t tmpfs -o size=20m tmpfs "${KEYS_DIR}" || true
 }
 
 check_chromium() {
   log_header "${FUNCNAME[0]}"
 
-  current=$(aws s3 cp "s3://${AWS_RELEASE_BUCKET}/chromium/revision" - || true)
+  current=$(get_current_metadata "chromium/revision")
   log "Chromium current: ${current}"
 
   log "Chromium requested: ${CHROMIUM_VERSION}"
@@ -169,11 +173,11 @@ EOF
     "${APKSIGNER}" sign --ks "${KEYSTORE}" --ks-pass pass:chromium --ks-key-alias chromium --in "../${app}.apk" --out "${app}.apk"
   done
 
-  log "Uploading trichrome apks to s3"
-  retry aws s3 cp "TrichromeLibrary.apk" "s3://${AWS_RELEASE_BUCKET}/chromium/TrichromeLibrary.apk"
-  retry aws s3 cp "TrichromeWebView.apk" "s3://${AWS_RELEASE_BUCKET}/chromium/TrichromeWebView.apk"
-  retry aws s3 cp "TrichromeChrome.apk" "s3://${AWS_RELEASE_BUCKET}/chromium/TrichromeChrome.apk"
-  echo "${CHROMIUM_REVISION}" | aws s3 cp - "s3://${AWS_RELEASE_BUCKET}/chromium/revision"
+  log "Uploading built trichrome apks"
+  upload_build_artifact "TrichromeLibrary.apk" "chromium/TrichromeLibrary.apk"
+  upload_build_artifact "TrichromeWebView.apk" "chromium/TrichromeWebView.apk"
+  upload_build_artifact "TrichromeChrome.apk" "chromium/TrichromeChrome.apk"
+  set_current_metadata "${CHROMIUM_REVISION}" "chromium/revision"
 }
 
 aosp_setup() {
@@ -284,9 +288,9 @@ add_chromium() {
   log_header "${FUNCNAME[0]}"
 
   # add latest built chromium to external/chromium
-  aws s3 cp "s3://${AWS_RELEASE_BUCKET}/chromium/TrichromeLibrary.apk" "${AOSP_BUILD_DIR}/external/chromium/prebuilt/arm64/"
-  aws s3 cp "s3://${AWS_RELEASE_BUCKET}/chromium/TrichromeWebView.apk" "${AOSP_BUILD_DIR}/external/chromium/prebuilt/arm64/"
-  aws s3 cp "s3://${AWS_RELEASE_BUCKET}/chromium/TrichromeChrome.apk" "${AOSP_BUILD_DIR}/external/chromium/prebuilt/arm64/"
+  download_build_artifact "chromium/TrichromeLibrary.apk" "${AOSP_BUILD_DIR}/external/chromium/prebuilt/arm64/"
+  download_build_artifact "chromium/TrichromeWebView.apk" "${AOSP_BUILD_DIR}/external/chromium/prebuilt/arm64/"
+  download_build_artifact "chromium/TrichromeChrome.apk" "${AOSP_BUILD_DIR}/external/chromium/prebuilt/arm64/"
 
   cat <<EOF > "${AOSP_BUILD_DIR}/frameworks/base/core/res/res/xml/config_webview_packages.xml"
 <?xml version="1.0" encoding="utf-8"?>
@@ -563,113 +567,37 @@ release() {
   mv "${DEVICE}"-*-factory-*.zip "${DEVICE}-factory-${BUILD_NUMBER}.zip"
 }
 
-aws_upload() {
+upload() {
   log_header "${FUNCNAME[0]}"
   cd "${AOSP_BUILD_DIR}/out"
 
   build_date="$(< soong/build_number.txt)"
   build_timestamp="$(unzip -p "release-${DEVICE}-${build_date}/${DEVICE}-ota_update-${build_date}.zip" "META-INF/com/android/metadata" | grep 'post-timestamp' | cut --delimiter "=" --fields 2)"
-
-  # copy ota file to s3, update file metadata used by updater app, and remove old ota files
-  read -r old_metadata <<< "$(wget -O - "${RELEASE_URL}/${RELEASE_CHANNEL}")"
+  old_metadata=$(get_current_metadata "${RELEASE_CHANNEL}")
   old_date="$(cut -d ' ' -f 1 <<< "${old_metadata}")"
-  (
-    aws s3 cp "${AOSP_BUILD_DIR}/out/release-${DEVICE}-${build_date}/${DEVICE}-ota_update-${build_date}.zip" "s3://${AWS_RELEASE_BUCKET}" --acl public-read &&
-    echo "${build_date} ${build_timestamp} ${AOSP_BUILD_ID}" | aws s3 cp - "s3://${AWS_RELEASE_BUCKET}/${RELEASE_CHANNEL}" --acl public-read &&
-    echo "${BUILD_TIMESTAMP}" | aws s3 cp - "s3://${AWS_RELEASE_BUCKET}/${RELEASE_CHANNEL}-true-timestamp" --acl public-read
-  ) && ( aws s3 rm "s3://${AWS_RELEASE_BUCKET}/${DEVICE}-ota_update-${old_date}.zip" || true )
+
+  # upload ota and set metadata
+  upload_build_artifact "${AOSP_BUILD_DIR}/out/release-${DEVICE}-${build_date}/${DEVICE}-ota_update-${build_date}.zip" "${DEVICE}-ota_update-${build_date}.zip" "public"
+  set_current_metadata "${RELEASE_CHANNEL}" "${build_date} ${build_timestamp} ${AOSP_BUILD_ID}" "public"
+  set_current_metadata "${BUILD_TIMESTAMP}" "${RELEASE_CHANNEL}-true-timestamp" "public"
+
+  # cleanup old ota
+  delete_build_artifact "${DEVICE}-ota_update-${old_date}.zip"
 
   # upload factory image
-  retry aws s3 cp "${AOSP_BUILD_DIR}/out/release-${DEVICE}-${build_date}/${DEVICE}-factory-${build_date}.zip" "s3://${AWS_RELEASE_BUCKET}/${DEVICE}-factory-latest.zip"
+  upload_build_artifact "${AOSP_BUILD_DIR}/out/release-${DEVICE}-${build_date}/${DEVICE}-factory-${build_date}.zip" "${DEVICE}-factory-latest.zip"
 }
 
 checkpoint_versions() {
   log_header "${FUNCNAME[0]}"
 
-  # checkpoint stack version
-  echo "${STACK_VERSION}" | aws s3 cp - "s3://${AWS_RELEASE_BUCKET}/rattlesnakeos-stack/revision"
-
-  # checkpoint f-droid
-  echo "${FDROID_PRIV_EXT_VERSION}" | aws s3 cp - "s3://${AWS_RELEASE_BUCKET}/fdroid-priv/revision"
-  echo "${FDROID_CLIENT_VERSION}" | aws s3 cp - "s3://${AWS_RELEASE_BUCKET}/fdroid/revision"
-
-  # checkpoint aosp
-  aws s3 cp - "s3://${AWS_RELEASE_BUCKET}/${DEVICE}-vendor" --acl public-read <<< "${AOSP_BUILD_ID}" || true
-
-  # checkpoint chromium
-  echo "yes" | aws s3 cp - "s3://${AWS_RELEASE_BUCKET}/chromium/included"
-}
-
-aws_notify_simple() {
-  log_header "${FUNCNAME[0]}"
-
-  aws sns publish --region ${REGION} --topic-arn "${AWS_SNS_ARN}" --message "$1"
-}
-
-aws_notify() {
-  log_header "${FUNCNAME[0]}"
-
-  LOGOUTPUT=
-  if [ -n "$2" ]; then
-    LOGOUTPUT=$(tail -c 20000 /var/log/cloud-init-output.log)
-  fi
-  ELAPSED="$((SECONDS / 3600))hrs $(((SECONDS / 60) % 60))min $((SECONDS % 60))sec"
-  aws sns publish --region ${REGION} --topic-arn "${AWS_SNS_ARN}" \
-    --message="$(printf "$1\n  Device: %s\n  Stack Name: %s\n  Stack Version: %s\n  Stack Region: %s\n  Release Channel: %s\n  Instance Type: %s\n  Instance Region: %s\n  Instance IP: %s\n  Build Date: %s\n  Elapsed Time: %s\n  AOSP Build ID: %s\n  AOSP Tag: %s\n  Chromium Version: %s\n  F-Droid Version: %s\n  F-Droid Priv Extension Version: %s\n  %s" \
-      "${DEVICE}" "${STACK_NAME}" "${STACK_VERSION}" "${REGION}" "${RELEASE_CHANNEL}" "${INSTANCE_TYPE}" "${INSTANCE_REGION}" "${INSTANCE_IP}" "${BUILD_DATE}" "${ELAPSED}" "${AOSP_BUILD_ID}" "${AOSP_TAG}" "${CHROMIUM_VERSION}" "${FDROID_CLIENT_VERSION}" "${FDROID_PRIV_EXT_VERSION}" "${LOGOUTPUT}")" || true
-}
-
-aws_logging() {
-  log_header "${FUNCNAME[0]}"
-
-  df -h
-  du -chs "${AOSP_BUILD_DIR}" || true
-  uptime
-  aws s3 cp /var/log/cloud-init-output.log "s3://${AWS_LOGS_BUCKET}/${DEVICE}/$(date +%s)"
-}
-
-aws_import_keys() {
-  log_header "${FUNCNAME[0]}"
-
-  if [ "${ENCRYPTED_KEYS}" = true ]; then
-    if [ "$(aws s3 ls "s3://${AWS_ENCRYPTED_KEYS_BUCKET}/${DEVICE}" | wc -l)" == '0' ]; then
-      log "No encrypted keys were found - generating encrypted keys"
-      gen_keys
-      for f in $(find "${KEYS_DIR}" -type f); do
-        log "Encrypting file ${f} to ${f}.gpg"
-        gpg --symmetric --batch --passphrase "${ENCRYPTION_KEY}" --cipher-algo AES256 "${f}"
-      done
-      log "Syncing encrypted keys to S3 s3://${AWS_ENCRYPTED_KEYS_BUCKET}"
-      aws s3 sync "${KEYS_DIR}" "s3://${AWS_ENCRYPTED_KEYS_BUCKET}" --exclude "*" --include "*.gpg"
-    fi
-  else
-    if [ "$(aws s3 ls "s3://${AWS_KEYS_BUCKET}/${DEVICE}" | wc -l)" == '0' ]; then
-      log "No keys were found - generating keys"
-      gen_keys
-      log "Syncing keys to S3 s3://${AWS_KEYS_BUCKET}"
-      aws s3 sync "${KEYS_DIR}" "s3://${AWS_KEYS_BUCKET}"
-    else
-      log "Keys already exist for ${DEVICE} - syncing them from S3"
-      aws s3 sync "s3://${AWS_KEYS_BUCKET}" "${KEYS_DIR}"
-    fi
-  fi
-
-  # handle migration with chromium.keystore
-  pushd "${KEYS_DIR}/${DEVICE}"
-  if [ ! -f "${KEYS_DIR}/${DEVICE}/chromium.keystore" ]; then
-    log "Did not find chromium.keystore - generating"
-	  keytool -genkey -v -keystore chromium.keystore -storetype pkcs12 -alias chromium -keyalg RSA -keysize 4096 \
-        -sigalg SHA512withRSA -validity 10000 -dname "cn=RattlesnakeOS" -storepass chromium
-    if [ "${ENCRYPTED_KEYS}" = true ]; then
-      log "Encrypting and uploading new chromium.keystore to s3://${AWS_ENCRYPTED_KEYS_BUCKET}"
-      gpg --symmetric --batch --passphrase "${ENCRYPTION_KEY}" --cipher-algo AES256 chromium.keystore
-      aws s3 sync "${KEYS_DIR}" "s3://${AWS_ENCRYPTED_KEYS_BUCKET}" --exclude "*" --include "*.gpg"
-    else
-      log "Uploading new chromium.keystore to s3://${AWS_KEYS_BUCKET}"
-      aws s3 sync "${KEYS_DIR}" "s3://${AWS_KEYS_BUCKET}"
-    fi
-  fi
-  popd
+  set_current_metadata "rattlesnakeos-stack/revision" "${STACK_VERSION}"
+  set_current_metadata "fdroid/revision" "${FDROID_CLIENT_VERSION}"
+  set_current_metadata "fdroid-priv/revision" "${FDROID_PRIV_EXT_VERSION}"
+  set_current_metadata "fdroid-priv/revision" "${FDROID_PRIV_EXT_VERSION}"
+  set_current_metadata "fdroid-priv/revision" "${FDROID_PRIV_EXT_VERSION}"
+  set_current_metadata "${DEVICE}-vendor" "${AOSP_BUILD_ID}" "public"
+  set_current_metadata "chromium/included" "yes"
 }
 
 gen_keys() {
@@ -696,95 +624,11 @@ gen_keys() {
   "${avb_tool}" extract_public_key --key "${KEYS_DIR}/${DEVICE}/avb.pem" --output "${KEYS_DIR}/${DEVICE}/avb_pkmd.bin"
 }
 
-initial_key_setup() {
-  # setup in memory file system to hold keys
-  log "Mounting in memory filesystem at ${KEYS_DIR} to hold keys"
-  sudo mount -t tmpfs -o size=20m tmpfs "${KEYS_DIR}" || true
-
-  # additional steps for getting encryption key up front
-  if [ "${ENCRYPTED_KEYS}" = true ]; then
-    log "Encrypted keys option was specified"
-
-    # send warning if user has selected encrypted keys option but still has normal keys
-    if [ "$(aws s3 ls "s3://${AWS_KEYS_BUCKET}/${DEVICE}" | wc -l)" != '0' ]; then
-      if [ "$(aws s3 ls "s3://${AWS_ENCRYPTED_KEYS_BUCKET}/${DEVICE}" | wc -l)" == '0' ]; then
-        aws_notify_simple "It looks like you have selected --encrypted-keys option and have existing signing keys in s3://${AWS_KEYS_BUCKET}/${DEVICE} but you haven't migrated your keys to s3://${AWS_ENCRYPTED_KEYS_BUCKET}/${DEVICE}. This means new encrypted signing keys will be generated and you'll need to flash a new factory image on your device. If you want to keep your existing keys - cancel this build and follow the steps on migrating your keys in the FAQ."
-      fi
-    fi
-
-    sudo DEBIAN_FRONTEND=noninteractive apt-get -y install gpg
-    if [ ! -e "${ENCRYPTION_PIPE}" ]; then
-      mkfifo "${ENCRYPTION_PIPE}"
-    fi
-
-    get_encryption_key
-  fi
-}
-
-get_encryption_key() {
-  additional_message=""
-  if [ "$(aws s3 ls "s3://${AWS_ENCRYPTED_KEYS_BUCKET}/${DEVICE}" | wc -l)" == '0' ]; then
-    additional_message="Since you have no encrypted signing keys in s3://${AWS_ENCRYPTED_KEYS_BUCKET}/${DEVICE} yet - new signing keys will be generated and encrypted with provided passphrase."
-  fi
-
-  wait_time="10m"
-  error_message=""
-  while true; do
-    aws sns publish --region ${REGION} --topic-arn "${AWS_SNS_ARN}" \
-      --message="$(printf "%s Need to login to the EC2 instance and provide the encryption passphrase (${wait_time} timeout before shutdown). You may need to open up SSH in the default security group, see the FAQ for details. %s\n\nssh ubuntu@%s 'printf \"Enter encryption passphrase: \" && read -s k && echo \"\$k\" > %s'" "${error_message}" "${additional_message}" "${INSTANCE_IP}" "${ENCRYPTION_PIPE}")"
-    error_message=""
-
-    log "Waiting for encryption passphrase (with ${wait_time} timeout) to be provided over named pipe ${ENCRYPTION_PIPE}"
-    set +e
-    ENCRYPTION_KEY=$(timeout ${wait_time} cat "${ENCRYPTION_PIPE}")
-    if [ $? -ne 0 ]; then
-      set -e
-      log "Timeout (${wait_time}) waiting for encryption passphrase"
-      aws_notify_simple "Timeout (${wait_time}) waiting for encryption passphrase. Terminating build process."
-      exit 1
-    fi
-    set -e
-    if [ -z "${ENCRYPTION_KEY}" ]; then
-      error_message="ERROR: Empty encryption passphrase received - try again."
-      log "${error_message}"
-      continue
-    fi
-    log "Received encryption passphrase over named pipe ${ENCRYPTION_PIPE}"
-
-    if [ "$(aws s3 ls "s3://${AWS_ENCRYPTED_KEYS_BUCKET}/${DEVICE}" | wc -l)" == '0' ]; then
-      log "No existing encrypting keys - new keys will be generated later in build process."
-    else
-      log "Verifying encryption passphrase is valid by syncing encrypted signing keys from S3 and decrypting"
-      aws s3 sync "s3://${AWS_ENCRYPTED_KEYS_BUCKET}" "${KEYS_DIR}"
-
-      decryption_error=false
-      set +e
-      for f in $(find "${KEYS_DIR}" -type f -name '*.gpg'); do
-        output_file=$(echo "${f}" | awk -F".gpg" '{print $1}')
-        log "Decrypting ${f} to ${output_file}..."
-        gpg -d --batch --passphrase "${ENCRYPTION_KEY}" "${f}" > "${output_file}"
-        if [ $? -ne 0 ]; then
-          log "Failed to decrypt ${f}"
-          decryption_error=true
-        fi
-      done
-      set -e
-      if [ "${decryption_error}" = true ]; then
-        log
-        error_message="ERROR: Failed to decrypt signing keys with provided passphrase - try again."
-        log "${error_message}"
-        continue
-      fi
-    fi
-    break
-  done
-}
-
 cleanup() {
   rv=$?
-  aws_logging
+  logging
   if [ $rv -ne 0 ]; then
-    aws_notify "RattlesnakeOS Build FAILED" 1
+    notify "RattlesnakeOS Build FAILED" 1
   fi
   sudo shutdown -h now
 }

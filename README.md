@@ -91,7 +91,6 @@ INFO[0000] Current settings:
 chromium-version: ""
 device: taimen
 email: user@domain.com
-encrypted-keys: false
 hosts-file: ""
 instance-regions: us-west-2,us-west-1,us-east-2
 instance-type: c5.4xlarge
@@ -129,7 +128,6 @@ Here is an example of a more advanced config file that: locks to a specific vers
 chromium-version = "80.0.3971.4"
 device = "crosshatch"
 email = "user@domain.com"
-encrypted-keys = "false"
 hosts-file = "https://raw.githubusercontent.com/StevenBlack/hosts/master/hosts"
 instance-regions = "us-west-2,us-west-1,us-east-2"
 instance-type = "c5.18xlarge"
@@ -161,7 +159,6 @@ Flags:
       --chromium-version string            specify the version of Chromium you want (e.g. 69.0.3497.100) to pin to. if not specified, the latest stable version of Chromium is used.
   -d, --device string                      device you want to build for (e.g. crosshatch): to list supported devices use '-d list'
   -e, --email string                       email address you want to use for build notifications
-      --encrypted-keys                     an advanced option that allows signing keys to be stored with symmetric gpg encryption and decrypted into memory during the build process. this option requires manual intervention during builds where you will be sent a notification and need to provide the key required for decryption over SSH to continue the build process. important: if you have an existing stack - please see the FAQ for how to migrate your keys
   -h, --help                               help for deploy
       --hosts-file string                  an advanced option that allows you to specify a replacement /etc/hosts file to enable global dns adblocking (e.g. https://raw.githubusercontent.com/StevenBlack/hosts/master/hosts). note: be careful with this, as you 1) won't get any sort of notification on blocking 2) if you need to unblock something you'll have to rebuild the OS
       --instance-regions string            possible regions to launch spot instance. the region with cheapest spot instance price will be used. (default "us-west-2,us-west-1,us-east-2")
@@ -206,8 +203,6 @@ Global Flags:
 
     ```sh 
     aws s3 sync s3://<rattlesnakeos-stackname>-keys/ .
-    # or if you are using encrypted keys
-    aws s3 sync s3://<rattlesnakeos-stackname>-keys-encrypted/ .
     ```
 
 ## FAQ
@@ -326,36 +321,11 @@ I don't recommend installing microG as it requires you to enable signature spoof
 
 ### Security
 #### How secure is this?
-Your abilty to secure your signing keys determines how secure RattlesnakeOS is. RattlesnakeOS generates and stores signing keys, optionally encrypted, in AWS, which means the security of your AWS account becomes critical to ensuring the security of your device. If you aren't able to properly secure your local workstation and your AWS account, then these additional security protections like verified boot become less useful. Using the encrypted signing keys option can reduce impact of an AWS account compromise by keeping signing keys encrypted at rest and only decrypted into memory at build time. Is this infallible? Absolutely not, as your unencrypted keys are going to be in memory on a VM running in the cloud. So if your threat model includes more targeted attacks that try to extract signing keys while they are in memory, then RattlesnakeOS is probably not for you.
+Your abilty to secure your signing keys determines how secure RattlesnakeOS is. RattlesnakeOS generates and stores signing keys in AWS, which means the security of your AWS account becomes critical to ensuring the security of your device. If you aren't able to properly secure your local workstation and your AWS account, then these additional security protections like verified boot become less useful.
 
 Cloud based builds are never going to be as secure as a locally built AOSP signed with highly secured keys generated from an HSM or air gapped computer, so if this is the level of security you require then there really is no other way. Would I recommend cloud builds like this for a large OEM or a company like CopperheadOS where the signing key being generated is protecting thousands of users? No, this becomes a high profile target as getting a hold of these keys essentially gives an attacker access to thousands of devices. On the other hand, for a single user generating their own key protecting a single device, there is less concern in my mind unless your threat profile includes very targeted attacks. 
 #### What are some security best practices for AWS accounts?
 Some minimimum steps worth considering are having an account solely for building RattlesnakeOS with a strong password, enabling two factor authentication, enabling auditing with CloudTrail, and locking down access to your AWS API credentials.
-#### What's the difference between the default option and encrypted signing keys option and what one should I use?
-There are different configurations for RattlesnakeOS builds based on your threat model. Here's a breakdown of the two primary build configurations and how they compare:
-* Using the standard RattlesnakeOS build process, your keys are autogenerated and stored in S3. This means your AWS account security become the most important part of maintaining secure signing keys. This default build option is a good fit for someone that is OK with putting some trust in AWS, wants hands off builds with no manual intervention, and doesn't want to deal with maintaining a passphrase for encrypting/decrypting signing keys. Even with this setup, this still means AWS has potential access to your signing keys. If your threat model included an attacker compromising your AWS account, then this would not suffice as they would be able to get access to your unencrypted signing keys.
-* The encrypted signing keys option allows you to prevent storing signing keys in an unencrypted form within AWS. It does this by using GPG symmetric encryption to store your keys at rest. This means that even AWS or someone that got control of your account wouldn't be able to extract your signing keys assuming the passphrase used to encrypt them was strong enough to prevent a brute force attack. Using this option puts less trust in AWS and more trust in your ability to secure the passphrase used for encrypting/decrypting your signing keys.
-#### How does the encrypted signing keys option work in practice?
-When using the encrypted signing keys option - the workflow is not fully automated like the standard build process. It requires a user to provide a passphrase to encrypt/decrypt signing keys to be used during the build process. The general workflow looks like this:
-* Stack is deployed with config option `encrypted-keys = true`.
-* When a build starts, an email notification will be sent that your EC2 instance is waiting for a passphrase - or will timeout in 10 mins and terminate the build. This email notification will give you an SSH command to run to provide your passphrase to the build process running on an EC2 instance. If this is your first build, encrypted signing keys don't exist yet in S3, and this passphrase will be used to store newly generated signing keys in encrypted form in S3. On future builds, these encrypted signing keys will be detected and the email notification you get to provide your passphrase to the build process will be used to decrypt your signing keys for use in the build signing process.
-* Build continues as usual
-#### How do I migrate to using the encrypted signing key option?
-If you have an existing stack and want to move to encrypted signing keys you'll need to migrate your keys. Note: if you don't do this migration process new signing keys will be generated during the build process and you'll need to flash a new factory image (losing all data) to be able to use these builds.
-* First you'll need to update your stack config file to use `encrypted-keys = true` and then run `rattlesnakeos-stack deploy` to update your stack. 
-* Next you'll need to copy your existing signing keys from S3 bucket `<rattlesnakeos-stackname>-keys`, encrypt them with GPG using a strong passphrase, and then copy over encrypted keys to S3 encrypted keys bucket `<rattlesnakeos-stackname>-keys-encrypted`.
-    ```sh
-    mkdir -p key-migration && cd key-migration
-    aws s3 sync s3://<rattlesnakeos-stackname>-keys/ .
-    echo -n "Encryption passphrase: "
-    read -s key
-    echo
-    for f in $(find . -type f); do 
-        gpg --symmetric --batch --passphrase "${key}" --cipher-algo AES256 $f
-    done
-    aws s3 sync . s3://<rattlesnakeos-stackname>-keys-encrypted/ --exclude "*" --include "*.gpg"
-    ```
-* After running a full build and updating your device, you can remove the keys from the original `s3://<rattlesnakeos-stackname>-keys` bucket.
 
 ## Uninstalling
 ### Remove AWS resources
