@@ -18,17 +18,17 @@ import (
 )
 
 const (
-	terraformVersion       = "0.11.8"
+	terraformVersion = "0.11.8"
 )
 
 var (
-	darwinBinaryURL   = fmt.Sprintf("https://releases.hashicorp.com/terraform/%s/terraform_%s_darwin_amd64.zip", terraformVersion, terraformVersion)
-	linuxBinaryURL    = fmt.Sprintf("https://releases.hashicorp.com/terraform/%s/terraform_%s_linux_amd64.zip", terraformVersion, terraformVersion)
-	windowsBinaryURL  = fmt.Sprintf("https://releases.hashicorp.com/terraform/%s/terraform_%s_windows_amd64.zip", terraformVersion, terraformVersion)
+	darwinBinaryURL  = fmt.Sprintf("https://releases.hashicorp.com/terraform/%s/terraform_%s_darwin_amd64.zip", terraformVersion, terraformVersion)
+	linuxBinaryURL   = fmt.Sprintf("https://releases.hashicorp.com/terraform/%s/terraform_%s_linux_amd64.zip", terraformVersion, terraformVersion)
+	windowsBinaryURL = fmt.Sprintf("https://releases.hashicorp.com/terraform/%s/terraform_%s_windows_amd64.zip", terraformVersion, terraformVersion)
 )
 
 type Client struct {
-	terraformDir string
+	terraformDir    string
 	terraformBinary string
 }
 

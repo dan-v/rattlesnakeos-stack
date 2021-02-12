@@ -79,13 +79,13 @@ var buildStartCmd = &cobra.Command{
 		}
 
 		lambdaPayload := struct {
-			ForceBuild bool
-			AOSPBuildID  string
-			AOSPTag string
+			ForceBuild  bool
+			AOSPBuildID string
+			AOSPTag     string
 		}{
-			ForceBuild: forceBuild,
-			AOSPBuildID:  aospBuildID,
-			AOSPTag: aospTag,
+			ForceBuild:  forceBuild,
+			AOSPBuildID: aospBuildID,
+			AOSPTag:     aospTag,
 		}
 		payload, err := json.Marshal(lambdaPayload)
 		if err != nil {

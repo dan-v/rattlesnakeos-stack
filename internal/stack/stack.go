@@ -25,7 +25,7 @@ import (
 
 const (
 	DefaultTrustedRepoBase = "https://github.com/rattlesnakeos/"
- 	MinimumChromiumVersion = 86
+	MinimumChromiumVersion = 86
 )
 
 const (
@@ -60,9 +60,9 @@ type Config struct {
 }
 
 type Stack struct {
-	config                  *Config
-	terraformClient         *terraform.Client
-	terraformOutput         string
+	config          *Config
+	terraformClient *terraform.Client
+	terraformOutput string
 }
 
 func New(config *Config, buildScript, buildScriptTemplate, lambdaTemplate, terraformTemplate string) (*Stack, error) {
@@ -99,9 +99,9 @@ func New(config *Config, buildScript, buildScriptTemplate, lambdaTemplate, terra
 	// render lambda
 	regionAMIs, _ := json.Marshal(stackaws.RegionAMIs)
 	lambdaConfig := struct {
-		Config Config
-		RegionAMIs   string
-	} {
+		Config     Config
+		RegionAMIs string
+	}{
 		*config,
 		string(regionAMIs),
 	}
@@ -112,10 +112,10 @@ func New(config *Config, buildScript, buildScriptTemplate, lambdaTemplate, terra
 
 	// render terraform
 	terraformConfig := struct {
-		Config Config
+		Config                  Config
 		LambdaZipFileLocation   string
 		BuildScriptFileLocation string
-	} {
+	}{
 		*config,
 		lambdaZipFilePath,
 		buildScriptFilePath,
@@ -160,8 +160,8 @@ func New(config *Config, buildScript, buildScriptTemplate, lambdaTemplate, terra
 	}
 
 	return &Stack{
-		config:                 config,
-		terraformClient: 		terraformClient,
+		config:          config,
+		terraformClient: terraformClient,
 	}, nil
 }
 

@@ -1,23 +1,21 @@
 package devices
 
 const (
-	Walleye = "walleye"
-	Taimen = "taimen"
-	Blueline = "blueline"
-	Crosshatch = "crosshatch"
-	Sargo = "sargo"
-	Bonito = "bonito"
-	Flame = "flame"
-	Coral = "coral"
-	Sunfish = "sunfish"
-	Redfin = "redfin"
-	AVBModeSimple = "vbmeta_simple"
-	AVBModeChained = "vbmeta_chained"
+	Blueline         = "blueline"
+	Crosshatch       = "crosshatch"
+	Sargo            = "sargo"
+	Bonito           = "bonito"
+	Flame            = "flame"
+	Coral            = "coral"
+	Sunfish          = "sunfish"
+	Redfin           = "redfin"
+	AVBModeSimple    = "vbmeta_simple"
+	AVBModeChained   = "vbmeta_chained"
 	AVBModeChainedV2 = "vbmeta_chained_v2"
 )
 
 var deviceSortOrder = []string{
-	Walleye, Taimen, Blueline, Crosshatch, Sargo, Bonito, Flame, Coral, Sunfish, Redfin,
+	Blueline, Crosshatch, Sargo, Bonito, Flame, Coral, Sunfish, Redfin,
 }
 
 func IsSupportedDevice(device string) bool {
@@ -32,88 +30,74 @@ func GetDeviceDetails(device string) Device {
 }
 
 var SupportedDevices = DeviceMap{
-	Walleye: {
-		Name: Walleye,
-		Friendly: "Pixel 2",
-		Family: "muskie",
-		Common: "wahoo",
-		AVBMode: AVBModeSimple,
-	},
-	Taimen: {
-		Name: Taimen,
-		Friendly: "Pixel 2 XL",
-		Family: "taimen",
-		Common: "wahoo",
-		AVBMode: AVBModeSimple,
-	},
 	Blueline: {
-		Name: Blueline,
+		Name:     Blueline,
 		Friendly: "Pixel 3",
-		Family: "crosshatch",
-		Common: "crosshatch",
-		AVBMode: AVBModeChained,
+		Family:   "crosshatch",
+		Common:   "crosshatch",
+		AVBMode:  AVBModeChained,
 		ExtraOTA: "(--retrofit_dynamic_partitions)",
 	},
 	Crosshatch: {
-		Name: Crosshatch,
+		Name:     Crosshatch,
 		Friendly: "Pixel 3 XL",
-		Family: "crosshatch",
-		Common: "crosshatch",
-		AVBMode: AVBModeChained,
+		Family:   "crosshatch",
+		Common:   "crosshatch",
+		AVBMode:  AVBModeChained,
 		ExtraOTA: "(--retrofit_dynamic_partitions)",
 	},
 	Sargo: {
-		Name: Sargo,
+		Name:     Sargo,
 		Friendly: "Pixel 3a",
-		Family: "bonito",
-		Common: "bonito",
-		AVBMode: AVBModeChained,
+		Family:   "bonito",
+		Common:   "bonito",
+		AVBMode:  AVBModeChained,
 		ExtraOTA: "(--retrofit_dynamic_partitions)",
 	},
 	Bonito: {
-		Name: Bonito,
+		Name:     Bonito,
 		Friendly: "Pixel 3a XL",
-		Family: "bonito",
-		Common: "bonito",
-		AVBMode: AVBModeChained,
+		Family:   "bonito",
+		Common:   "bonito",
+		AVBMode:  AVBModeChained,
 		ExtraOTA: "(--retrofit_dynamic_partitions)",
 	},
 	Flame: {
-		Name: Flame,
+		Name:     Flame,
 		Friendly: "Pixel 4",
-		Family: "coral",
-		Common: "coral",
-		AVBMode: AVBModeChainedV2,
+		Family:   "coral",
+		Common:   "coral",
+		AVBMode:  AVBModeChainedV2,
 	},
 	Coral: {
-		Name: Coral,
+		Name:     Coral,
 		Friendly: "Pixel 4 XL",
-		Family: "coral",
-		Common: "coral",
-		AVBMode: AVBModeChainedV2,
+		Family:   "coral",
+		Common:   "coral",
+		AVBMode:  AVBModeChainedV2,
 	},
 	Sunfish: {
-		Name: Sunfish,
+		Name:     Sunfish,
 		Friendly: "Pixel 4a",
-		Family: "sunfish",
-		Common: "sunfish",
-		AVBMode: AVBModeChainedV2,
+		Family:   "sunfish",
+		Common:   "sunfish",
+		AVBMode:  AVBModeChainedV2,
 	},
 	Redfin: {
-		Name: Redfin,
+		Name:     Redfin,
 		Friendly: "Pixel 5",
-		Family: "redfin",
-		Common: "redfin",
-		AVBMode: AVBModeChainedV2,
+		Family:   "redfin",
+		Common:   "redfin",
+		AVBMode:  AVBModeChainedV2,
 	},
 }
 
 type Device struct {
-	Name string
+	Name     string
 	Friendly string
-	Family string
-	Common string
-	AVBMode string
+	Family   string
+	Common   string
+	AVBMode  string
 	ExtraOTA string
 }
 

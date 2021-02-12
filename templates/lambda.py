@@ -34,10 +34,6 @@ def lambda_handler(event, context):
     latest_json = json.loads(urlopen(LATEST_JSON).read().decode())
     latest_chromium_version = latest_json.get('chromium')
     print("latest_chromium_version", latest_chromium_version)
-    latest_fdroid_client_version = latest_json.get('fdroid').get('client')
-    print("latest_fdroid_client_version", latest_fdroid_client_version)
-    latest_fdroid_priv_version = latest_json.get('fdroid').get('privilegedextention')
-    print("latest_fdroid_priv_version", latest_fdroid_priv_version)
     latest_aosp_build_id = latest_json.get('devices').get(DEVICE).get('build_id')
     print("latest_aosp_build_id", latest_aosp_build_id)
     latest_aosp_tag = latest_json.get('devices').get(DEVICE).get('aosp_tag')
@@ -52,13 +48,9 @@ def lambda_handler(event, context):
     print("aosp_tag", aosp_tag)
     chromium_version = event.get('ChromiumVersion') or CHROMIUM_PINNED_VERSION if CHROMIUM_PINNED_VERSION != "" else latest_chromium_version
     print("chromium_version", chromium_version)
-    fdroid_client_version = event.get('FDroidClientVersion') or latest_fdroid_client_version
-    print("fdroid_client_version", fdroid_client_version)
-    fdroid_priv_version = event.get('FDroidPrivVersion') or latest_fdroid_priv_version
-    print("fdroid_priv_version", fdroid_priv_version)
 
     # check if build is required
-    needs_build, build_reasons = is_build_required(latest_stack_version, aosp_build_id, chromium_version, fdroid_client_version, fdroid_priv_version)
+    needs_build, build_reasons = is_build_required(latest_stack_version, aosp_build_id, chromium_version)
     if not needs_build and not force_build:
         message = "RattlesnakeOS build is already up to date."
         send_sns_message("RattlesnakeOS Build Not Required", message)
@@ -92,8 +84,8 @@ def lambda_handler(event, context):
 
     # userdata to deploy with spot instance
     copy_build_command = f"sudo -u ubuntu aws s3 --region {REGION} cp {SRC_PATH} /home/ubuntu/build.sh"
-    build_args_command = f"echo \\\"aosp_build_id={aosp_build_id} aosp_tag={aosp_tag} chromium_version={chromium_version} fdroid_client_version={fdroid_client_version} fdroid_priv_version={fdroid_priv_version}\\\" > /home/ubuntu/build_args"
-    build_start_command = f"sudo -u ubuntu bash /home/ubuntu/build.sh \\\"{aosp_build_id}\\\" \\\"{aosp_tag}\\\" \\\"{chromium_version}\\\" \\\"{fdroid_client_version}\\\" \\\"{fdroid_priv_version}\\\""
+    build_args_command = f"echo \\\"{aosp_build_id} {aosp_tag} {chromium_version}\\\" > /home/ubuntu/build_args"
+    build_start_command = f"sudo -u ubuntu bash /home/ubuntu/build.sh \\\"{aosp_build_id}\\\" \\\"{aosp_tag}\\\" \\\"{chromium_version}\\\""
     userdata = base64.b64encode(f"""
 #cloud-config
 output : {{ all : '| tee -a /var/log/cloud-init-output.log' }}
@@ -135,7 +127,7 @@ runcmd:
                         'Ebs': {
                             'DeleteOnTermination': True,
                             'VolumeSize': 250,
-                            'VolumeType': 'gp2'
+                            'VolumeType': 'gp3'
                         },
                     },
                 ],
@@ -163,13 +155,13 @@ runcmd:
         send_sns_message("RattlesnakeOS Spot Instance FAILED", message)
         raise
 
-    subject = "RattlesnakeOS Spot Instance SUCCESS"
+    subject = "RattlesnakeOS Spot Instance REQUESTED"
     message = f"Successfully requested a spot instance.\n\n Stack Name: {NAME}\n Device: {DEVICE}\n Instance Type: {INSTANCE_TYPE}\n Cheapest Region: {cheapest_region}\n Cheapest Hourly Price: ${cheapest_price}\n Build Reason: {build_reasons}"
     send_sns_message(subject, message)
     return message.replace('\n', ' ')
 
 
-def is_build_required(latest_stack_version, aosp_build_id, chromium_version, fdroid_client_version, fdroid_priv_version):
+def is_build_required(latest_stack_version, aosp_build_id, chromium_version):
     s3 = boto3.resource('s3')
     needs_update = False
     build_reasons = []
@@ -231,39 +223,6 @@ def is_build_required(latest_stack_version, aosp_build_id, chromium_version, fdr
         else:
             print("chromium needs to be updated to {}".format(chromium_version))
             build_reasons.append("Chromium version {} != {}".format(existing_chromium_version, chromium_version))
-
-    # FDROID
-    existing_fdroid_client_version = ""
-    try:
-        existing_fdroid_client_version = s3.Object(RELEASE_BUCKET, "fdroid/revision").get()[
-            'Body'].read().decode().strip("\n")
-        print("existing_fdroid_client_version='{}'".format(existing_chromium_version))
-    except:
-        print("failed to get existing_fdroid_client_version: {}".format(e))
-        pass
-    if existing_fdroid_client_version == fdroid_client_version:
-        print("fdroid client {} is up to date".format(existing_fdroid_client_version))
-    else:
-        print("fdroid needs to be updated to {}".format(fdroid_client_version))
-        needs_update = True
-        build_reasons.append("F-Droid version {} != {}".format(existing_fdroid_client_version, fdroid_client_version))
-
-    # FDROID PRIV
-    existing_fdroid_priv_version = ""
-    try:
-        existing_fdroid_priv_version = s3.Object(RELEASE_BUCKET, "fdroid-priv/revision").get()[
-            'Body'].read().decode().strip("\n")
-        print("existing_fdroid_priv_version='{}'".format(existing_fdroid_priv_version))
-    except Exception as e:
-        print("failed to get existing_fdroid_priv_version: {}".format(e))
-        pass
-    if existing_fdroid_priv_version == fdroid_priv_version:
-        print("fdroid priv {} is up to date".format(fdroid_priv_version))
-    else:
-        print("fdroid priv needs to be updated to {}".format(fdroid_priv_version))
-        needs_update = True
-        build_reasons.append(
-            "F-Droid priv ext version {} != {}".format(existing_fdroid_priv_version, fdroid_priv_version))
 
     return needs_update, build_reasons
 

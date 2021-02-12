@@ -29,7 +29,7 @@ var configCmd = &cobra.Command{
 			if len(input) < 1 {
 				return errors.New("Device name is too short")
 			}
-			if !devices.IsSupportedDevice(input){
+			if !devices.IsSupportedDevice(input) {
 				return errors.New("Invalid device")
 			}
 			return nil

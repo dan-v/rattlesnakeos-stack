@@ -19,9 +19,9 @@ var (
 	defaultConfigFileFullPath string
 	configFileFullPath        string
 	version                   string
-	buildScript 			  string
-	buildTemplate 			  string
-	lambdaTemplate 			  string
+	buildScript               string
+	buildTemplate             string
+	lambdaTemplate            string
 	terraformTemplate         string
 )
 

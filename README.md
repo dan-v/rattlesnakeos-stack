@@ -60,8 +60,8 @@ The rattlesnakeos-stack `config` subcommand should be run first to initialize a 
 ```none
 ./rattlesnakeos-stack config
 
-Device is the device codename (e.g. sunfish). Supported devices: walleye (Pixel 2), taimen (Pixel 2 XL), blueline (Pixel 3), crosshatch (Pixel 3 XL), sargo (Pixel 3a), bonito (Pixel 3a XL)
-device: taimen
+Device is the device codename (e.g. sunfish).
+device: sunfish
 
 Stack name is used as an identifier for all the AWS components that get deployed. THIS NAME MUST BE UNIQUE OR DEPLOYMENT WILL FAIL.
 Stack name: <rattlesnakeos-stackname>
