@@ -11,8 +11,8 @@ var version string
 //go:embed templates/build.sh
 var buildScript string
 
-//go:embed templates/build_vars.sh
-var buildScriptTemplate string
+//go:embed templates/generated_vars_and_funcs.sh
+var buildScriptVars string
 
 //go:embed templates/lambda.py
 var lambdaTemplate string
@@ -21,5 +21,5 @@ var lambdaTemplate string
 var terraformTemplate string
 
 func main() {
-	cmd.Execute(version, buildScript, buildScriptTemplate, lambdaTemplate, terraformTemplate)
+	cmd.Execute(version, buildScript, buildScriptVars, lambdaTemplate, terraformTemplate)
 }

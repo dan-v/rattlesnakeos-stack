@@ -24,8 +24,8 @@ import (
 )
 
 const (
-	DefaultTrustedRepoBase = "https://github.com/rattlesnakeos/"
 	MinimumChromiumVersion = 86
+	DefaultCoreConfigRepo = "https://github.com/rattlesnakeos/core"
 )
 
 const (
@@ -37,6 +37,7 @@ const (
 )
 
 type Config struct {
+	Version                string
 	Name                   string
 	Region                 string
 	Device                 string
@@ -47,16 +48,12 @@ type Config struct {
 	SkipPrice              string
 	MaxPrice               string
 	SSHKey                 string
-	Version                string
 	Schedule               string
+	ChromiumBuildDisabled   bool
 	ChromiumVersion        string
-	CustomPatches          *CustomPatches
-	CustomScripts          *CustomScripts
-	CustomPrebuilts        *CustomPrebuilts
-	CustomManifestRemotes  *CustomManifestRemotes
-	CustomManifestProjects *CustomManifestProjects
-	HostsFile              string
 	AMI                    string
+	CoreConfigRepo         string
+	CustomConfigRepo       string
 }
 
 type Stack struct {
@@ -65,7 +62,7 @@ type Stack struct {
 	terraformOutput string
 }
 
-func New(config *Config, buildScript, buildScriptTemplate, lambdaTemplate, terraformTemplate string) (*Stack, error) {
+func New(config *Config, buildScript, buildScriptVars, lambdaTemplate, terraformTemplate string) (*Stack, error) {
 	err := checkAWSCreds(config.Region)
 	if err != nil {
 		return nil, err
@@ -91,7 +88,7 @@ func New(config *Config, buildScript, buildScriptTemplate, lambdaTemplate, terra
 	}
 
 	// render build script
-	renderedBuildScriptTemplate, err := renderTemplate(buildScriptTemplate, config)
+	renderedBuildScriptTemplate, err := renderTemplate(buildScriptVars, config)
 	if err != nil {
 		return nil, fmt.Errorf("failed to render build script: %w", err)
 	}
@@ -126,7 +123,7 @@ func New(config *Config, buildScript, buildScriptTemplate, lambdaTemplate, terra
 	}
 
 	// write out shell script
-	updatedBuildScript := strings.Replace(buildScript, "####REPLACE-VARS####", string(renderedBuildScriptTemplate), 1)
+	updatedBuildScript := strings.Replace(buildScript, "#### <generated_vars_and_funcs.sh> ####", string(renderedBuildScriptTemplate), 1)
 	err = ioutil.WriteFile(buildScriptFilePath, []byte(updatedBuildScript), 0644)
 	if err != nil {
 		return nil, err

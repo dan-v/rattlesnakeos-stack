@@ -18,17 +18,12 @@ import (
 )
 
 var name, region, email, device, sshKey, maxPrice, skipPrice, schedule string
-var instanceType, instanceRegions, hostsFile, chromiumVersion string
-var skipDeploy bool
-var patches = &stack.CustomPatches{}
-var scripts = &stack.CustomScripts{}
-var prebuilts = &stack.CustomPrebuilts{}
-var manifestRemotes = &stack.CustomManifestRemotes{}
-var manifestProjects = &stack.CustomManifestProjects{}
-
+var instanceType, instanceRegions, chromiumVersion string
+var skipDeploy, chromiumBuildDisabled bool
 var supportedDevicesFriendly = devices.SupportedDevices.GetDeviceFriendlyNames()
 var supportedDevicesCodename = devices.SupportedDevices.GetDeviceCodeNames()
 var supportDevicesOutput string
+var coreConfigRepo, customConfigRepo string
 
 func init() {
 	rootCmd.AddCommand(deployCmd)
@@ -41,6 +36,7 @@ func init() {
 	}
 
 	flags := deployCmd.Flags()
+
 	flags.StringVarP(&name, "name", "n", "",
 		"name for stack. note: this must be a valid/unique S3 bucket name.")
 	_ = viper.BindPFlag("name", flags.Lookup("name"))
@@ -69,7 +65,7 @@ func init() {
 		"max ec2 spot instance price. if this value is too low, you may not obtain an instance or it may terminate during a build.")
 	_ = viper.BindPFlag("max-price", flags.Lookup("max-price"))
 
-	flags.StringVar(&instanceType, "instance-type", "c5.4xlarge", "EC2 instance type (e.g. c4.4xlarge) to use for the build.")
+	flags.StringVar(&instanceType, "instance-type", "c5.4xlarge", "EC2 instance type (e.g. c5.4xlarge) to use for the build.")
 	_ = viper.BindPFlag("instance-type", flags.Lookup("instance-type"))
 
 	flags.StringVar(&instanceRegions, "instance-regions", aws.DefaultInstanceRegions,
@@ -82,16 +78,18 @@ func init() {
 			"see this for cron format details: https://docs.aws.amazon.com/AmazonCloudWatch/latest/events/ScheduledEvents.html#CronExpressions")
 	_ = viper.BindPFlag("schedule", flags.Lookup("schedule"))
 
-	flags.StringVar(&hostsFile, "hosts-file", "",
-		"an advanced option that allows you to specify a replacement /etc/hosts file to enable global dns adblocking "+
-			"(e.g. https://raw.githubusercontent.com/StevenBlack/hosts/master/hosts). note: be careful with this, as you "+
-			"1) won't get any sort of notification on blocking 2) if you need to unblock something you'll have to rebuild the OS")
-	_ = viper.BindPFlag("hosts-file", flags.Lookup("hosts-file"))
+	flags.BoolVar(&chromiumBuildDisabled, "chromium-build-disabled", false, "control whether chromium builds are enabled or disabled.")
+	_ = viper.BindPFlag("chromium-build-disabled", flags.Lookup("chromium-build-disabled"))
 
 	flags.StringVar(&chromiumVersion, "chromium-version", "",
-		"specify the version of Chromium you want (e.g. 80.0.3971.4) to pin to. if not specified, the latest stable "+
-			"version of Chromium is used.")
+		"specify the version of Chromium you want (e.g. 80.0.3971.4) to pin to. if not specified, the latest stable version of Chromium is used.")
 	_ = viper.BindPFlag("chromium-version", flags.Lookup("chromium-version"))
+
+	flags.StringVar(&coreConfigRepo, "core-config-repo", stack.DefaultCoreConfigRepo, "a specially formatted repo that contains core customizations on top of AOSP.")
+	_ = viper.BindPFlag("core-config-repo", flags.Lookup("core-config-repo"))
+
+	flags.StringVar(&customConfigRepo, "custom-config-repo", "", "a specially formatted repo that contains customizations on top of core.")
+	_ = viper.BindPFlag("custom-config-repo", flags.Lookup("custom-config-repo"))
 
 	flags.BoolVar(&skipDeploy, "skip-deploy", false, "only generate the output, but do not deploy with terraform.")
 }
@@ -140,12 +138,6 @@ var deployCmd = &cobra.Command{
 		return fmt.Errorf("must specify a supported device: %v", strings.Join(supportedDevicesCodename, ", "))
 	},
 	Run: func(cmd *cobra.Command, args []string) {
-		viper.UnmarshalKey("custom-patches", patches)
-		viper.UnmarshalKey("custom-scripts", scripts)
-		viper.UnmarshalKey("custom-prebuilts", prebuilts)
-		viper.UnmarshalKey("custom-manifest-remotes", manifestRemotes)
-		viper.UnmarshalKey("custom-manifest-projects", manifestProjects)
-
 		c := viper.AllSettings()
 		bs, err := yaml.Marshal(c)
 		if err != nil {
@@ -153,24 +145,6 @@ var deployCmd = &cobra.Command{
 		}
 		log.Println("Current settings:")
 		fmt.Println(string(bs))
-
-		for _, r := range *patches {
-			if !strings.Contains(strings.ToLower(r.Repo), stack.DefaultTrustedRepoBase) {
-				log.Warnf("You are using an untrusted repository (%v) for patches - this is risky unless you own the repository", r.Repo)
-			}
-		}
-
-		for _, r := range *scripts {
-			if !strings.Contains(strings.ToLower(r.Repo), stack.DefaultTrustedRepoBase) {
-				log.Warnf("You are using an untrusted repository (%v) for scripts - this is risky unless you own the repository", r.Repo)
-			}
-		}
-
-		for _, r := range *prebuilts {
-			if !strings.Contains(strings.ToLower(r.Repo), stack.DefaultTrustedRepoBase) {
-				log.Warnf("You are using an untrusted repository (%v) for prebuilts - this is risky unless you own the repository", r.Repo)
-			}
-		}
 
 		if !skipDeploy {
 			prompt := promptui.Prompt{
@@ -184,6 +158,7 @@ var deployCmd = &cobra.Command{
 		}
 
 		s, err := stack.New(&stack.Config{
+			Version:                version,
 			Name:                   viper.GetString("name"),
 			Region:                 viper.GetString("region"),
 			Device:                 viper.GetString("device"),
@@ -195,14 +170,10 @@ var deployCmd = &cobra.Command{
 			SkipPrice:              viper.GetString("skip-price"),
 			MaxPrice:               viper.GetString("max-price"),
 			Schedule:               viper.GetString("schedule"),
+			ChromiumBuildDisabled:  viper.GetBool("chromium-build-disabled"),
 			ChromiumVersion:        viper.GetString("chromium-version"),
-			HostsFile:              viper.GetString("hosts-file"),
-			CustomPatches:          patches,
-			CustomScripts:          scripts,
-			CustomPrebuilts:        prebuilts,
-			CustomManifestRemotes:  manifestRemotes,
-			CustomManifestProjects: manifestProjects,
-			Version:                version,
+			CoreConfigRepo:         viper.GetString("core-config-repo"),
+			CustomConfigRepo:       viper.GetString("custom-config-repo"),
 		}, buildScript, buildTemplate, lambdaTemplate, terraformTemplate)
 		if err != nil {
 			log.Fatal(err)

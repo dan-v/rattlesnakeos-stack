@@ -20,6 +20,7 @@ REGION = '<% .Config.Region %>'
 REGIONS = '<% .Config.InstanceRegions %>'
 REGION_AMIS = json.loads('<% .RegionAMIs %>')
 AMI_OVERRIDE = '<% .Config.AMI %>'
+CHROMIUM_BUILD_DISABLED = '<% .Config.ChromiumBuildDisabled %>'
 CHROMIUM_PINNED_VERSION = '<% .Config.ChromiumVersion %>'
 LATEST_JSON = "https://raw.githubusercontent.com/RattlesnakeOS/latest/11.0/latest.json"
 STACK_URL_LATEST = "https://api.github.com/repos/dan-v/rattlesnakeos-stack/releases/latest"
@@ -84,7 +85,7 @@ def lambda_handler(event, context):
 
     # userdata to deploy with spot instance
     copy_build_command = f"sudo -u ubuntu aws s3 --region {REGION} cp {SRC_PATH} /home/ubuntu/build.sh"
-    build_args_command = f"echo \\\"{aosp_build_id} {aosp_tag} {chromium_version}\\\" > /home/ubuntu/build_args"
+    build_args_command = f"echo \\\"./build.sh {aosp_build_id} {aosp_tag} {chromium_version}\\\" > /home/ubuntu/build_cmd"
     build_start_command = f"sudo -u ubuntu bash /home/ubuntu/build.sh \\\"{aosp_build_id}\\\" \\\"{aosp_tag}\\\" \\\"{chromium_version}\\\""
     userdata = base64.b64encode(f"""
 #cloud-config
@@ -126,7 +127,7 @@ runcmd:
                         'DeviceName': '/dev/sda1',
                         'Ebs': {
                             'DeleteOnTermination': True,
-                            'VolumeSize': 250,
+                            'VolumeSize': 300,
                             'VolumeType': 'gp3'
                         },
                     },
@@ -169,8 +170,7 @@ def is_build_required(latest_stack_version, aosp_build_id, chromium_version):
     # STACK
     existing_stack_version = ""
     try:
-        existing_stack_version = s3.Object(RELEASE_BUCKET, "rattlesnakeos-stack/revision").get()[
-            'Body'].read().decode().strip("\n")
+        existing_stack_version = s3.Object(RELEASE_BUCKET, "rattlesnakeos-stack/revision").get()['Body'].read().decode().strip("\n")
     except Exception as e:
         print("failed to get existing_stack_version: {}".format(e))
         pass
@@ -195,34 +195,34 @@ def is_build_required(latest_stack_version, aosp_build_id, chromium_version):
         build_reasons.append("AOSP build id {} != {}".format(existing_aosp_build_id, aosp_build_id))
 
     # CHROMIUM
-    existing_chromium_version = ""
-    try:
-        existing_chromium_version = s3.Object(RELEASE_BUCKET, "chromium/revision").get()['Body'].read().decode().strip(
-            "\n")
-        print("existing_chromium_version='{}'".format(existing_chromium_version))
-    except Exception as e:
-        print("failed to get existing_chromium_version: {}".format(e))
-        pass
-    chromium_included = False
-    try:
-        chromium_included_text = s3.Object(RELEASE_BUCKET, "chromium/included").get()['Body'].read().decode().strip(
-            "\n")
-        if chromium_included_text == "yes":
-            chromium_included = True
-    except:
-        print("failed to get chromium_included: {}".format(e))
-        pass
+    if CHROMIUM_BUILD_DISABLED == "false":
+        existing_chromium_version = ""
+        try:
+            existing_chromium_version = s3.Object(RELEASE_BUCKET, "chromium/revision").get()['Body'].read().decode().strip("\n")
+            print("existing_chromium_version='{}'".format(existing_chromium_version))
+        except Exception as e:
+            print("failed to get existing_chromium_version: {}".format(e))
+            pass
 
-    if existing_chromium_version == chromium_version and chromium_included:
-        print("chromium build {} is up to date".format(existing_chromium_version))
-    else:
-        needs_update = True
-        if existing_chromium_version == chromium_version:
-            print("chromium {} was built but not installed".format(existing_chromium_version))
-            build_reasons.append("Chromium version {} built but not installed".format(existing_chromium_version))
+        chromium_included = False
+        try:
+            chromium_included_text = s3.Object(RELEASE_BUCKET, "chromium/included").get()['Body'].read().decode().strip("\n")
+            if chromium_included_text == "yes":
+                chromium_included = True
+        except Exception as e:
+            print("failed to get chromium_included: {}".format(e))
+            pass
+
+        if existing_chromium_version == chromium_version and chromium_included:
+            print("chromium build {} is up to date".format(existing_chromium_version))
         else:
-            print("chromium needs to be updated to {}".format(chromium_version))
-            build_reasons.append("Chromium version {} != {}".format(existing_chromium_version, chromium_version))
+            needs_update = True
+            if existing_chromium_version == chromium_version:
+                print("chromium {} was built but not installed".format(existing_chromium_version))
+                build_reasons.append("Chromium version {} built but not installed".format(existing_chromium_version))
+            else:
+                print("chromium needs to be updated to {}".format(chromium_version))
+                build_reasons.append("Chromium version {} != {}".format(existing_chromium_version, chromium_version))
 
     return needs_update, build_reasons
 

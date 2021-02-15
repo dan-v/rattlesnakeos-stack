@@ -1,32 +1,39 @@
-ANDROID_VERSION="11.0"
+########################################
+######## STACK CONFIG VARS #############
+########################################
 DEVICE="<% .Device %>"
 DEVICE_FRIENDLY="<% .DeviceDetails.Friendly %>"
 DEVICE_FAMILY="<% .DeviceDetails.Family %>"
 DEVICE_COMMON="<% .DeviceDetails.Common %>"
-AVB_MODE="<% .DeviceDetails.AVBMode %>"
+DEVICE_AVB_MODE="<% .DeviceDetails.AVBMode %>"
 EXTRA_OTA=<% .DeviceDetails.ExtraOTA %>
-REGION="<% .Region %>"
 STACK_NAME="<% .Name %>"
 STACK_VERSION="<% .Version %>"
-BUILD_TYPE="user"
-BUILD_CHANNEL="stable"
-HOSTS_FILE="<% .HostsFile %>"
+CHROMIUM_BUILD_DISABLED="<% .ChromiumBuildDisabled %>"
+CORE_CONFIG_REPO="<% .CoreConfigRepo %>"
+CUSTOM_CONFIG_REPO="<% .CustomConfigRepo %>"
+
+########################################
+###### AWS SPECIFIC VARS AND FUNCS #####
+########################################
+REGION="<% .Region %>"
 AWS_KEYS_BUCKET="${STACK_NAME}-keys"
 AWS_RELEASE_BUCKET="${STACK_NAME}-release"
-MANIFEST_URL="https://android.googlesource.com/platform/manifest"
-CORE_URL="https://github.com/rattlesnakeos/core.git"
-CUSTOM_URL="https://github.com/dan-v/custom.git"
-BUILD_TARGET="release aosp_${DEVICE} ${BUILD_TYPE}"
 RELEASE_URL="https://${AWS_RELEASE_BUCKET}.s3.amazonaws.com"
-RELEASE_CHANNEL="${DEVICE}-${BUILD_CHANNEL}"
-ROOT_DIR="${HOME}"
-AOSP_BUILD_DIR="${ROOT_DIR}/aosp"
-CHROMIUM_BUILD_DIR="${ROOT_DIR}/chromium"
-CORE_DIR="${ROOT_DIR}/core"
-CUSTOM_DIR="${ROOT_DIR}/custom"
-KEYS_DIR="${ROOT_DIR}/keys"
-MISC_DIR="${ROOT_DIR}/misc"
-RELEASE_TOOLS_DIR="${MISC_DIR}/releasetools"
+
+import_keys() {
+  log_header "${FUNCNAME[0]}"
+
+  if [ "$(aws s3 ls "s3://${AWS_KEYS_BUCKET}/${DEVICE}" | wc -l)" == '0' ]; then
+    log "No keys were found - generating keys"
+    gen_keys
+    log "Syncing keys to S3 s3://${AWS_KEYS_BUCKET}"
+    aws s3 sync "${KEYS_DIR}" "s3://${AWS_KEYS_BUCKET}"
+  else
+    log "Keys already exist for ${DEVICE} - syncing them from S3"
+    aws s3 sync "s3://${AWS_KEYS_BUCKET}" "${KEYS_DIR}"
+  fi
+}
 
 notify() {
   log_header "${FUNCNAME[0]}"
@@ -42,43 +49,21 @@ notify() {
   INSTANCE_IP=$(curl -s http://169.254.169.254/latest/meta-data/public-ipv4)
   ELAPSED="$((SECONDS / 3600))hrs $(((SECONDS / 60) % 60))min $((SECONDS % 60))sec"
   aws sns publish --region ${REGION} --topic-arn "${AWS_SNS_ARN}" \
-    --message="$(printf "$1\n  Device: %s\n  Stack Name: %s\n  Stack Version: %s\n  Stack Region: %s\n  Release Channel: %s\n  Instance Type: %s\n  Instance Region: %s\n  Instance IP: %s\n  Elapsed Time: %s\n  AOSP Build ID: %s\n  AOSP Tag: %s\n  Chromium Version: %s\n %s" \
-      "${DEVICE}" "${STACK_NAME}" "${STACK_VERSION}" "${REGION}" "${RELEASE_CHANNEL}" "${INSTANCE_TYPE}" "${INSTANCE_REGION}" "${INSTANCE_IP}" "${ELAPSED}" "${AOSP_BUILD_ID}" "${AOSP_TAG}" "${CHROMIUM_VERSION}" "${LOGOUTPUT}")" || true
+    --message="$(printf "$1\n  Device: %s\n  Stack Name: %s\n  Stack Version: %s\n  Stack Region: %s\n  Release Channel: %s\n  Instance Type: %s\n  Instance Region: %s\n  Instance IP: %s\n  Elapsed Time: %s\n  AOSP Build ID: %s\n  AOSP Tag: %s\n  %s" \
+      "${DEVICE}" "${STACK_NAME}" "${STACK_VERSION}" "${REGION}" "${RELEASE_CHANNEL}" "${INSTANCE_TYPE}" "${INSTANCE_REGION}" "${INSTANCE_IP}" "${ELAPSED}" "${AOSP_BUILD_ID}" "${AOSP_TAG}" "${LOGOUTPUT}")" || true
 }
 
-logging() {
-  log_header "${FUNCNAME[0]}"
-
+cleanup() {
+  rv=$?
   df -h
   du -chs "${AOSP_BUILD_DIR}" || true
   uptime
   AWS_LOGS_BUCKET="${STACK_NAME}-logs"
   aws s3 cp /var/log/cloud-init-output.log "s3://${AWS_LOGS_BUCKET}/${DEVICE}/$(date +%s)" || true
-}
-
-import_keys() {
-  log_header "${FUNCNAME[0]}"
-
-  if [ "$(aws s3 ls "s3://${AWS_KEYS_BUCKET}/${DEVICE}" | wc -l)" == '0' ]; then
-    log "No keys were found - generating keys"
-    gen_keys
-    log "Syncing keys to S3 s3://${AWS_KEYS_BUCKET}"
-    aws s3 sync "${KEYS_DIR}" "s3://${AWS_KEYS_BUCKET}"
-  else
-    log "Keys already exist for ${DEVICE} - syncing them from S3"
-    aws s3 sync "s3://${AWS_KEYS_BUCKET}" "${KEYS_DIR}"
+  if [ $rv -ne 0 ]; then
+    notify "RattlesnakeOS Build FAILED" 1
   fi
-
-  # handle migration with chromium.keystore
-  pushd "${KEYS_DIR}/${DEVICE}"
-  if [ ! -f "${KEYS_DIR}/${DEVICE}/chromium.keystore" ]; then
-    log "Did not find chromium.keystore - generating"
-	  keytool -genkey -v -keystore chromium.keystore -storetype pkcs12 -alias chromium -keyalg RSA -keysize 4096 \
-        -sigalg SHA512withRSA -validity 10000 -dname "cn=RattlesnakeOS" -storepass chromium
-    log "Uploading new chromium.keystore to s3://${AWS_KEYS_BUCKET}"
-    aws s3 sync "${KEYS_DIR}" "s3://${AWS_KEYS_BUCKET}"
-  fi
-  popd
+  sudo shutdown -h now
 }
 
 get_current_metadata() {
