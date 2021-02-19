@@ -5,8 +5,11 @@ import json
 from urllib.request import urlopen
 from datetime import datetime, timedelta
 
+STACK_VERSION = '<% .Config.Version %>'
 NAME = '<% .Config.Name %>'
-SRC_PATH = 's3://<% .Config.Name %>-script/build.sh'
+LATEST_JSON = "<% .Config.LatestURL %>"
+STACK_URL_LATEST = "<% .RattlesnakeOSStackReleasesURL %>"
+BUILD_SCRIPT_S3_LOCATION = 's3://<% .Config.Name %>-script/build.sh'
 RELEASE_BUCKET = '<% .Config.Name %>-release'
 FLEET_ROLE = 'arn:aws:iam::{0}:role/aws-service-role/spotfleet.amazonaws.com/AWSServiceRoleForEC2SpotFleet'
 IAM_PROFILE = 'arn:aws:iam::{0}:instance-profile/<% .Config.Name %>-ec2'
@@ -16,15 +19,12 @@ DEVICE = '<% .Config.Device %>'
 SSH_KEY_NAME = '<% .Config.SSHKey %>'
 MAX_PRICE = '<% .Config.MaxPrice %>'
 SKIP_PRICE = '<% .Config.SkipPrice %>'
-REGION = '<% .Config.Region %>'
-REGIONS = '<% .Config.InstanceRegions %>'
+STACK_REGION = '<% .Config.Region %>'
+INSTANCE_REGIONS = '<% .Config.InstanceRegions %>'
 REGION_AMIS = json.loads('<% .RegionAMIs %>')
 AMI_OVERRIDE = '<% .Config.AMI %>'
 CHROMIUM_BUILD_DISABLED = '<% .Config.ChromiumBuildDisabled %>'
 CHROMIUM_PINNED_VERSION = '<% .Config.ChromiumVersion %>'
-LATEST_JSON = "https://raw.githubusercontent.com/RattlesnakeOS/latest/11.0/latest.json"
-STACK_URL_LATEST = "https://api.github.com/repos/dan-v/rattlesnakeos-stack/releases/latest"
-STACK_VERSION = '<% .Config.Version %>'
 
 
 def lambda_handler(event, context):
@@ -84,7 +84,7 @@ def lambda_handler(event, context):
         'SubnetId']
 
     # userdata to deploy with spot instance
-    copy_build_command = f"sudo -u ubuntu aws s3 --region {REGION} cp {SRC_PATH} /home/ubuntu/build.sh"
+    copy_build_command = f"sudo -u ubuntu aws s3 --region {STACK_REGION} cp {BUILD_SCRIPT_S3_LOCATION} /home/ubuntu/build.sh"
     build_args_command = f"echo \\\"./build.sh {aosp_build_id} {aosp_tag} {chromium_version}\\\" > /home/ubuntu/build_cmd"
     build_start_command = f"sudo -u ubuntu bash /home/ubuntu/build.sh \\\"{aosp_build_id}\\\" \\\"{aosp_tag}\\\" \\\"{chromium_version}\\\""
     userdata = base64.b64encode(f"""
@@ -157,7 +157,7 @@ runcmd:
         raise
 
     subject = "RattlesnakeOS Spot Instance REQUESTED"
-    message = f"Successfully requested a spot instance.\n\n Stack Name: {NAME}\n Device: {DEVICE}\n Instance Type: {INSTANCE_TYPE}\n Cheapest Region: {cheapest_region}\n Cheapest Hourly Price: ${cheapest_price}\n Build Reason: {build_reasons}"
+    message = f"Successfully requested a spot instance.\n\n Stack Name: {NAME}\n Device: {DEVICE}\n Instance Type: {INSTANCE_TYPE}\n Cheapest Region: {cheapest_region}\n Cheapest Hourly Price: ${cheapest_price}\n Build Reason: {build_reasons} "
     send_sns_message(subject, message)
     return message.replace('\n', ' ')
 
@@ -226,11 +226,12 @@ def is_build_required(latest_stack_version, aosp_build_id, chromium_version):
 
     return needs_update, build_reasons
 
+
 def find_cheapest_region():
     cheapest_price = 0
     cheapest_region = ""
     cheapest_az = ""
-    for region in REGIONS.split(","):
+    for region in INSTANCE_REGIONS.split(","):
         ec2_client = boto3.client('ec2', region_name=region)
         spot_price_dict = ec2_client.describe_spot_price_history(
             StartTime=datetime.now() - timedelta(minutes=1),
@@ -258,6 +259,7 @@ def find_cheapest_region():
                             cheapest_az = az
                     print("{} {}".format(az, price))
     return cheapest_price, cheapest_region, cheapest_az
+
 
 def send_sns_message(subject, message):
     account_id = boto3.client('sts').get_caller_identity().get('Account')

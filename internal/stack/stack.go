@@ -24,8 +24,10 @@ import (
 )
 
 const (
-	MinimumChromiumVersion = 86
-	DefaultCoreConfigRepo = "https://github.com/rattlesnakeos/core"
+	MinimumChromiumVersion        = 86
+	DefaultCoreConfigRepo         = "https://github.com/rattlesnakeos/core"
+	DefaultLatestURL              = "https://raw.githubusercontent.com/RattlesnakeOS/latest/11.0/latest.json"
+	RattlesnakeOSStackReleasesURL = "https://api.github.com/repos/dan-v/rattlesnakeos-stack/releases/latest"
 )
 
 const (
@@ -37,23 +39,25 @@ const (
 )
 
 type Config struct {
-	Version                string
-	Name                   string
-	Region                 string
-	Device                 string
-	DeviceDetails          devices.Device
-	Email                  string
-	InstanceType           string
-	InstanceRegions        string
-	SkipPrice              string
-	MaxPrice               string
-	SSHKey                 string
-	Schedule               string
-	ChromiumBuildDisabled   bool
-	ChromiumVersion        string
-	AMI                    string
-	CoreConfigRepo         string
-	CustomConfigRepo       string
+	Version               string
+	Name                  string
+	Region                string
+	Device                string
+	DeviceDetails         devices.Device
+	Email                 string
+	InstanceType          string
+	InstanceRegions       string
+	SkipPrice             string
+	MaxPrice              string
+	SSHKey                string
+	Schedule              string
+	ChromiumBuildDisabled bool
+	ChromiumVersion       string
+	AMI                   string
+	CoreConfigRepo        string
+	CustomConfigRepo      string
+	LatestURL             string
+	Cloud                 string
 }
 
 type Stack struct {
@@ -94,13 +98,15 @@ func New(config *Config, buildScript, buildScriptVars, lambdaTemplate, terraform
 	}
 
 	// render lambda
-	regionAMIs, _ := json.Marshal(stackaws.RegionAMIs)
+	regionAMIs, _ := json.Marshal(stackaws.GetAMIs())
 	lambdaConfig := struct {
-		Config     Config
-		RegionAMIs string
+		Config                        Config
+		RegionAMIs                    string
+		RattlesnakeOSStackReleasesURL string
 	}{
 		*config,
 		string(regionAMIs),
+		RattlesnakeOSStackReleasesURL,
 	}
 	renderedLambdaFunction, err := renderTemplate(lambdaTemplate, lambdaConfig)
 	if err != nil {

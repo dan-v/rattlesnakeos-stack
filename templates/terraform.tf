@@ -179,7 +179,7 @@ resource "aws_iam_instance_profile" "rattlesnake_ec2_role" {
 }
 
 resource "aws_iam_role" "rattlesnake_lambda_role" {
-  name = "${var.name}-lambda"
+  name               = "${var.name}-lambda"
   assume_role_policy = <<EOF
 {
 "Version": "2012-10-17",
@@ -245,9 +245,9 @@ EOF
 # S3
 ###################
 resource "aws_s3_bucket" "rattlesnake_s3_keys" {
-  bucket = "${var.name}-keys"
+  bucket        = "${var.name}-keys"
   force_destroy = true
-  acl    = "private"
+  acl           = "private"
 
   server_side_encryption_configuration {
     rule {
@@ -257,10 +257,11 @@ resource "aws_s3_bucket" "rattlesnake_s3_keys" {
     }
   }
 }
+
 resource "aws_s3_bucket" "rattlesnake_s3_keys_enc" {
-  bucket = "${var.name}-keys-encrypted"
+  bucket        = "${var.name}-keys-encrypted"
   force_destroy = true
-  acl    = "private"
+  acl           = "private"
 
   server_side_encryption_configuration {
     rule {
@@ -270,10 +271,11 @@ resource "aws_s3_bucket" "rattlesnake_s3_keys_enc" {
     }
   }
 }
+
 resource "aws_s3_bucket" "rattlesnake_s3_logs" {
-  bucket = "${var.name}-logs"
+  bucket        = "${var.name}-logs"
   force_destroy = true
-  acl    = "private"
+  acl           = "private"
 
   server_side_encryption_configuration {
     rule {
@@ -283,10 +285,11 @@ resource "aws_s3_bucket" "rattlesnake_s3_logs" {
     }
   }
 }
+
 resource "aws_s3_bucket" "rattlesnake_s3_release" {
-  bucket = "${var.name}-release"
+  bucket        = "${var.name}-release"
   force_destroy = true
-  acl    = "private"
+  acl           = "private"
 
   server_side_encryption_configuration {
     rule {
@@ -296,10 +299,11 @@ resource "aws_s3_bucket" "rattlesnake_s3_release" {
     }
   }
 }
+
 resource "aws_s3_bucket" "rattlesnake_s3_script" {
-  bucket = "${var.name}-script"
+  bucket        = "${var.name}-script"
   force_destroy = true
-  acl    = "private"
+  acl           = "private"
 
   server_side_encryption_configuration {
     rule {
@@ -343,8 +347,8 @@ resource "aws_lambda_function" "rattlesnake_lambda_build" {
 # Cloudwatch Event
 ###################
 resource "aws_cloudwatch_event_rule" "build_schedule" {
-  name = "${var.name}-build-schedule"
-  description = "RattlesnakeOS build"
+  name                = "${var.name}-build-schedule"
+  description         = "RattlesnakeOS build"
   schedule_expression = "<% .Config.Schedule %>"
 }
 

@@ -68,7 +68,7 @@ var configCmd = &cobra.Command{
 		viper.Set("name", result)
 
 		color.Cyan(fmt.Sprintf("Stack region is the AWS region where you would like to deploy your stack. Valid options: %v\n",
-			strings.Join(aws.SupportedRegions(), ", ")))
+			strings.Join(aws.GetSupportedRegions(), ", ")))
 		validate = func(input string) error {
 			if len(input) < 1 {
 				return errors.New("Stack region is too short")

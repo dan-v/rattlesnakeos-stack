@@ -6,24 +6,27 @@ DEVICE_FRIENDLY="<% .DeviceDetails.Friendly %>"
 DEVICE_FAMILY="<% .DeviceDetails.Family %>"
 DEVICE_COMMON="<% .DeviceDetails.Common %>"
 DEVICE_AVB_MODE="<% .DeviceDetails.AVBMode %>"
-EXTRA_OTA=<% .DeviceDetails.ExtraOTA %>
+DEVICE_EXTRA_OTA=<% .DeviceDetails.ExtraOTA %>
 STACK_NAME="<% .Name %>"
 STACK_VERSION="<% .Version %>"
 CHROMIUM_BUILD_DISABLED="<% .ChromiumBuildDisabled %>"
 CORE_CONFIG_REPO="<% .CoreConfigRepo %>"
 CUSTOM_CONFIG_REPO="<% .CustomConfigRepo %>"
 
-########################################
-###### AWS SPECIFIC VARS AND FUNCS #####
-########################################
+##########################################
+###### CLOUD SPECIFIC VARS AND FUNCS #####
+##########################################
+<% if eq .Cloud "aws" -%>
 REGION="<% .Region %>"
 AWS_KEYS_BUCKET="${STACK_NAME}-keys"
 AWS_RELEASE_BUCKET="${STACK_NAME}-release"
 RELEASE_URL="https://${AWS_RELEASE_BUCKET}.s3.amazonaws.com"
+<%- end %>
 
 import_keys() {
   log_header "${FUNCNAME[0]}"
 
+  <% if eq .Cloud "aws" -%>
   if [ "$(aws s3 ls "s3://${AWS_KEYS_BUCKET}/${DEVICE}" | wc -l)" == '0' ]; then
     log "No keys were found - generating keys"
     gen_keys
@@ -33,11 +36,15 @@ import_keys() {
     log "Keys already exist for ${DEVICE} - syncing them from S3"
     aws s3 sync "s3://${AWS_KEYS_BUCKET}" "${KEYS_DIR}"
   fi
+  <%- else %>
+  echo "todo"
+  <%- end %>
 }
 
 notify() {
   log_header "${FUNCNAME[0]}"
 
+  <% if eq .Cloud "aws" -%>
   LOGOUTPUT=
   if [ -n "$2" ]; then
     LOGOUTPUT=$(tail -c 20000 /var/log/cloud-init-output.log)
@@ -51,9 +58,13 @@ notify() {
   aws sns publish --region ${REGION} --topic-arn "${AWS_SNS_ARN}" \
     --message="$(printf "$1\n  Device: %s\n  Stack Name: %s\n  Stack Version: %s\n  Stack Region: %s\n  Release Channel: %s\n  Instance Type: %s\n  Instance Region: %s\n  Instance IP: %s\n  Elapsed Time: %s\n  AOSP Build ID: %s\n  AOSP Tag: %s\n  %s" \
       "${DEVICE}" "${STACK_NAME}" "${STACK_VERSION}" "${REGION}" "${RELEASE_CHANNEL}" "${INSTANCE_TYPE}" "${INSTANCE_REGION}" "${INSTANCE_IP}" "${ELAPSED}" "${AOSP_BUILD_ID}" "${AOSP_TAG}" "${LOGOUTPUT}")" || true
+  <%- else %>
+  echo "todo"
+  <%- end %>
 }
 
 cleanup() {
+  <% if eq .Cloud "aws" -%>
   rv=$?
   df -h
   du -chs "${AOSP_BUILD_DIR}" || true
@@ -64,43 +75,66 @@ cleanup() {
     notify "RattlesnakeOS Build FAILED" 1
   fi
   sudo shutdown -h now
+  <%- else %>
+  echo "todo"
+  <%- end %>
 }
 
 get_current_metadata() {
-  local metadata_location="${1}"
-  local current=$(aws s3 cp "s3://${AWS_RELEASE_BUCKET}/${1}" - 2>/dev/null || true)
-  echo "${current}"
+  <% if eq .Cloud "aws" -%>
+    local metadata_location="${1}"
+    local current=$(aws s3 cp "s3://${AWS_RELEASE_BUCKET}/${1}" - 2>/dev/null || true)
+    echo "${current}"
+  <%- else %>
+  echo "todo"
+  <%- end %>
 }
 
 set_current_metadata() {
   local metadata_location="${1}"
   local metadata_value="${2}"
   local public="${3}"
+  <% if eq .Cloud "aws" -%>
   if [ -z "${public}" ]; then
     echo "${metadata_value}" | aws s3 cp - "s3://${AWS_RELEASE_BUCKET}/${metadata_location}"
   else
     echo "${metadata_value}" | aws s3 cp - "s3://${AWS_RELEASE_BUCKET}/${metadata_location}" --acl public-read
   fi
+  <%- else %>
+  echo "todo"
+  <%- end %>
 }
 
 upload_build_artifact() {
   local src_file="${1}"
   local dest_file="${2}"
   local public="${3}"
+  <% if eq .Cloud "aws" -%>
   if [ -z "${public}" ]; then
     retry aws s3 cp "${src_file}" "s3://${AWS_RELEASE_BUCKET}/${dest_file}"
   else
     retry aws s3 cp "${src_file}" "s3://${AWS_RELEASE_BUCKET}/${dest_file}" --acl public-read
   fi
+  <%- else %>
+  echo "todo"
+  <%- end %>
 }
 
 download_build_artifact() {
   local src_file="${1}"
   local dest_file="${2}"
+  <% if eq .Cloud "aws" -%>
   retry aws s3 cp "s3://${AWS_RELEASE_BUCKET}/${src_file}" "${dest_file}"
+  <%- else %>
+  echo "todo"
+  <%- end %>
 }
 
 delete_build_artifact() {
   local dest_file="${1}"
+  <% if eq .Cloud "aws" -%>
   aws s3 rm "s3://${AWS_RELEASE_BUCKET}/${dest_file}" || true
+  <%- else %>
+  echo "todo"
+  <%- end %>
 }

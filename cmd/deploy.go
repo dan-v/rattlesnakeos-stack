@@ -20,10 +20,12 @@ import (
 var name, region, email, device, sshKey, maxPrice, skipPrice, schedule string
 var instanceType, instanceRegions, chromiumVersion string
 var skipDeploy, chromiumBuildDisabled bool
-var supportedDevicesFriendly = devices.SupportedDevices.GetDeviceFriendlyNames()
-var supportedDevicesCodename = devices.SupportedDevices.GetDeviceCodeNames()
+var supportedDevicesFriendly = devices.GetDeviceFriendlyNames()
+var supportedDevicesCodename = devices.GetDeviceCodeNames()
 var supportDevicesOutput string
 var coreConfigRepo, customConfigRepo string
+var cloud string
+var latestURL string
 
 func init() {
 	rootCmd.AddCommand(deployCmd)
@@ -90,6 +92,12 @@ func init() {
 
 	flags.StringVar(&customConfigRepo, "custom-config-repo", "", "a specially formatted repo that contains customizations on top of core.")
 	_ = viper.BindPFlag("custom-config-repo", flags.Lookup("custom-config-repo"))
+
+	flags.StringVar(&latestURL, "latest-url", stack.DefaultLatestURL, "url that is used to check versions of aosp/chromium and whether build is required.")
+	_ = viper.BindPFlag("latest-url", flags.Lookup("latest-url"))
+
+	flags.StringVar(&cloud, "cloud", "aws", "cloud (aws only right now)")
+	_ = viper.BindPFlag("cloud", flags.Lookup("cloud"))
 
 	flags.BoolVar(&skipDeploy, "skip-deploy", false, "only generate the output, but do not deploy with terraform.")
 }
@@ -174,6 +182,8 @@ var deployCmd = &cobra.Command{
 			ChromiumVersion:        viper.GetString("chromium-version"),
 			CoreConfigRepo:         viper.GetString("core-config-repo"),
 			CustomConfigRepo:       viper.GetString("custom-config-repo"),
+			LatestURL:              viper.GetString("latest-url"),
+			Cloud: 					viper.GetString("cloud"),
 		}, buildScript, buildTemplate, lambdaTemplate, terraformTemplate)
 		if err != nil {
 			log.Fatal(err)

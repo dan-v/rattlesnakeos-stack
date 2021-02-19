@@ -7,7 +7,7 @@ about: Create a report to help us improve
 ### Prerequisites
 
 * [ ] I am running the [latest version](https://github.com/dan-v/rattlesnakeos-stack/releases) of rattlesnakeos-stack
-* [ ] I am able to reproduce this issue without any advanced customization options
+* [ ] I am able to reproduce this issue without any customization options
 
 ### Description
 
@@ -45,7 +45,7 @@ ssh-key = "rattlesnakeos"
 e.g. T-mobile, etc
 
 ### Email Notification Output
-Should look something like this. You can mask stack name from here and you may want to verify contents of log output before pasting.
+Should look something like this. You can mask stack name from here, and you may want to verify contents of log output before pasting.
 ```
 RattlesnakeOS build FAILED
  Device: crosshatch

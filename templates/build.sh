@@ -24,6 +24,10 @@ KEYS_DIR="${ROOT_DIR}/keys"
 MISC_DIR="${ROOT_DIR}/misc"
 RELEASE_TOOLS_DIR="${MISC_DIR}/releasetools"
 PRODUCT_MAKEFILE="${AOSP_BUILD_DIR}/device/google/${DEVICE_FAMILY}/aosp_${DEVICE}.mk"
+CORE_VENDOR_BASEDIR="${AOSP_BUILD_DIR}/vendor/core"
+CORE_VENDOR_MAKEFILE="${CORE_VENDOR_BASEDIR}/vendor/config/main.mk"
+CUSTOM_VENDOR_BASEDIR="${AOSP_BUILD_DIR}/vendor/custom"
+CUSTOM_VENDOR_MAKEFILE="${CUSTOM_VENDOR_BASEDIR}/vendor/config/main.mk"
 
 full_run() {
   log_header "${FUNCNAME[0]}"
@@ -49,19 +53,14 @@ setup_env() {
 
   # install required packages
   sudo apt-get update
-  sudo DEBIAN_FRONTEND=noninteractive apt-get -y install python2 python3 gperf jq default-jdk git-core gnupg \
+  sudo DEBIAN_FRONTEND=noninteractive apt-get -y install python python2 python3 gperf jq default-jdk git-core gnupg \
       flex bison build-essential zip curl zlib1g-dev gcc-multilib g++-multilib libc6-dev-i386 lib32ncurses5-dev \
       x11proto-core-dev libx11-dev lib32z-dev ccache libgl1-mesa-dev libxml2-utils xsltproc unzip liblz4-tool \
-      libncurses5
+      libncurses5 wget parallel rsync python-protobuf python3-protobuf python3-pip
 
   retry curl --fail -s https://storage.googleapis.com/git-repo-downloads/repo > /tmp/repo
   chmod +x /tmp/repo
   sudo mv /tmp/repo /usr/local/bin/
-
-  # still some scripts that expect python2 as default
-  sudo update-alternatives --install /usr/bin/python python /usr/bin/python2 1 || true
-  sudo update-alternatives --install /usr/bin/python python /usr/bin/python3 2 || true
-  sudo update-alternatives --config python <<< 1
 
   # setup git
   git config --get --global user.name || git config --global user.name 'aosp'
@@ -98,7 +97,7 @@ aosp_repo_init() {
   run_hook_if_exists "aosp_repo_init_pre"
 
   MANIFEST_URL="https://android.googlesource.com/platform/manifest"
-  retry repo init --manifest-url "${MANIFEST_URL}" --manifest-branch "${AOSP_TAG}" --depth 1 || true
+  retry repo init --manifest-url "${MANIFEST_URL}" --manifest-branch "${AOSP_TAG}" --depth 1
 
   run_hook_if_exists "aosp_repo_init_post"
 }
@@ -109,6 +108,7 @@ aosp_local_repo_additions() {
 
   run_hook_if_exists "aosp_local_repo_additions_pre"
 
+  rm -rf "${AOSP_BUILD_DIR}/.repo/local_manifests"
   mkdir -p "${AOSP_BUILD_DIR}/.repo/local_manifests"
   cp -f "${CORE_DIR}"/local_manifests/*.xml "${AOSP_BUILD_DIR}/.repo/local_manifests"
 
@@ -133,9 +133,13 @@ aosp_repo_sync() {
 
   run_hook_if_exists "aosp_repo_sync_pre"
 
-  # sync with retries
+  if [ "$(ls -l "${AOSP_BUILD_DIR}" | wc -l)" -gt 0 ]; then
+    log "Running git reset and clean as environment appears to already have been synced previously"
+    repo forall -c 'git reset --hard ; git clean --force -dx'
+  fi
+
   for i in {1..10}; do
-    log "aosp repo sync attempt ${i}/10"
+    log "Running aosp repo sync attempt ${i}/10"
     repo sync -c --no-tags --no-clone-bundle --jobs 32 && break
   done
 
@@ -146,9 +150,16 @@ setup_vendor() {
   log_header "${FUNCNAME[0]}"
   run_hook_if_exists "setup_vendor_pre"
 
-  # new dependency to extract ota partitions
-  sudo DEBIAN_FRONTEND=noninteractive apt-get -y install python-protobuf python3-protobuf python3-pip
-  pip3 install --user protobuf -U
+  # skip if already downloaded
+  current_vendor_build_id=""
+  vendor_build_id_file="${AOSP_BUILD_DIR}/vendor/google_devices/${DEVICE}/build_id.txt"
+  if [ -f "${vendor_build_id_file}" ]; then
+    current_vendor_build_id=$(cat "${vendor_build_id_file}")
+  fi
+  if [ "${current_vendor_build_id}" == "${AOSP_BUILD_ID}" ]; then
+    log "Skipping vendor download as ${AOSP_BUILD_ID} already exists at ${vendor_build_id_file}"
+    return
+  fi
 
   # get vendor files (with timeout)
   timeout 30m "${AOSP_BUILD_DIR}/vendor/android-prepare-vendor/execute-all.sh" --debugfs --yes --device "${DEVICE}" \
@@ -175,24 +186,25 @@ setup_vendor() {
 insert_vendor_includes() {
   log_header "${FUNCNAME[0]}"
 
-  core_vendor_name="core"
-  if ! grep -q "vendor/${core_vendor_name}/vendor/config/main.mk" "${PRODUCT_MAKEFILE}"; then
-    sed -i "/vendor\/google_devices\/crosshatch\/proprietary\/device-vendor.mk)/a \$(call inherit-product, vendor\/${core_vendor_name}\/vendor\/config\/main.mk)" "${PRODUCT_MAKEFILE}"
+  if ! grep -q "${CORE_VENDOR_MAKEFILE}" "${PRODUCT_MAKEFILE}"; then
+    sed -i "\@vendor/google_devices/${DEVICE_FAMILY}/proprietary/device-vendor.mk)@a \$(call inherit-product, ${CORE_VENDOR_MAKEFILE})" "${PRODUCT_MAKEFILE}"
   fi
 
   if [ -n "${CUSTOM_CONFIG_REPO}" ]; then
-    custom_vendor_name="custom"
-    if ! grep -q "vendor/${custom_vendor_name}/vendor/config/main.mk" "${PRODUCT_MAKEFILE}"; then
-      sed -i "/vendor\/google_devices\/crosshatch\/proprietary\/device-vendor.mk)/a \$(call inherit-product, vendor\/${custom_vendor_name}\/vendor\/config\/main.mk)" "${PRODUCT_MAKEFILE}" || true
+    if ! grep -q "${CUSTOM_VENDOR_MAKEFILE}" "${PRODUCT_MAKEFILE}"; then
+      sed -i "\@vendor/google_devices/${DEVICE_FAMILY}/proprietary/device-vendor.mk)@a \$(call inherit-product, ${CUSTOM_VENDOR_MAKEFILE})" "${PRODUCT_MAKEFILE}"
     fi
   fi
 }
 
 env_setup_script() {
+  log_header "${FUNCNAME[0]}"
   cd "${AOSP_BUILD_DIR}"
+
   source build/envsetup.sh
   export LANG=C
   export _JAVA_OPTIONS=-XX:-UsePerfData
+  # shellcheck disable=SC2155
   export BUILD_NUMBER=$(cat out/soong/build_number.txt 2>/dev/null || date --utc +%Y.%m.%d.%H)
   log "BUILD_NUMBER=${BUILD_NUMBER}"
   export DISPLAY_BUILD_NUMBER=true
@@ -208,8 +220,8 @@ aosp_build() {
 
   if [ "${CHROMIUM_BUILD_DISABLED}" == "true" ]; then
     log "Removing TrichromeChrome and TrichromeWebView as chromium build is disabled"
-    sed -i '/PRODUCT_PACKAGES += TrichromeChrome/d' "${AOSP_BUILD_DIR}/vendor/core/vendor/config/main.mk" || true
-    sed -i '/PRODUCT_PACKAGES += TrichromeWebView/d' "${AOSP_BUILD_DIR}/vendor/core/vendor/config/main.mk" || true
+    sed -i '/PRODUCT_PACKAGES += TrichromeChrome/d' "${CORE_VENDOR_MAKEFILE}" || true
+    sed -i '/PRODUCT_PACKAGES += TrichromeWebView/d' "${CORE_VENDOR_MAKEFILE}" || true
   fi
 
   (
@@ -250,6 +262,7 @@ release() {
     DEVICE="${device}"
     PREFIX="aosp_"
     BUILD="${BUILD_NUMBER}"
+    # shellcheck disable=SC2034
     PRODUCT="${DEVICE}"
     TARGET_FILES="${DEVICE}-target_files-${BUILD}.zip"
     BOOTLOADER=$(grep -Po "require version-bootloader=\K.+" "vendor/google_devices/${DEVICE}/vendor-board-info.txt" | tr '[:upper:]' '[:lower:]')
@@ -293,7 +306,7 @@ release() {
     "${OUT}/${TARGET_FILES}"
 
     log "Running ota_from_target_files"
-    "${RELEASE_TOOLS_DIR}/releasetools/ota_from_target_files" --block -k "${KEY_DIR}/releasekey" "${EXTRA_OTA[@]}" "${OUT}/${TARGET_FILES}" \
+    "${RELEASE_TOOLS_DIR}/releasetools/ota_from_target_files" --block -k "${KEY_DIR}/releasekey" "${DEVICE_EXTRA_OTA[@]}" "${OUT}/${TARGET_FILES}" \
         "${OUT}/${DEVICE}-ota_update-${BUILD}.zip"
 
     log "Running img_from_target_files"
@@ -384,6 +397,7 @@ run_hook_if_exists() {
   if [ -n "${core_hook_file}" ]; then
     if [ -f "${core_hook_file}" ]; then
       log "Running ${core_hook_file}"
+      # shellcheck disable=SC1090
       (source "${core_hook_file}")
     fi
   fi
@@ -391,6 +405,7 @@ run_hook_if_exists() {
   if [ -n "${custom_hook_file}" ]; then
     if [ -f "${custom_hook_file}" ]; then
       log "Running ${custom_hook_file}"
+      # shellcheck disable=SC1090
       (source "${custom_hook_file}")
     fi
   fi

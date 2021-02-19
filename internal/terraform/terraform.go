@@ -18,7 +18,7 @@ import (
 )
 
 const (
-	terraformVersion = "0.11.8"
+	terraformVersion = "0.11.14"
 )
 
 var (

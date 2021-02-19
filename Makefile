@@ -12,7 +12,6 @@ ARCH := amd64
 	default \
 	clean \
 	clean-artifacts \
-	clean-vendor \
 	tools \
 	deps \
 	test \
@@ -21,14 +20,13 @@ ARCH := amd64
 	errors \
 	lint \
 	fmt \
-	env \
 	build \
 	build-all \
 	doc \
 	check \
 	version
 
-all: fmt lint vet build-all
+all: fmt lint vet shellcheck build-all
 
 help:
 	@echo 'Usage: make <OPTIONS> ... <TARGETS>'
@@ -49,25 +47,17 @@ help:
 	@echo '    env                Display Go environment.'
 	@echo '    build              Build project for current platform.'
 	@echo '    build-all          Build project for all supported platforms.'
-	@echo '    doc                Start Go documentation server on port 8080.'
 	@echo '    check              Verify compiled binary.'
-	@echo '    version            Display Go version.'
-	@echo ''
-	@echo 'Targets run by default are: imports, fmt, lint, vet, errors and build.'
 	@echo ''
 
 print-%:
 	@echo $* = $($*)
 
 clean: clean-artifacts
-	go clean -i ./...
 	rm -vf $(CURDIR)/coverage.*
 
 clean-artifacts:
 	rm -Rf build
-
-clean-vendor:
-	find $(CURDIR)/vendor -type d -print0 2>/dev/null | xargs -0 rm -Rf
 
 clean-all: clean clean-artifacts clean-vendor
 
@@ -79,13 +69,13 @@ tools:
 	go get github.com/mitchellh/gox
 
 deps:
-	dep ensure
+	go mod tidy
 
 test:
-	go test -v ./...
+	go test -v $(go list ./internal/...)
 
 coverage: 
-	gocov test ./... > $(CURDIR)/coverage.out 2>/dev/null
+	gocov test $(go list ./internal/...) > $(CURDIR)/coverage.out 2>/dev/null
 	gocov report $(CURDIR)/coverage.out
 	if test -z "$$CI"; then \
 	  gocov-html $(CURDIR)/coverage.out > $(CURDIR)/coverage.html; \
@@ -95,16 +85,19 @@ coverage:
 	fi
 
 vet:
-	go vet -v ./...
+	go vet $(go list ./cmd/...)
+	go vet $(go list ./internal/...)
 
 lint:
-	golint $(go list ./... | grep -v /vendor/)
+	golint $(go list ./cmd/...)
+	golint $(go list ./internal/...)
 
 fmt:
-	go fmt ./...
+	go fmt $(go list ./cmd/...)
+	go fmt $(go list ./internal/...)
 
-env:
-	@go env
+shellcheck:
+	shellcheck --severity=warning templates/build.sh
 
 build:
 	go build -race -ldflags "-X github.com/dan-v/rattlesnakeos-stack/cli.version=$(VERSION)" -v -o "$(TARGET)" .
@@ -117,9 +110,6 @@ build-all:
 	cp -v -f \
 	   $(CURDIR)/build/$(VERSION)/$$(go env GOOS)/$(TARGET) .
 
-doc:
-	godoc -http=:8080 -index
-
 check:
 	@test -x $(CURDIR)/$(TARGET) || exit 1
 	if $(CURDIR)/$(TARGET) --version | grep -qF '$(VERSION)'; then \
@@ -127,9 +117,6 @@ check:
 	else \
 	  exit 1; \
 	fi
-
-version:
-	@go version
 
 zip: all
 	mkdir -p build/zips
