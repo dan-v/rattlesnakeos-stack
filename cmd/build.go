@@ -91,8 +91,9 @@ var buildStartCmd = &cobra.Command{
 
 		log.Infof("calling lambda function to start manual build for stack %v", name)
 		output, err := cloudaws.ExecuteLambdaFunction(ctx, name, region, payload)
-		if err != nil {
-			log.Fatalf("Failed to start manual build: status=%v output=%v err=%v", output.StatusCode, output.LogResult, err)
+		if err != nil || output.FunctionError != nil || output.StatusCode != 200  {
+			log.Fatalf("failed to start manual build for stack %v: err=%v, statuscode=%v logresult=%v funcerr=%v payload:%v",
+				name, err, output.StatusCode, output.LogResult, *output.FunctionError, string(output.Payload))
 		}
 
 		log.Infof("successfully started manual build for stack %v", name)
