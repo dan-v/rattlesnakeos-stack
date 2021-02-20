@@ -4,13 +4,7 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
-	"strings"
-
-	"github.com/aws/aws-sdk-go/service/lambda"
-
-	"github.com/aws/aws-sdk-go/aws"
-	"github.com/aws/aws-sdk-go/aws/session"
-	"github.com/aws/aws-sdk-go/service/ec2"
+	"github.com/dan-v/rattlesnakeos-stack/internal/cloudaws"
 	log "github.com/sirupsen/logrus"
 	"github.com/spf13/cobra"
 	"github.com/spf13/viper"
@@ -28,11 +22,10 @@ func init() {
 	buildListCmd.Flags().StringVar(&listRegions, "instance-regions", "", "regions to look for running builds")
 
 	buildCmd.AddCommand(buildStartCmd)
-	buildStartCmd.Flags().StringVar(&name, "name", "", "name for stack")
-	buildStartCmd.Flags().BoolVar(&forceBuild, "force-build", false, "force build even if there are no changes in "+
-		"available version of AOSP, Chromium, or F-Droid.")
-	buildStartCmd.Flags().StringVar(&aospBuildID, "aosp-build-id", "", "advanced option - specify the specific the AOSP build id (e.g. PQ3A.190505.002)")
-	buildStartCmd.Flags().StringVar(&aospTag, "aosp-tag", "", "advanced option - specify the corresponding AOSP tag to use for build (e.g. android-9.0.0_r37)")
+	buildStartCmd.Flags().StringVar(&name, "name", "", "name of stack")
+	buildStartCmd.Flags().BoolVar(&forceBuild, "force-build", false, "force build even if there are no changes in component versions")
+	buildStartCmd.Flags().StringVar(&aospBuildID, "aosp-build-id", "", "advanced option - specify the specific the AOSP build id (e.g. RQ1A.210205.004)")
+	buildStartCmd.Flags().StringVar(&aospTag, "aosp-tag", "", "advanced option - specify the corresponding AOSP tag to use for build (e.g. android-11.0.0_r29)")
 
 	buildCmd.AddCommand(buildTerminateCmd)
 	buildTerminateCmd.Flags().StringVarP(&terminateInstanceID, "instance-id", "i", "", "EC2 instance id "+
@@ -43,7 +36,7 @@ func init() {
 
 var buildCmd = &cobra.Command{
 	Use:   "build",
-	Short: "Commands to list, start, and terminate builds.",
+	Short: "commands to list, start, and terminate builds.",
 	Args: func(cmd *cobra.Command, args []string) error {
 		if len(args) == 0 {
 			return errors.New("Need to specify a subcommand")
@@ -55,7 +48,7 @@ var buildCmd = &cobra.Command{
 
 var buildStartCmd = &cobra.Command{
 	Use:   "start",
-	Short: "Manually start a build",
+	Short: "manually start a build",
 	Args: func(cmd *cobra.Command, args []string) error {
 		if viper.GetString("name") == "" && name == "" {
 			return fmt.Errorf("must provide a stack name")
@@ -73,47 +66,40 @@ var buildStartCmd = &cobra.Command{
 			region = viper.GetString("region")
 		}
 
-		sess, err := session.NewSession(aws.NewConfig().WithCredentialsChainVerboseErrors(true))
-		if err != nil {
-			log.Fatalf("Failed to setup AWS session: %v", err)
-		}
-
-		lambdaPayload := struct {
-			ForceBuild  bool
-			AOSPBuildID string
-			AOSPTag     string
+		payload, err := json.Marshal(struct {
+			ForceBuild  bool   `json:"force-build"`
+			AOSPBuildID string `json:"aosp-build-id"`
+			AOSPTag     string `json:"aosp-tag"`
 		}{
 			ForceBuild:  forceBuild,
 			AOSPBuildID: aospBuildID,
 			AOSPTag:     aospTag,
-		}
-		payload, err := json.Marshal(lambdaPayload)
+		})
 		if err != nil {
-			log.Fatalf("Failed to create payload for Lambda function: %v", err)
+			log.Fatalf("failed to create payload for lambda function: %v", err)
 		}
 
-		lambdaClient := lambda.New(sess, &aws.Config{Region: &region})
-		out, err := lambdaClient.Invoke(&lambda.InvokeInput{
-			FunctionName:   aws.String(name + "-build"),
-			InvocationType: aws.String("RequestResponse"),
-			Payload:        payload,
-		})
+		log.Infof("calling lambda function to start manual build for stack %v", name)
+		output, err := cloudaws.ExecuteLambdaFunction(name, region, payload)
 		if err != nil {
 			log.Fatalf("Failed to start manual build: %v", err)
 		}
-		if out.FunctionError != nil {
-			log.Fatalf("Failed to start manual build. Function error: %v. Output: %v", *out.FunctionError, string(out.Payload))
+
+		if output.FunctionError != nil {
+			log.Fatalf("failed to start manual build. function error: %v. Output: %v", *output.FunctionError, string(output.Payload))
 		}
-		if *out.StatusCode != 200 {
-			log.Fatalf("Failed to start manual build. Status code calling Lambda function %v != 200", *out.StatusCode)
+
+		if *output.StatusCode != 200 {
+			log.Fatalf("failed to start manual build. status code calling lambda function %v != 200", *output.StatusCode)
 		}
-		log.Infof("Successfully started manual build for stack %v", name)
+
+		log.Infof("successfully started manual build for stack %v", name)
 	},
 }
 
 var buildTerminateCmd = &cobra.Command{
 	Use:   "terminate",
-	Short: "Terminate a running a build",
+	Short: "terminate a running a build",
 	Args: func(cmd *cobra.Command, args []string) error {
 		if terminateInstanceID == "" {
 			return fmt.Errorf("must provide an instance id to terminate")
@@ -124,24 +110,18 @@ var buildTerminateCmd = &cobra.Command{
 		return nil
 	},
 	Run: func(cmd *cobra.Command, args []string) {
-		sess, err := session.NewSession(aws.NewConfig().WithCredentialsChainVerboseErrors(true))
+		output, err := cloudaws.TerminateEC2Instance(terminateInstanceID, terminateRegion)
 		if err != nil {
-			log.Fatalf("Failed to setup AWS session: %v", err)
+			log.Fatal(err)
 		}
-		ec2Client := ec2.New(sess, &aws.Config{Region: &terminateRegion})
-		_, err = ec2Client.TerminateInstances(&ec2.TerminateInstancesInput{
-			InstanceIds: aws.StringSlice([]string{terminateInstanceID}),
-		})
-		if err != nil {
-			log.Fatalf("Failed to terminate EC2 instance %v in region %v: %v", terminateInstanceID, terminateRegion, err)
-		}
-		log.Infof("Terminated instance %v in region %v", terminateInstanceID, terminateRegion)
+
+		log.Infof("terminated instance %v in region %v: %v", terminateInstanceID, terminateRegion, output)
 	},
 }
 
 var buildListCmd = &cobra.Command{
 	Use:   "list",
-	Short: "List in progress RattlesnakeOS builds",
+	Short: "list in progress builds",
 	Args: func(cmd *cobra.Command, args []string) error {
 		if viper.GetString("name") == "" && name == "" {
 			return fmt.Errorf("must provide a stack name")
@@ -159,44 +139,16 @@ var buildListCmd = &cobra.Command{
 			listRegions = viper.GetString("instance-regions")
 		}
 
-		sess, err := session.NewSession(aws.NewConfig().WithCredentialsChainVerboseErrors(true))
+		instances, err := cloudaws.GetRunningEC2InstancesWithProfileName(fmt.Sprintf("%v-ec2", name), listRegions)
 		if err != nil {
-			log.Fatalf("Failed to setup AWS session: %v", err)
+			log.Fatal(err)
 		}
-
-		log.Infof("Looking for builds for stack %v in the following regions: %v", name, listRegions)
-		runningInstances := 0
-		for _, region := range strings.Split(listRegions, ",") {
-			ec2Client := ec2.New(sess, &aws.Config{Region: &region})
-			resp, err := ec2Client.DescribeInstances(&ec2.DescribeInstancesInput{
-				Filters: []*ec2.Filter{
-					&ec2.Filter{
-						Name:   aws.String("instance-state-name"),
-						Values: []*string{aws.String("running")}},
-				}})
-			if err != nil {
-				log.Fatalf("Failed to describe EC2 instances in region %v", region)
-			}
-			if len(resp.Reservations) == 0 || len(resp.Reservations[0].Instances) == 0 {
-				continue
-			}
-
-			for _, reservation := range resp.Reservations {
-				for _, instance := range reservation.Instances {
-					if instance.IamInstanceProfile == nil || instance.IamInstanceProfile.Arn == nil {
-						continue
-					}
-
-					instanceIamProfileName := strings.Split(*instance.IamInstanceProfile.Arn, "/")[1]
-					if instanceIamProfileName == name+"-ec2" {
-						log.Printf("Instance '%v': ip='%v' region='%v' launched='%v'", *instance.InstanceId, *instance.PublicIpAddress, region, *instance.LaunchTime)
-						runningInstances++
-					}
-				}
-			}
+		if len(instances) == 0 {
+			log.Info("no active builds found")
+			return
 		}
-		if runningInstances == 0 {
-			log.Info("No active builds found")
+		for _, instance := range instances {
+			fmt.Println(instance)
 		}
 	},
 }

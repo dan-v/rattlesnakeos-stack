@@ -3,6 +3,7 @@ package main
 import (
 	_ "embed"
 	"github.com/dan-v/rattlesnakeos-stack/cmd"
+	"github.com/dan-v/rattlesnakeos-stack/internal/templates"
 )
 
 //go:embed VERSION
@@ -21,5 +22,10 @@ var lambdaTemplate string
 var terraformTemplate string
 
 func main() {
-	cmd.Execute(version, buildScript, buildScriptVars, lambdaTemplate, terraformTemplate)
+	cmd.Execute(version, &templates.TemplateFiles{
+		BuildScript:       buildScript,
+		BuildScriptVars:   buildScriptVars,
+		LambdaTemplate:    lambdaTemplate,
+		TerraformTemplate: terraformTemplate,
+	})
 }

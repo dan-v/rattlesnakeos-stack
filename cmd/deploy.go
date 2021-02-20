@@ -3,10 +3,13 @@ package cmd
 import (
 	"errors"
 	"fmt"
-	"github.com/dan-v/rattlesnakeos-stack/internal/aws"
+	"github.com/dan-v/rattlesnakeos-stack/internal/cloudaws"
 	"github.com/dan-v/rattlesnakeos-stack/internal/devices"
 	"github.com/dan-v/rattlesnakeos-stack/internal/stack"
+	"github.com/dan-v/rattlesnakeos-stack/internal/templates"
+	"github.com/dan-v/rattlesnakeos-stack/internal/terraform"
 	"os"
+	"path/filepath"
 	"strconv"
 	"strings"
 
@@ -48,7 +51,7 @@ func init() {
 	_ = viper.BindPFlag("region", flags.Lookup("region"))
 
 	flags.StringVarP(&device, "device", "d", "",
-		"device you want to build for (e.g. crosshatch): to list supported devices use '-d list'")
+		"device you want to build for (e.g. crosshatch)")
 	_ = viper.BindPFlag("device", flags.Lookup("device"))
 
 	flags.StringVarP(&email, "email", "e", "",
@@ -70,7 +73,7 @@ func init() {
 	flags.StringVar(&instanceType, "instance-type", "c5.4xlarge", "EC2 instance type (e.g. c5.4xlarge) to use for the build.")
 	_ = viper.BindPFlag("instance-type", flags.Lookup("instance-type"))
 
-	flags.StringVar(&instanceRegions, "instance-regions", aws.DefaultInstanceRegions,
+	flags.StringVar(&instanceRegions, "instance-regions", cloudaws.DefaultInstanceRegions,
 		"possible regions to launch spot instance. the region with cheapest spot instance price will be used.")
 	_ = viper.BindPFlag("instance-regions", flags.Lookup("instance-regions"))
 
@@ -134,10 +137,6 @@ var deployCmd = &cobra.Command{
 				return fmt.Errorf("pinned chromium-version must have major version of at least %v", stack.MinimumChromiumVersion)
 			}
 		}
-		if device == "list" {
-			fmt.Printf("Valid devices are: %v\n", supportDevicesOutput)
-			os.Exit(0)
-		}
 		for _, device := range supportedDevicesCodename {
 			if device == viper.GetString("device") {
 				return nil
@@ -161,39 +160,71 @@ var deployCmd = &cobra.Command{
 			}
 			_, err = prompt.Run()
 			if err != nil {
-				log.Fatalf("Exiting %v", err)
+				log.Fatalf("exiting: %v", err)
 			}
 		}
 
-		s, err := stack.New(&stack.Config{
-			Version:                version,
-			Name:                   viper.GetString("name"),
-			Region:                 viper.GetString("region"),
-			Device:                 viper.GetString("device"),
-			DeviceDetails:          devices.GetDeviceDetails(viper.GetString("device")),
-			Email:                  viper.GetString("email"),
-			InstanceType:           viper.GetString("instance-type"),
-			InstanceRegions:        viper.GetString("instance-regions"),
-			SSHKey:                 viper.GetString("ssh-key"),
-			SkipPrice:              viper.GetString("skip-price"),
-			MaxPrice:               viper.GetString("max-price"),
-			Schedule:               viper.GetString("schedule"),
-			ChromiumBuildDisabled:  viper.GetBool("chromium-build-disabled"),
-			ChromiumVersion:        viper.GetString("chromium-version"),
-			CoreConfigRepo:         viper.GetString("core-config-repo"),
-			CustomConfigRepo:       viper.GetString("custom-config-repo"),
-			LatestURL:              viper.GetString("latest-url"),
-			Cloud: 					viper.GetString("cloud"),
-		}, buildScript, buildTemplate, lambdaTemplate, terraformTemplate)
+		// TODO: make this configurable
+		outputDirFullPath, err := filepath.Abs(fmt.Sprintf("output_%v", viper.GetString("name")))
 		if err != nil {
 			log.Fatal(err)
 		}
+
+		if err := os.MkdirAll(outputDirFullPath, os.ModePerm); err != nil {
+			log.Fatal(err)
+		}
+
+		templateConfig := &templates.Config{
+			Version:               version,
+			Name:                  viper.GetString("name"),
+			Region:                viper.GetString("region"),
+			Device:                viper.GetString("device"),
+			DeviceDetails:         devices.GetDeviceDetails(viper.GetString("device")),
+			Email:                 viper.GetString("email"),
+			InstanceType:          viper.GetString("instance-type"),
+			InstanceRegions:       viper.GetString("instance-regions"),
+			SkipPrice:             viper.GetString("skip-price"),
+			MaxPrice:              viper.GetString("max-price"),
+			SSHKey:                viper.GetString("ssh-key"),
+			Schedule:              viper.GetString("schedule"),
+			ChromiumBuildDisabled: viper.GetBool("chromium-build-disabled"),
+			ChromiumVersion:       viper.GetString("chromium-version"),
+			CoreConfigRepo:        viper.GetString("core-config-repo"),
+			CustomConfigRepo:      viper.GetString("custom-config-repo"),
+			LatestURL:             viper.GetString("latest-url"),
+			Cloud:                 viper.GetString("cloud"),
+		}
+
+		templateRenderer, err := templates.New(templateConfig, templatesFiles, outputDirFullPath)
+		if err != nil {
+			log.Fatalf("failed to create template client: %v", err)
+		}
+
+		cloudClient, err := cloudaws.New(
+			viper.GetString("name"),
+			viper.GetString("region"),
+			viper.GetString("email"),
+		)
+		if err != nil {
+			log.Fatalf("failed to create cloud client: %v", err)
+		}
+
+		terraformClient, err := terraform.New(outputDirFullPath)
+		if err != nil {
+			log.Fatalf("failed to create terraform client: %v", err)
+		}
+
+		s := stack.New(viper.GetString("name"), templateRenderer, cloudClient, terraformClient)
+		if err != nil {
+			log.Fatal(err)
+		}
+
 		if !skipDeploy {
 			if err := s.Apply(); err != nil {
 				log.Fatal(err)
 			}
 		} else {
-			log.Println("Skipping Terraform deployment as --skip-deploy was specified")
+			log.Println("skipping deployment as --skip-deploy was specified")
 		}
 	},
 }

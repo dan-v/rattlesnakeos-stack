@@ -335,7 +335,7 @@ resource "aws_sns_topic" "rattlesnake" {
 ###################
 resource "aws_lambda_function" "rattlesnake_lambda_build" {
   filename         = "${var.lambda_build_zip_file}"
-  function_name    = "${var.name}-build"
+  function_name    = "${var.name}"
   role             = "${aws_iam_role.rattlesnake_lambda_role.arn}"
   handler          = "lambda_spot_function.lambda_handler"
   source_code_hash = "${base64sha256(file("${var.lambda_build_zip_file}"))}"
@@ -354,7 +354,7 @@ resource "aws_cloudwatch_event_rule" "build_schedule" {
 
 resource "aws_cloudwatch_event_target" "check_build_schedule" {
   rule = "${aws_cloudwatch_event_rule.build_schedule.name}"
-  target_id = "${var.name}-build"
+  target_id = "${var.name}"
   arn = "${aws_lambda_function.rattlesnake_lambda_build.arn}"
 }
 

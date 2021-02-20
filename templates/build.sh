@@ -306,7 +306,11 @@ release() {
     "${OUT}/${TARGET_FILES}"
 
     log "Running ota_from_target_files"
-    "${RELEASE_TOOLS_DIR}/releasetools/ota_from_target_files" --block -k "${KEY_DIR}/releasekey" "${DEVICE_EXTRA_OTA[@]}" "${OUT}/${TARGET_FILES}" \
+    # shellcheck disable=SC2068
+    echo "${RELEASE_TOOLS_DIR}/releasetools/ota_from_target_files" --block -k "${KEY_DIR}/releasekey" ${DEVICE_EXTRA_OTA[@]} "${OUT}/${TARGET_FILES}" \
+        "${OUT}/${DEVICE}-ota_update-${BUILD}.zip"
+    # shellcheck disable=SC2068
+    "${RELEASE_TOOLS_DIR}/releasetools/ota_from_target_files" --block -k "${KEY_DIR}/releasekey" ${DEVICE_EXTRA_OTA[@]} "${OUT}/${TARGET_FILES}" \
         "${OUT}/${DEVICE}-ota_update-${BUILD}.zip"
 
     log "Running img_from_target_files"

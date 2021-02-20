@@ -2,6 +2,7 @@ package cmd
 
 import (
 	"fmt"
+	"github.com/dan-v/rattlesnakeos-stack/internal/templates"
 	"os"
 
 	homedir "github.com/mitchellh/go-homedir"
@@ -11,7 +12,6 @@ import (
 )
 
 var (
-	// TODO: temporarily hardcoded
 	cfgFile                   string
 	defaultConfigFileBase     = ".rattlesnakeos"
 	defaultConfigFileFormat   = "toml"
@@ -19,19 +19,13 @@ var (
 	defaultConfigFileFullPath string
 	configFileFullPath        string
 	version                   string
-	buildScript               string
-	buildTemplate             string
-	lambdaTemplate            string
-	terraformTemplate         string
+	templatesFiles            *templates.TemplateFiles
 )
 
 // Execute the CLI
-func Execute(ver, bScript, bTemplate, lTemplate, tTempalte string) {
+func Execute(ver string, templFiles *templates.TemplateFiles) {
 	version = ver
-	buildScript = bScript
-	buildTemplate = bTemplate
-	lambdaTemplate = lTemplate
-	terraformTemplate = tTempalte
+	templatesFiles = templFiles
 	if err := rootCmd.Execute(); err != nil {
 		log.Fatal(err)
 	}
@@ -48,10 +42,10 @@ func initConfig() {
 		viper.SetConfigFile(cfgFile)
 		configFileFullPath = cfgFile
 		if _, err := os.Stat(configFileFullPath); os.IsNotExist(err) {
-			log.Infof("Config file %v doesn't exist yet - creating it", configFileFullPath)
+			log.Infof("config file %v doesn't exist yet - creating it", configFileFullPath)
 			_, err := os.Create(configFileFullPath)
 			if err != nil {
-				log.Fatalf("Failed to create config file %v", configFileFullPath)
+				log.Fatalf("failed to create config file %v", configFileFullPath)
 			}
 		}
 	} else {
@@ -63,11 +57,11 @@ func initConfig() {
 
 	if err := viper.ReadInConfig(); err != nil {
 		if viper.ConfigFileUsed() != "" {
-			log.Fatalf("Failed to parse config file %v. Error: %v", viper.ConfigFileUsed(), err)
+			log.Fatalf("failed to parse config file %v. error: %v", viper.ConfigFileUsed(), err)
 		}
 	}
 	if viper.ConfigFileUsed() != "" {
-		log.Printf("Using config file: %v\n", viper.ConfigFileUsed())
+		log.Printf("using config file: %v\n", viper.ConfigFileUsed())
 	}
 }
 
@@ -78,6 +72,6 @@ func init() {
 
 var rootCmd = &cobra.Command{
 	Use: "rattlesnakeos-stack",
-	Short: "A cross platform tool that provisions all of the AWS infrastructure required to build your own privacy " +
+	Short: "a cross platform tool that provisions all of the AWS infrastructure required to build your own privacy " +
 		"focused Android OS on a continuous basis with OTA updates.",
 }

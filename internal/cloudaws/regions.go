@@ -1,14 +1,11 @@
-package aws
-
-const (
-	DefaultInstanceRegions = "us-west-2,us-west-1,us-east-2"
-)
+package cloudaws
 
 var (
 	supportedRegions = map[string]Region{}
 	regionSortOrder  []string
 )
 
+// Region contains details about an AWS region
 type Region struct {
 	Name string
 	AMI  string
@@ -45,17 +42,20 @@ func init() {
 	)
 }
 
-func addRegions(regions ...Region) {
-	for _, region := range regions {
-		supportedRegions[region.Name] = region
-		regionSortOrder = append(regionSortOrder, region.Name)
-	}
-}
-
+// GetSupportedRegions returns a list of all supported regions
 func GetSupportedRegions() []string {
 	return regionSortOrder
 }
 
+// IsSupportedRegion returns whether a specified region is supported
+func IsSupportedRegion(region string) bool {
+	if _, ok := supportedRegions[region]; !ok {
+		return false
+	}
+	return true
+}
+
+// GetAMIs returns a region to AMI mapping for all supported regions
 func GetAMIs() map[string]string {
 	amis := map[string]string{}
 	for _, region := range regionSortOrder {
@@ -64,9 +64,9 @@ func GetAMIs() map[string]string {
 	return amis
 }
 
-func IsSupportedRegion(region string) bool {
-	if _, ok := supportedRegions[region]; !ok {
-		return false
+func addRegions(regions ...Region) {
+	for _, region := range regions {
+		supportedRegions[region.Name] = region
+		regionSortOrder = append(regionSortOrder, region.Name)
 	}
-	return true
 }

@@ -3,7 +3,7 @@ package cmd
 import (
 	"errors"
 	"fmt"
-	"github.com/dan-v/rattlesnakeos-stack/internal/aws"
+	"github.com/dan-v/rattlesnakeos-stack/internal/cloudaws"
 	"github.com/dan-v/rattlesnakeos-stack/internal/devices"
 	"math/rand"
 	"strings"
@@ -41,7 +41,7 @@ var configCmd = &cobra.Command{
 		}
 		result, err := devicePrompt.Run()
 		if err != nil {
-			log.Fatalf("Prompt failed %v\n", err)
+			log.Fatalf("prompt failed %v\n", err)
 		}
 		viper.Set("device", result)
 
@@ -63,17 +63,17 @@ var configCmd = &cobra.Command{
 		}
 		result, err = namePrompt.Run()
 		if err != nil {
-			log.Fatalf("Prompt failed %v\n", err)
+			log.Fatalf("prompt failed %v\n", err)
 		}
 		viper.Set("name", result)
 
 		color.Cyan(fmt.Sprintf("Stack region is the AWS region where you would like to deploy your stack. Valid options: %v\n",
-			strings.Join(aws.GetSupportedRegions(), ", ")))
+			strings.Join(cloudaws.GetSupportedRegions(), ", ")))
 		validate = func(input string) error {
 			if len(input) < 1 {
 				return errors.New("Stack region is too short")
 			}
-			if !aws.IsSupportedRegion(input) {
+			if !cloudaws.IsSupportedRegion(input) {
 				return errors.New("Invalid region")
 			}
 			return nil
@@ -85,7 +85,7 @@ var configCmd = &cobra.Command{
 		}
 		result, err = regionPrompt.Run()
 		if err != nil {
-			log.Fatalf("Prompt failed %v\n", err)
+			log.Fatalf("prompt failed %v\n", err)
 		}
 		viper.Set("region", result)
 
@@ -103,7 +103,7 @@ var configCmd = &cobra.Command{
 		}
 		result, err = emailPrompt.Run()
 		if err != nil {
-			log.Fatalf("Prompt failed %v\n", err)
+			log.Fatalf("prompt failed %v\n", err)
 		}
 		viper.Set("email", result)
 
@@ -125,7 +125,7 @@ var configCmd = &cobra.Command{
 		}
 		result, err = keypairPrompt.Run()
 		if err != nil {
-			log.Fatalf("Prompt failed %v\n", err)
+			log.Fatalf("prompt failed %v\n", err)
 		}
 		viper.Set("ssh-key", result)
 

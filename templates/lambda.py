@@ -22,7 +22,6 @@ SKIP_PRICE = '<% .Config.SkipPrice %>'
 STACK_REGION = '<% .Config.Region %>'
 INSTANCE_REGIONS = '<% .Config.InstanceRegions %>'
 REGION_AMIS = json.loads('<% .RegionAMIs %>')
-AMI_OVERRIDE = '<% .Config.AMI %>'
 CHROMIUM_BUILD_DISABLED = '<% .Config.ChromiumBuildDisabled %>'
 CHROMIUM_PINNED_VERSION = '<% .Config.ChromiumVersion %>'
 
@@ -41,11 +40,11 @@ def lambda_handler(event, context):
     print("latest_aosp_tag", latest_aosp_tag)
 
     # build time overrides
-    force_build = event.get('ForceBuild') or False
+    force_build = event.get('force-build') or False
     print("force_build", force_build)
-    aosp_build_id = event.get('AOSPBuildID') or latest_aosp_build_id
+    aosp_build_id = event.get('aosp-build-id') or latest_aosp_build_id
     print("aosp_build_id", aosp_build_id)
-    aosp_tag = event.get('AOSPTag') or latest_aosp_tag
+    aosp_tag = event.get('aosp-tag') or latest_aosp_tag
     print("aosp_tag", aosp_tag)
     chromium_version = event.get('ChromiumVersion') or CHROMIUM_PINNED_VERSION if CHROMIUM_PINNED_VERSION != "" else latest_chromium_version
     print("chromium_version", chromium_version)
@@ -74,7 +73,7 @@ def lambda_handler(event, context):
         raise
 
     # AMI to launch with
-    ami = AMI_OVERRIDE if AMI_OVERRIDE else REGION_AMIS[cheapest_region]
+    ami = REGION_AMIS[cheapest_region]
 
     # create ec2 client for cheapest region
     client = boto3.client('ec2', region_name=cheapest_region)

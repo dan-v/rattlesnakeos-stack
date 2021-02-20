@@ -2,13 +2,13 @@ package cmd
 
 import (
 	"fmt"
-	"github.com/dan-v/rattlesnakeos-stack/internal/stack"
-
+	"github.com/dan-v/rattlesnakeos-stack/internal/terraform"
 	"github.com/fatih/color"
 	"github.com/manifoldco/promptui"
 	log "github.com/sirupsen/logrus"
 	"github.com/spf13/cobra"
 	"github.com/spf13/viper"
+	"path/filepath"
 )
 
 func init() {
@@ -23,7 +23,7 @@ func init() {
 
 var removeCmd = &cobra.Command{
 	Use:   "remove",
-	Short: "Remove all AWS infrastructure used for building RattlesnakeOS",
+	Short: "remove all AWS infrastructure used for building OS",
 	Args: func(cmd *cobra.Command, args []string) error {
 		if viper.GetString("name") == "" && name == "" {
 			return fmt.Errorf("must provide a stack name")
@@ -46,10 +46,10 @@ var removeCmd = &cobra.Command{
 		fmt.Println("Stack region:", region)
 		fmt.Println("")
 
-		color.Red("This is a destructive action! All S3 buckets will be removed and all data will be destroyed. " +
-			"Make sure to backup anything you might want to keep!")
+		color.Red("this is a destructive action! all S3 buckets will be removed and all data will be destroyed. " +
+			"make sure to backup anything you might want to keep!")
 		prompt := promptui.Prompt{
-			Label:     fmt.Sprintf("This will remove all AWS infrastructure for stack %v. Do you want to continue ", viper.GetString("name")),
+			Label:     fmt.Sprintf("this will remove all AWS infrastructure for stack %v. do you want to continue ", viper.GetString("name")),
 			IsConfirm: true,
 		}
 		_, err := prompt.Run()
@@ -57,15 +57,21 @@ var removeCmd = &cobra.Command{
 			log.Fatalf("Exiting %v", err)
 		}
 
-		s, err := stack.New(&stack.Config{
-			Name:   name,
-			Region: region,
-		}, buildScript, buildTemplate, lambdaTemplate, terraformTemplate)
+		// TODO: this requires directory to already exist
+		// TODO: make this configurable and not duplicated
+		outputDirFullPath, err := filepath.Abs(fmt.Sprintf("output_%v", viper.GetString("name")))
 		if err != nil {
 			log.Fatal(err)
 		}
-		if err := s.Destroy(); err != nil {
-			log.Fatal(err)
+
+		terraformClient, err := terraform.New(outputDirFullPath)
+		if err != nil {
+			log.Fatalf("failed to create terraform client: %v", err)
+		}
+
+		_, err = terraformClient.Destroy()
+		if err != nil {
+			log.Fatalf("failed to run terraform destroy: %v", err)
 		}
 	},
 }

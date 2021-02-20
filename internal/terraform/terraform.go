@@ -28,41 +28,46 @@ var (
 )
 
 type Client struct {
-	terraformDir    string
-	terraformBinary string
+	rootDir             string
+	terraformBinaryFile string
 }
 
-func New(terraformDir string) (*Client, error) {
-	terraformBinary, err := setupBinary(terraformDir)
+func New(rootDir string) (*Client, error) {
+	terraformBinary, err := setupBinary(rootDir)
 	if err != nil {
 		return nil, err
 	}
 
 	client := &Client{
-		terraformDir:    terraformDir,
-		terraformBinary: terraformBinary,
+		rootDir:             rootDir,
+		terraformBinaryFile: terraformBinary,
 	}
 	return client, nil
 }
 
-func (c *Client) Apply(args []string) ([]byte, error) {
-	cmd := c.setup(append([]string{"apply"}, args...))
+func (c *Client) Apply() ([]byte, error) {
+	output, err := c.init()
+	if err != nil {
+		return output, err
+	}
+
+	cmd := c.setup(append([]string{"apply", "-auto-approve", c.rootDir}))
 	return c.run(cmd)
 }
 
-func (c *Client) Init(args []string) ([]byte, error) {
-	cmd := c.setup(append([]string{"init"}, args...))
+func (c *Client) Destroy() ([]byte, error) {
+	cmd := c.setup(append([]string{"destroy", "-auto-approve", c.rootDir}))
 	return c.run(cmd)
 }
 
-func (c *Client) Destroy(args []string) ([]byte, error) {
-	cmd := c.setup(append([]string{"destroy"}, args...))
+func (c *Client) init() ([]byte, error) {
+	cmd := c.setup(append([]string{"init", c.rootDir}))
 	return c.run(cmd)
 }
 
 func (c *Client) setup(args []string) *exec.Cmd {
-	cmd := exec.Command(c.terraformBinary, args...)
-	cmd.Dir = c.terraformDir
+	cmd := exec.Command(c.terraformBinaryFile, args...)
+	cmd.Dir = c.rootDir
 	return cmd
 }
 
