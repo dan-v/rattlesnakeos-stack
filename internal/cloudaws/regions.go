@@ -7,7 +7,9 @@ var (
 
 // Region contains details about an AWS region
 type Region struct {
+	// Name is the name of the region (e.g. us-west-2)
 	Name string
+	// AMI is the AMI to use in this region
 	AMI  string
 }
 

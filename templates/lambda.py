@@ -7,8 +7,8 @@ from datetime import datetime, timedelta
 
 STACK_VERSION = '<% .Config.Version %>'
 NAME = '<% .Config.Name %>'
-LATEST_JSON = "<% .Config.LatestURL %>"
-STACK_URL_LATEST = "<% .RattlesnakeOSStackReleasesURL %>"
+LATEST_JSON_URL = "<% .Config.LatestURL %>"
+STACK_VERSION_LATEST_URL = "<% .RattlesnakeOSStackReleasesURL %>"
 BUILD_SCRIPT_S3_LOCATION = 's3://<% .Config.Name %>-script/build.sh'
 RELEASE_BUCKET = '<% .Config.Name %>-release'
 FLEET_ROLE = 'arn:aws:iam::{0}:role/aws-service-role/spotfleet.amazonaws.com/AWSServiceRoleForEC2SpotFleet'
@@ -28,10 +28,10 @@ CHROMIUM_PINNED_VERSION = '<% .Config.ChromiumVersion %>'
 
 def lambda_handler(event, context):
     # get latest
-    latest_stack_json = json.loads(urlopen(STACK_URL_LATEST).read().decode())
+    latest_stack_json = json.loads(urlopen(STACK_VERSION_LATEST_URL).read().decode())
     latest_stack_version = latest_stack_json.get('name')
     print("latest_stack_version", latest_stack_version)
-    latest_json = json.loads(urlopen(LATEST_JSON).read().decode())
+    latest_json = json.loads(urlopen(LATEST_JSON_URL).read().decode())
     latest_chromium_version = latest_json.get('chromium')
     print("latest_chromium_version", latest_chromium_version)
     latest_aosp_build_id = latest_json.get('devices').get(DEVICE).get('build_id')

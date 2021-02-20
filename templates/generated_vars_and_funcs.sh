@@ -4,7 +4,6 @@
 DEVICE="<% .Device %>"
 DEVICE_FRIENDLY="<% .DeviceDetails.Friendly %>"
 DEVICE_FAMILY="<% .DeviceDetails.Family %>"
-DEVICE_COMMON="<% .DeviceDetails.Common %>"
 DEVICE_AVB_MODE="<% .DeviceDetails.AVBMode %>"
 DEVICE_EXTRA_OTA=<% .DeviceDetails.ExtraOTA %>
 STACK_NAME="<% .Name %>"
@@ -12,6 +11,7 @@ STACK_VERSION="<% .Version %>"
 CHROMIUM_BUILD_DISABLED="<% .ChromiumBuildDisabled %>"
 CORE_CONFIG_REPO="<% .CoreConfigRepo %>"
 CUSTOM_CONFIG_REPO="<% .CustomConfigRepo %>"
+LATEST_JSON_URL="<% .Config.LatestURL %>"
 
 ##########################################
 ###### CLOUD SPECIFIC VARS AND FUNCS #####

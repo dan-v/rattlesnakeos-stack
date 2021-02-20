@@ -9,6 +9,7 @@ import (
 	lambdatypes "github.com/aws/aws-sdk-go-v2/service/lambda/types"
 )
 
+// ExecuteLambdaFunction executes a synchronous Lambda function
 func ExecuteLambdaFunction(ctx context.Context, functionName, region string, payload []byte) (*lambda.InvokeOutput, error) {
 	cfg, err := config.LoadDefaultConfig(ctx, config.WithRegion(region))
 	if err != nil {

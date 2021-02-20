@@ -21,6 +21,10 @@ import (
 	yaml "gopkg.in/yaml.v2"
 )
 
+const (
+	minimumChromiumVersion = 86
+)
+
 var (
 	name, region, email, device, sshKey, maxPrice, skipPrice, schedule, cloud string
 	instanceType, instanceRegions, chromiumVersion, latestURL string
@@ -91,13 +95,13 @@ func init() {
 		"specify the version of Chromium you want (e.g. 80.0.3971.4) to pin to. if not specified, the latest stable version of Chromium is used.")
 	_ = viper.BindPFlag("chromium-version", flags.Lookup("chromium-version"))
 
-	flags.StringVar(&coreConfigRepo, "core-config-repo", stack.DefaultCoreConfigRepo, "a specially formatted repo that contains core customizations on top of AOSP.")
+	flags.StringVar(&coreConfigRepo, "core-config-repo", templates.DefaultCoreConfigRepo, "a specially formatted repo that contains core customizations on top of AOSP.")
 	_ = viper.BindPFlag("core-config-repo", flags.Lookup("core-config-repo"))
 
 	flags.StringVar(&customConfigRepo, "custom-config-repo", "", "a specially formatted repo that contains customizations on top of core.")
 	_ = viper.BindPFlag("custom-config-repo", flags.Lookup("custom-config-repo"))
 
-	flags.StringVar(&latestURL, "latest-url", stack.DefaultLatestURL, "url that is used to check versions of aosp/chromium and whether build is required.")
+	flags.StringVar(&latestURL, "latest-url", templates.DefaultLatestURL, "url that is used to check versions of aosp/chromium and whether build is required.")
 	_ = viper.BindPFlag("latest-url", flags.Lookup("latest-url"))
 
 	flags.StringVar(&cloud, "cloud", "aws", "cloud (aws only right now)")
@@ -134,8 +138,8 @@ var deployCmd = &cobra.Command{
 			if err != nil {
 				return fmt.Errorf("unable to parse specified chromium-version: %v", err)
 			}
-			if chromiumMajorNumber < stack.MinimumChromiumVersion {
-				return fmt.Errorf("pinned chromium-version must have major version of at least %v", stack.MinimumChromiumVersion)
+			if chromiumMajorNumber < minimumChromiumVersion {
+				return fmt.Errorf("pinned chromium-version must have major version of at least %v", minimumChromiumVersion)
 			}
 		}
 		for _, device := range supportedDevicesCodename {
@@ -201,13 +205,21 @@ var deployCmd = &cobra.Command{
 			log.Fatalf("failed to create template client: %v", err)
 		}
 
-		cloudClient, err := cloudaws.New(
+		awsSetupClient, err := cloudaws.NewSetupClient(
+			viper.GetString("name"),
+			viper.GetString("region"),
+		)
+		if err != nil {
+			log.Fatalf("failed to create aws setup client: %v", err)
+		}
+
+		awsSubscribeClient, err := cloudaws.NewSubscribeClient(
 			viper.GetString("name"),
 			viper.GetString("region"),
 			viper.GetString("email"),
 		)
 		if err != nil {
-			log.Fatalf("failed to create cloud client: %v", err)
+			log.Fatalf("failed to create aws subscribe client: %v", err)
 		}
 
 		terraformClient, err := terraform.New(outputDirFullPath)
@@ -215,7 +227,7 @@ var deployCmd = &cobra.Command{
 			log.Fatalf("failed to create terraform client: %v", err)
 		}
 
-		s := stack.New(viper.GetString("name"), templateRenderer, cloudClient, terraformClient)
+		s := stack.New(viper.GetString("name"), templateRenderer, awsSetupClient, awsSubscribeClient, terraformClient)
 		if err != nil {
 			log.Fatal(err)
 		}

@@ -7,20 +7,19 @@ import (
 )
 
 const (
-	MinimumChromiumVersion        = 86
 	DefaultDeployTimeout          = time.Minute * 5
-	DefaultCoreConfigRepo         = "https://github.com/rattlesnakeos/core"
-	DefaultLatestURL              = "https://raw.githubusercontent.com/RattlesnakeOS/latest/11.0/latest.json"
-	DefaultReleaseURL             = "https://api.github.com/repos/dan-v/rattlesnakeos-stack/releases/latest"
 )
 
 type TemplateRenderer interface {
 	RenderAll() error
 }
 
-type CloudSetupSubscriber interface {
+type CloudSetup interface {
 	Setup(ctx context.Context) error
-	SubscribeNotifications(ctx context.Context) error
+}
+
+type CloudSubscriber interface {
+	Subscribe(ctx context.Context) error
 }
 
 type TerraformApplier interface {
@@ -29,38 +28,40 @@ type TerraformApplier interface {
 
 type Stack struct {
 	name              string
-	templateClient    TemplateRenderer
-	cloudClient       CloudSetupSubscriber
-	terraformClient   TerraformApplier
+	templateRenderer  TemplateRenderer
+	cloudSetup        CloudSetup
+	cloudSubscriber   CloudSubscriber
+	terraformApplier  TerraformApplier
 }
 
-func New(name string, templateClient TemplateRenderer, cloudClient CloudSetupSubscriber, terraformClient TerraformApplier) *Stack {
+func New(name string, templateRenderer TemplateRenderer, cloudSetup CloudSetup, cloudSubscriber CloudSubscriber, terraformApplier TerraformApplier) *Stack {
 	return &Stack{
-		name:            name,
-		templateClient:  templateClient,
-		cloudClient:     cloudClient,
-		terraformClient: terraformClient,
+		name:            	name,
+		templateRenderer:  	templateRenderer,
+		cloudSetup:     	cloudSetup,
+		cloudSubscriber: 	cloudSubscriber,
+		terraformApplier: 	terraformApplier,
 	}
 }
 
 func (s *Stack) Deploy(ctx context.Context) error {
 	log.Infof("Rendering all templates files for stack %v", s.name)
-	if err := s.templateClient.RenderAll(); err != nil {
+	if err := s.templateRenderer.RenderAll(); err != nil {
 		return err
 	}
 
 	log.Infof("Creating/updating non terraform resources for stack %v", s.name)
-	if err := s.cloudClient.Setup(ctx); err != nil {
+	if err := s.cloudSetup.Setup(ctx); err != nil {
 		return err
 	}
 
 	log.Infof("Executing terraform apply for stack %v", s.name)
-	if _, err := s.terraformClient.Apply(ctx); err != nil {
+	if _, err := s.terraformApplier.Apply(ctx); err != nil {
 		return err
 	}
 
 	log.Infof("Ensuring notifications enabled for stack %v", s.name)
-	if err := s.cloudClient.SubscribeNotifications(ctx); err != nil {
+	if err := s.cloudSubscriber.Subscribe(ctx); err != nil {
 		return err
 	}
 

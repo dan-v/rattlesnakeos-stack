@@ -7,7 +7,6 @@ import (
 	"fmt"
 	"github.com/dan-v/rattlesnakeos-stack/internal/cloudaws"
 	"github.com/dan-v/rattlesnakeos-stack/internal/devices"
-	"github.com/dan-v/rattlesnakeos-stack/internal/stack"
 	"io"
 	"io/ioutil"
 	"os"
@@ -17,6 +16,9 @@ import (
 )
 
 const (
+	DefaultLatestURL                 = "https://raw.githubusercontent.com/RattlesnakeOS/latest/11.0/latest.json"
+	DefaultCoreConfigRepo            = "https://github.com/rattlesnakeos/core"
+	DefaultReleaseURL             	 = "https://api.github.com/repos/dan-v/rattlesnakeos-stack/releases/latest"
 	defaultLambdaFunctionFilename    = "lambda_spot_function.py"
 	defaultLambdaZipFilename         = "lambda_spot.zip"
 	defaultBuildScriptFilename       = "build.sh"
@@ -24,13 +26,19 @@ const (
 	defaultGeneratedVarReplaceString = "#### <generated_vars_and_funcs.sh> ####"
 )
 
+// TemplateFiles are all of the template files as strings
 type TemplateFiles struct {
+	// BuildScript is the raw build shell script
 	BuildScript       string
+	// BuildScriptVars is a template file with variables and functions that gets inserted into build script after render
 	BuildScriptVars   string
+	// LambdaTemplate is a template file of the python Lambda function
 	LambdaTemplate    string
+	// TerraformTemplate is a template file of the Terraform code
 	TerraformTemplate string
 }
 
+// Config contains all of the template config values
 type Config struct {
 	Version               string
 	Name                  string
@@ -52,6 +60,7 @@ type Config struct {
 	Cloud                 string
 }
 
+// Templates provides the ability to render templates and write them to disk
 type Templates struct {
 	config                 *Config
 	templateFiles          *TemplateFiles
@@ -61,6 +70,8 @@ type Templates struct {
 	tfMainFilePath         string
 }
 
+
+// New returns an initialized Templates
 func New(config *Config, templateFiles *TemplateFiles, outputDir string) (*Templates, error) {
 	return &Templates{
 		config:                 config,
@@ -72,6 +83,7 @@ func New(config *Config, templateFiles *TemplateFiles, outputDir string) (*Templ
 	}, nil
 }
 
+// RenderAll renders all templates and writes them to output directory
 func (t *Templates) RenderAll() error {
 	renderedBuildScript, err := t.renderBuildScript()
 	if err != nil {
@@ -119,7 +131,7 @@ func (t *Templates) renderLambdaFunction() ([]byte, error) {
 	}{
 		t.config,
 		string(regionAMIs),
-		stack.DefaultReleaseURL,
+		DefaultReleaseURL,
 	})
 }
 

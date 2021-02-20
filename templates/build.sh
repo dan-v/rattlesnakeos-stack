@@ -176,10 +176,6 @@ setup_vendor() {
     mv "${AOSP_BUILD_DIR}/vendor/android-prepare-vendor/${DEVICE}/$(tr '[:upper:]' '[:lower:]' <<< "${AOSP_BUILD_ID}")/vendor/google_devices/${DEVICE_FAMILY}" "${AOSP_BUILD_DIR}/vendor/google_devices"
   fi
 
-  # workaround for libsdsprpc and libadsprpc not specifying LOCAL_SHARED_LIBRARIES
-  sed -i '/LOCAL_MODULE := libsdsprpc/a LOCAL_SHARED_LIBRARIES := libc++ libc libcutils libdl libion liblog libm' "${AOSP_BUILD_DIR}/vendor/google_devices/${DEVICE}/Android.mk" || true
-  sed -i '/LOCAL_MODULE := libadsprpc/a LOCAL_SHARED_LIBRARIES := libc++ libc libcutils libdl libion liblog libm' "${AOSP_BUILD_DIR}/vendor/google_devices/${DEVICE}/Android.mk" || true
-
   run_hook_if_exists "setup_vendor_post"
 }
 
@@ -300,18 +296,15 @@ release() {
 
     log "Running sign_target_files_apks"
     "${RELEASE_TOOLS_DIR}/releasetools/sign_target_files_apks" \
-    -o -d "${KEY_DIR}" \
-    -k "${AOSP_BUILD_DIR}/build/target/product/security/networkstack=${KEY_DIR}/networkstack" "${AVB_SWITCHES[@]}" \
-    "${AOSP_BUILD_DIR}/out/target/product/${DEVICE}/obj/PACKAGING/target_files_intermediates/${PREFIX}${DEVICE}-target_files-${BUILD_NUMBER}.zip" \
-    "${OUT}/${TARGET_FILES}"
+      -o -d "${KEY_DIR}" \
+      -k "${AOSP_BUILD_DIR}/build/target/product/security/networkstack=${KEY_DIR}/networkstack" "${AVB_SWITCHES[@]}" \
+      "${AOSP_BUILD_DIR}/out/target/product/${DEVICE}/obj/PACKAGING/target_files_intermediates/${PREFIX}${DEVICE}-target_files-${BUILD_NUMBER}.zip" \
+      "${OUT}/${TARGET_FILES}"
 
     log "Running ota_from_target_files"
     # shellcheck disable=SC2068
-    echo "${RELEASE_TOOLS_DIR}/releasetools/ota_from_target_files" --block -k "${KEY_DIR}/releasekey" ${DEVICE_EXTRA_OTA[@]} "${OUT}/${TARGET_FILES}" \
-        "${OUT}/${DEVICE}-ota_update-${BUILD}.zip"
-    # shellcheck disable=SC2068
     "${RELEASE_TOOLS_DIR}/releasetools/ota_from_target_files" --block -k "${KEY_DIR}/releasekey" ${DEVICE_EXTRA_OTA[@]} "${OUT}/${TARGET_FILES}" \
-        "${OUT}/${DEVICE}-ota_update-${BUILD}.zip"
+      "${OUT}/${DEVICE}-ota_update-${BUILD}.zip"
 
     log "Running img_from_target_files"
     "${RELEASE_TOOLS_DIR}/releasetools/img_from_target_files" "${OUT}/${TARGET_FILES}" "${OUT}/${DEVICE}-img-${BUILD}.zip"

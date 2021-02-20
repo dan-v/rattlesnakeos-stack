@@ -19,8 +19,10 @@ import (
 )
 
 const (
+	// TODO: this version of Terraform is getting quite old, but don't have a great plan for seamless major version upgrade.
 	// Version is the Terraform version that is downloaded and used
 	Version = "0.11.14"
+	// DefaultTerraformDestroyTimeout is the default timeout for running Terraform destroy
 	DefaultTerraformDestroyTimeout = time.Minute * 2
 )
 
@@ -30,11 +32,13 @@ var (
 	windowsBinaryURL = fmt.Sprintf("https://releases.hashicorp.com/terraform/%s/terraform_%s_windows_amd64.zip", Version, Version)
 )
 
+// Client provides a basic Terraform client
 type Client struct {
 	rootDir             string
 	terraformBinaryFile string
 }
 
+// New downloads the Terraform binary for current platform and returns an initialized Client
 func New(rootDir string) (*Client, error) {
 	terraformBinary, err := setupBinary(rootDir)
 	if err != nil {
@@ -48,6 +52,7 @@ func New(rootDir string) (*Client, error) {
 	return client, nil
 }
 
+// Apply runs terraform init and apply
 func (c *Client) Apply(ctx context.Context) ([]byte, error) {
 	output, err := c.init(ctx)
 	if err != nil {
@@ -58,6 +63,7 @@ func (c *Client) Apply(ctx context.Context) ([]byte, error) {
 	return c.run(cmd)
 }
 
+// Destroy runs terraform destroy
 func (c *Client) Destroy(ctx context.Context) ([]byte, error) {
 	cmd := c.setup(ctx, append([]string{"destroy", "-auto-approve", c.rootDir}))
 	return c.run(cmd)

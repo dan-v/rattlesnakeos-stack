@@ -18,11 +18,11 @@ var (
 	deviceSortOrder  []string
 )
 
+// Device contains details and metadata about a device
 type Device struct {
 	Name     string
 	Friendly string
 	Family   string
-	Common   string
 	AVBMode  string
 	ExtraOTA string
 }
@@ -33,7 +33,6 @@ func init() {
 			Name:     blueline,
 			Friendly: "Pixel 3",
 			Family:   "crosshatch",
-			Common:   "crosshatch",
 			AVBMode:  avbModeChained,
 			ExtraOTA: "(--retrofit_dynamic_partitions)",
 		},
@@ -41,7 +40,6 @@ func init() {
 			Name:     crosshatch,
 			Friendly: "Pixel 3 XL",
 			Family:   "crosshatch",
-			Common:   "crosshatch",
 			AVBMode:  avbModeChained,
 			ExtraOTA: "(--retrofit_dynamic_partitions)",
 		},
@@ -49,7 +47,6 @@ func init() {
 			Name:     sargo,
 			Friendly: "Pixel 3a",
 			Family:   "bonito",
-			Common:   "bonito",
 			AVBMode:  avbModeChained,
 			ExtraOTA: "(--retrofit_dynamic_partitions)",
 		},
@@ -57,7 +54,6 @@ func init() {
 			Name:     bonito,
 			Friendly: "Pixel 3a XL",
 			Family:   "bonito",
-			Common:   "bonito",
 			AVBMode:  avbModeChained,
 			ExtraOTA: "(--retrofit_dynamic_partitions)",
 		},
@@ -65,28 +61,24 @@ func init() {
 			Name:     flame,
 			Friendly: "Pixel 4",
 			Family:   "coral",
-			Common:   "coral",
 			AVBMode:  avbModeChainedV2,
 		},
 		Device{
 			Name:     coral,
 			Friendly: "Pixel 4 XL",
 			Family:   "coral",
-			Common:   "coral",
 			AVBMode:  avbModeChainedV2,
 		},
 		Device{
 			Name:     sunfish,
 			Friendly: "Pixel 4a",
 			Family:   "sunfish",
-			Common:   "sunfish",
 			AVBMode:  avbModeChainedV2,
 		},
 		Device{
 			Name:     redfin,
 			Friendly: "Pixel 5",
 			Family:   "redfin",
-			Common:   "redfin",
 			AVBMode:  avbModeChainedV2,
 		},
 	)

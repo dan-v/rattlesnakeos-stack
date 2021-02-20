@@ -10,6 +10,7 @@ import (
 	"strings"
 )
 
+// TerminateEC2Instance terminates the specified ec2 instance
 func TerminateEC2Instance(ctx context.Context, instanceID, region string) (*ec2.TerminateInstancesOutput, error) {
 	cfg, err := config.LoadDefaultConfig(ctx, config.WithRegion(region))
 	if err != nil {
@@ -27,6 +28,7 @@ func TerminateEC2Instance(ctx context.Context, instanceID, region string) (*ec2.
 	return output, nil
 }
 
+// GetRunningEC2InstancesWithProfileName returns a list of instances running with a profile name
 func GetRunningEC2InstancesWithProfileName(ctx context.Context, profileName, listRegions string) ([]string, error) {
 	cfg, err := config.LoadDefaultConfig(ctx)
 	if err != nil {
