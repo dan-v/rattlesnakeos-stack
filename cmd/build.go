@@ -16,9 +16,9 @@ var (
 	terminateInstanceID, terminateRegion, listRegions string
 	aospBuildID, aospTag string
 	forceBuild bool
-	defaultExecuteLambdaTimeout = time.Second*60
-	defaultTerminateInstanceTimeout = time.Second*10
-	defaultListInstancesTimeout = time.Second*10
+	defaultExecuteLambdaTimeout = time.Second * 60
+	defaultTerminateInstanceTimeout = time.Second * 10
+	defaultListInstancesTimeout = time.Second * 10
 )
 
 func init() {

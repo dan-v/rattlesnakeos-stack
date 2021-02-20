@@ -4,6 +4,7 @@ import base64
 import json
 from urllib.request import urlopen
 from datetime import datetime, timedelta
+from pkg_resources import packaging
 
 STACK_VERSION = '<% .Config.Version %>'
 NAME = '<% .Config.Name %>'
@@ -38,6 +39,21 @@ def lambda_handler(event, context):
     print("latest_aosp_build_id", latest_aosp_build_id)
     latest_aosp_tag = latest_json.get('devices').get(DEVICE).get('aosp_tag')
     print("latest_aosp_tag", latest_aosp_tag)
+    minimum_stack_version = latest_json.get('minimum_stack_version')
+    print("minimum_stack_version", minimum_stack_version)
+
+    # only build if minimum stack version requirement is met
+    if packaging.version.parse(STACK_VERSION) < packaging.version.parse(minimum_stack_version):
+        message = "RattlesnakeOS build was cancelled. Existing stack version {} needs to be updated to latest".format(STACK_VERSION)
+        send_sns_message("RattlesnakeOS Stack Needs Update", message)
+        return message
+
+    # gather revisions for passing to build script
+    revisions = []
+    for k, v in latest_json.get('revisions').items():
+        revisions.append("{}={}".format(k, v))
+    revisions_string = (",".join(revisions))
+    print("revisions_string", revisions_string)
 
     # build time overrides
     force_build = event.get('force-build') or False
@@ -84,8 +100,8 @@ def lambda_handler(event, context):
 
     # userdata to deploy with spot instance
     copy_build_command = f"sudo -u ubuntu aws s3 --region {STACK_REGION} cp {BUILD_SCRIPT_S3_LOCATION} /home/ubuntu/build.sh"
-    build_args_command = f"echo \\\"./build.sh {aosp_build_id} {aosp_tag} {chromium_version}\\\" > /home/ubuntu/build_cmd"
-    build_start_command = f"sudo -u ubuntu bash /home/ubuntu/build.sh \\\"{aosp_build_id}\\\" \\\"{aosp_tag}\\\" \\\"{chromium_version}\\\""
+    build_args_command = f"echo \\\"/home/ubuntu/build.sh {aosp_build_id} {aosp_tag} {chromium_version} {revisions_string}\\\" > /home/ubuntu/build_cmd"
+    build_start_command = f"sudo -u ubuntu bash /home/ubuntu/build.sh \\\"{aosp_build_id}\\\" \\\"{aosp_tag}\\\" \\\"{chromium_version}\\\" \\\"{revisions_string}\\\""
     userdata = base64.b64encode(f"""
 #cloud-config
 output : {{ all : '| tee -a /var/log/cloud-init-output.log' }}

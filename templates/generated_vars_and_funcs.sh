@@ -11,7 +11,6 @@ STACK_VERSION="<% .Version %>"
 CHROMIUM_BUILD_DISABLED="<% .ChromiumBuildDisabled %>"
 CORE_CONFIG_REPO="<% .CoreConfigRepo %>"
 CUSTOM_CONFIG_REPO="<% .CustomConfigRepo %>"
-LATEST_JSON_URL="<% .Config.LatestURL %>"
 
 ##########################################
 ###### CLOUD SPECIFIC VARS AND FUNCS #####

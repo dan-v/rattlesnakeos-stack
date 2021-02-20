@@ -9,6 +9,8 @@ AOSP_TAG=$2
 echo "AOSP_TAG=${AOSP_TAG}"
 CHROMIUM_VERSION=$3
 echo "CHROMIUM_VERSION=${CHROMIUM_VERSION}"
+LOCAL_MANIFEST_REVISIONS=$4
+echo "LOCAL_MANIFEST_REVISIONS=${LOCAL_MANIFEST_REVISIONS}"
 
 #### <generated_vars_and_funcs.sh> ####
 
@@ -117,6 +119,14 @@ aosp_local_repo_additions() {
     if [ -f "${local_chromium_manifest}" ]; then
       log "Removing ${local_chromium_manifest} as chromium build is disabled"
       rm -f "${local_chromium_manifest}" || true
+    fi
+  fi
+
+  if [ -n "${LOCAL_MANIFEST_REVISIONS}" ]; then
+    update_local_manifest_revisions_script="${CORE_DIR}/scripts/update_local_manifest_revisions.py"
+    if [ -f "${update_local_manifest_revisions_script}" ]; then
+      log "Updating local manifests with specified revisions ${LOCAL_MANIFEST_REVISIONS}"
+      python3 "${update_local_manifest_revisions_script}" "${CORE_DIR}/local_manifests/*.xml" "${LOCAL_MANIFEST_REVISIONS}"
     fi
   fi
 
