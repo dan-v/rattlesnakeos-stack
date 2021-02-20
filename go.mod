@@ -3,7 +3,13 @@ module github.com/dan-v/rattlesnakeos-stack
 go 1.16
 
 require (
-	github.com/aws/aws-sdk-go v1.37.2
+	github.com/aws/aws-sdk-go-v2 v1.2.0
+	github.com/aws/aws-sdk-go-v2/config v1.1.1
+	github.com/aws/aws-sdk-go-v2/service/ec2 v1.1.1
+	github.com/aws/aws-sdk-go-v2/service/iam v1.1.1
+	github.com/aws/aws-sdk-go-v2/service/lambda v1.1.1
+	github.com/aws/aws-sdk-go-v2/service/s3 v1.2.0
+	github.com/aws/aws-sdk-go-v2/service/sns v1.1.1
 	github.com/fatih/color v1.10.0
 	github.com/fsnotify/fsnotify v1.4.9 // indirect
 	github.com/lunixbochs/vtclean v1.0.0 // indirect

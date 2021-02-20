@@ -1,6 +1,7 @@
 package cmd
 
 import (
+	"context"
 	"fmt"
 	"github.com/dan-v/rattlesnakeos-stack/internal/terraform"
 	"github.com/fatih/color"
@@ -23,7 +24,7 @@ func init() {
 
 var removeCmd = &cobra.Command{
 	Use:   "remove",
-	Short: "remove all AWS infrastructure used for building OS",
+	Short: "remove all cloud infrastructure used for OS building",
 	Args: func(cmd *cobra.Command, args []string) error {
 		if viper.GetString("name") == "" && name == "" {
 			return fmt.Errorf("must provide a stack name")
@@ -41,7 +42,7 @@ var removeCmd = &cobra.Command{
 			region = viper.GetString("region")
 		}
 
-		log.Println("Details of stack to be deleted:")
+		log.Println("details of stack to be deleted:")
 		fmt.Println("Stack name:", name)
 		fmt.Println("Stack region:", region)
 		fmt.Println("")
@@ -69,7 +70,10 @@ var removeCmd = &cobra.Command{
 			log.Fatalf("failed to create terraform client: %v", err)
 		}
 
-		_, err = terraformClient.Destroy()
+		ctx, cancel := context.WithTimeout(context.Background(), terraform.DefaultTerraformDestroyTimeout)
+		defer cancel()
+
+		_, err = terraformClient.Destroy(ctx)
 		if err != nil {
 			log.Fatalf("failed to run terraform destroy: %v", err)
 		}

@@ -1,25 +1,29 @@
 package cloudaws
 
 import (
+	"context"
 	"fmt"
-	"github.com/aws/aws-sdk-go/aws"
-	"github.com/aws/aws-sdk-go/service/lambda"
+	"github.com/aws/aws-sdk-go-v2/aws"
+	"github.com/aws/aws-sdk-go-v2/config"
+	"github.com/aws/aws-sdk-go-v2/service/lambda"
+	lambdatypes "github.com/aws/aws-sdk-go-v2/service/lambda/types"
 )
 
-func ExecuteLambdaFunction(functionName, region string, payload []byte) (*lambda.InvokeOutput, error) {
-	sess, err := getSession()
+func ExecuteLambdaFunction(ctx context.Context, functionName, region string, payload []byte) (*lambda.InvokeOutput, error) {
+	cfg, err := config.LoadDefaultConfig(ctx, config.WithRegion(region))
 	if err != nil {
-		return nil, fmt.Errorf("failed to get session for lambda function execution: %w", err)
+		return nil, err
 	}
 
-	lambdaClient := lambda.New(sess, &aws.Config{Region: &region})
-	output, err := lambdaClient.Invoke(&lambda.InvokeInput{
+	lambdaClient := lambda.NewFromConfig(cfg)
+	output, err := lambdaClient.Invoke(ctx, &lambda.InvokeInput{
 		FunctionName:   aws.String(functionName),
-		InvocationType: aws.String("RequestResponse"),
+		InvocationType: lambdatypes.InvocationTypeRequestResponse,
 		Payload:        payload,
 	})
 	if err != nil {
 		return output, fmt.Errorf("failed to execute lambda function: %w", err)
 	}
+
 	return output, nil
 }

@@ -22,7 +22,7 @@ func init() {
 
 var configCmd = &cobra.Command{
 	Use:   "config",
-	Short: "Setup config file for rattlesnakeos-stack",
+	Short: "setup config file for rattlesnakeos-stack",
 	Run: func(cmd *cobra.Command, args []string) {
 		color.Cyan(fmt.Sprintln("Device is the device codename (e.g. sailfish). Supported devices:", supportDevicesOutput))
 		validate := func(input string) error {

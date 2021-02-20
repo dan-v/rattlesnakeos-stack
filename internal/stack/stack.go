@@ -1,78 +1,69 @@
 package stack
 
 import (
+	"context"
 	log "github.com/sirupsen/logrus"
+	"time"
 )
 
 const (
 	MinimumChromiumVersion        = 86
+	DefaultDeployTimeout          = time.Minute * 5
 	DefaultCoreConfigRepo         = "https://github.com/rattlesnakeos/core"
 	DefaultLatestURL              = "https://raw.githubusercontent.com/RattlesnakeOS/latest/11.0/latest.json"
-	RattlesnakeOSStackReleasesURL = "https://api.github.com/repos/dan-v/rattlesnakeos-stack/releases/latest"
+	DefaultReleaseURL             = "https://api.github.com/repos/dan-v/rattlesnakeos-stack/releases/latest"
 )
 
-type TemplateGenerator interface {
+type TemplateRenderer interface {
 	RenderAll() error
 }
 
-type CloudClient interface {
-	Setup() error
-	Subscribe() error
+type CloudSetupSubscriber interface {
+	Setup(ctx context.Context) error
+	SubscribeNotifications(ctx context.Context) error
 }
 
-type TerraformClient interface {
-	Apply() ([]byte, error)
-	Destroy() ([]byte, error)
+type TerraformApplier interface {
+	Apply(ctx context.Context) ([]byte, error)
 }
 
 type Stack struct {
 	name              string
-	templates         TemplateGenerator
-	cloudClient       CloudClient
-	terraformClient   TerraformClient
-	outputDirFullPath string
-	tfDir             string
+	templateClient    TemplateRenderer
+	cloudClient       CloudSetupSubscriber
+	terraformClient   TerraformApplier
 }
 
-func New(name string, templates TemplateGenerator, cloudClient CloudClient, terraformClient TerraformClient) *Stack {
+func New(name string, templateClient TemplateRenderer, cloudClient CloudSetupSubscriber, terraformClient TerraformApplier) *Stack {
 	return &Stack{
 		name:            name,
-		templates:       templates,
+		templateClient:  templateClient,
 		cloudClient:     cloudClient,
 		terraformClient: terraformClient,
 	}
 }
 
-func (s *Stack) Apply() error {
+func (s *Stack) Deploy(ctx context.Context) error {
 	log.Infof("Rendering all templates files for stack %v", s.name)
-	if err := s.templates.RenderAll(); err != nil {
+	if err := s.templateClient.RenderAll(); err != nil {
 		return err
 	}
 
-	log.Infof("Creating/updating non Terraform AWS resources for stack %v", s.name)
-	if err := s.cloudClient.Setup(); err != nil {
+	log.Infof("Creating/updating non terraform resources for stack %v", s.name)
+	if err := s.cloudClient.Setup(ctx); err != nil {
 		return err
 	}
 
-	log.Infof("Executing Terraform apply for stack %v", s.name)
-	if _, err := s.terraformClient.Apply(); err != nil {
+	log.Infof("Executing terraform apply for stack %v", s.name)
+	if _, err := s.terraformClient.Apply(ctx); err != nil {
 		return err
 	}
 
-	if err := s.cloudClient.Subscribe(); err != nil {
+	log.Infof("Ensuring notifications enabled for stack %v", s.name)
+	if err := s.cloudClient.SubscribeNotifications(ctx); err != nil {
 		return err
 	}
 
-	log.Infof("Successfully deployed/updated AWS resources for stack %v", s.name)
-	return nil
-}
-
-func (s *Stack) Destroy() error {
-	log.Info("Executing Terraform destroy for stack %v", s.name)
-	if _, err := s.terraformClient.Destroy(); err != nil {
-		return err
-	}
-
-	log.Infof("Successfully removed AWS resources for stack %v", s.name)
+	log.Infof("Successfully deployed/updated resources for stack %v", s.name)
 	return nil
 }

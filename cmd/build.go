@@ -1,6 +1,7 @@
 package cmd
 
 import (
+	"context"
 	"encoding/json"
 	"errors"
 	"fmt"
@@ -8,11 +9,17 @@ import (
 	log "github.com/sirupsen/logrus"
 	"github.com/spf13/cobra"
 	"github.com/spf13/viper"
+	"time"
 )
 
-var forceBuild bool
-var terminateInstanceID, terminateRegion, listRegions string
-var aospBuildID, aospTag string
+var (
+	terminateInstanceID, terminateRegion, listRegions string
+	aospBuildID, aospTag string
+	forceBuild bool
+	defaultExecuteLambdaTimeout = time.Second*60
+	defaultTerminateInstanceTimeout = time.Second*10
+	defaultListInstancesTimeout = time.Second*10
+)
 
 func init() {
 	rootCmd.AddCommand(buildCmd)
@@ -79,18 +86,13 @@ var buildStartCmd = &cobra.Command{
 			log.Fatalf("failed to create payload for lambda function: %v", err)
 		}
 
+		ctx, cancel := context.WithTimeout(context.Background(), defaultExecuteLambdaTimeout)
+		defer cancel()
+
 		log.Infof("calling lambda function to start manual build for stack %v", name)
-		output, err := cloudaws.ExecuteLambdaFunction(name, region, payload)
+		output, err := cloudaws.ExecuteLambdaFunction(ctx, name, region, payload)
 		if err != nil {
-			log.Fatalf("Failed to start manual build: %v", err)
-		}
-
-		if output.FunctionError != nil {
-			log.Fatalf("failed to start manual build. function error: %v. Output: %v", *output.FunctionError, string(output.Payload))
-		}
-
-		if *output.StatusCode != 200 {
-			log.Fatalf("failed to start manual build. status code calling lambda function %v != 200", *output.StatusCode)
+			log.Fatalf("Failed to start manual build: status=%v output=%v err=%v", output.StatusCode, output.LogResult, err)
 		}
 
 		log.Infof("successfully started manual build for stack %v", name)
@@ -110,7 +112,10 @@ var buildTerminateCmd = &cobra.Command{
 		return nil
 	},
 	Run: func(cmd *cobra.Command, args []string) {
-		output, err := cloudaws.TerminateEC2Instance(terminateInstanceID, terminateRegion)
+		ctx, cancel := context.WithTimeout(context.Background(), defaultTerminateInstanceTimeout)
+		defer cancel()
+
+		output, err := cloudaws.TerminateEC2Instance(ctx, terminateInstanceID, terminateRegion)
 		if err != nil {
 			log.Fatal(err)
 		}
@@ -139,14 +144,19 @@ var buildListCmd = &cobra.Command{
 			listRegions = viper.GetString("instance-regions")
 		}
 
-		instances, err := cloudaws.GetRunningEC2InstancesWithProfileName(fmt.Sprintf("%v-ec2", name), listRegions)
+		ctx, cancel := context.WithTimeout(context.Background(), defaultListInstancesTimeout)
+		defer cancel()
+
+		instances, err := cloudaws.GetRunningEC2InstancesWithProfileName(ctx, fmt.Sprintf("%v-ec2", name), listRegions)
 		if err != nil {
 			log.Fatal(err)
 		}
+
 		if len(instances) == 0 {
 			log.Info("no active builds found")
 			return
 		}
+
 		for _, instance := range instances {
 			fmt.Println(instance)
 		}

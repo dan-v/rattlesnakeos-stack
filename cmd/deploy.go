@@ -1,6 +1,7 @@
 package cmd
 
 import (
+	"context"
 	"errors"
 	"fmt"
 	"github.com/dan-v/rattlesnakeos-stack/internal/cloudaws"
@@ -20,15 +21,15 @@ import (
 	yaml "gopkg.in/yaml.v2"
 )
 
-var name, region, email, device, sshKey, maxPrice, skipPrice, schedule string
-var instanceType, instanceRegions, chromiumVersion string
-var skipDeploy, chromiumBuildDisabled bool
-var supportedDevicesFriendly = devices.GetDeviceFriendlyNames()
-var supportedDevicesCodename = devices.GetDeviceCodeNames()
-var supportDevicesOutput string
-var coreConfigRepo, customConfigRepo string
-var cloud string
-var latestURL string
+var (
+	name, region, email, device, sshKey, maxPrice, skipPrice, schedule, cloud string
+	instanceType, instanceRegions, chromiumVersion, latestURL string
+	skipDeploy, chromiumBuildDisabled bool
+	supportedDevicesFriendly = devices.GetDeviceFriendlyNames()
+	supportedDevicesCodename = devices.GetDeviceCodeNames()
+	supportDevicesOutput string
+	coreConfigRepo, customConfigRepo string
+)
 
 func init() {
 	rootCmd.AddCommand(deployCmd)
@@ -107,7 +108,7 @@ func init() {
 
 var deployCmd = &cobra.Command{
 	Use:   "deploy",
-	Short: "Deploy or update the AWS infrastructure used for building RattlesnakeOS",
+	Short: "deploy or update the cloud infrastructure used for OS building",
 	Args: func(cmd *cobra.Command, args []string) error {
 		if viper.GetString("name") == "" {
 			return fmt.Errorf("must provide a stack name")
@@ -220,7 +221,10 @@ var deployCmd = &cobra.Command{
 		}
 
 		if !skipDeploy {
-			if err := s.Apply(); err != nil {
+			ctx, cancel := context.WithTimeout(context.Background(), stack.DefaultDeployTimeout)
+			defer cancel()
+
+			if err := s.Deploy(ctx); err != nil {
 				log.Fatal(err)
 			}
 		} else {

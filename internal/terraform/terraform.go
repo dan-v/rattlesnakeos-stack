@@ -4,8 +4,10 @@ import (
 	"archive/zip"
 	"bufio"
 	"bytes"
+	"context"
 	_ "embed"
 	"fmt"
+	log "github.com/sirupsen/logrus"
 	"io"
 	"net/http"
 	"os"
@@ -13,18 +15,19 @@ import (
 	"path/filepath"
 	"runtime"
 	"strings"
-
-	log "github.com/sirupsen/logrus"
+	"time"
 )
 
 const (
-	terraformVersion = "0.11.14"
+	// Version is the Terraform version that is downloaded and used
+	Version = "0.11.14"
+	DefaultTerraformDestroyTimeout = time.Minute * 2
 )
 
 var (
-	darwinBinaryURL  = fmt.Sprintf("https://releases.hashicorp.com/terraform/%s/terraform_%s_darwin_amd64.zip", terraformVersion, terraformVersion)
-	linuxBinaryURL   = fmt.Sprintf("https://releases.hashicorp.com/terraform/%s/terraform_%s_linux_amd64.zip", terraformVersion, terraformVersion)
-	windowsBinaryURL = fmt.Sprintf("https://releases.hashicorp.com/terraform/%s/terraform_%s_windows_amd64.zip", terraformVersion, terraformVersion)
+	darwinBinaryURL  = fmt.Sprintf("https://releases.hashicorp.com/terraform/%s/terraform_%s_darwin_amd64.zip", Version, Version)
+	linuxBinaryURL   = fmt.Sprintf("https://releases.hashicorp.com/terraform/%s/terraform_%s_linux_amd64.zip", Version, Version)
+	windowsBinaryURL = fmt.Sprintf("https://releases.hashicorp.com/terraform/%s/terraform_%s_windows_amd64.zip", Version, Version)
 )
 
 type Client struct {
@@ -45,28 +48,28 @@ func New(rootDir string) (*Client, error) {
 	return client, nil
 }
 
-func (c *Client) Apply() ([]byte, error) {
-	output, err := c.init()
+func (c *Client) Apply(ctx context.Context) ([]byte, error) {
+	output, err := c.init(ctx)
 	if err != nil {
 		return output, err
 	}
 
-	cmd := c.setup(append([]string{"apply", "-auto-approve", c.rootDir}))
+	cmd := c.setup(ctx, append([]string{"apply", "-auto-approve", c.rootDir}))
 	return c.run(cmd)
 }
 
-func (c *Client) Destroy() ([]byte, error) {
-	cmd := c.setup(append([]string{"destroy", "-auto-approve", c.rootDir}))
+func (c *Client) Destroy(ctx context.Context) ([]byte, error) {
+	cmd := c.setup(ctx, append([]string{"destroy", "-auto-approve", c.rootDir}))
 	return c.run(cmd)
 }
 
-func (c *Client) init() ([]byte, error) {
-	cmd := c.setup(append([]string{"init", c.rootDir}))
+func (c *Client) init(ctx context.Context) ([]byte, error) {
+	cmd := c.setup(ctx, append([]string{"init", c.rootDir}))
 	return c.run(cmd)
 }
 
-func (c *Client) setup(args []string) *exec.Cmd {
-	cmd := exec.Command(c.terraformBinaryFile, args...)
+func (c *Client) setup(ctx context.Context, args []string) *exec.Cmd {
+	cmd := exec.CommandContext(ctx, c.terraformBinaryFile, args...)
 	cmd.Dir = c.rootDir
 	return cmd
 }
@@ -108,7 +111,7 @@ func getTerraformURL() (string, error) {
 }
 
 func setupBinary(outputDir string) (string, error) {
-	terraformZipFilename := fmt.Sprintf("terraform-%v.zip", terraformVersion)
+	terraformZipFilename := fmt.Sprintf("terraform-%v.zip", Version)
 	terraformZipFullPathFilename := filepath.Join(outputDir, terraformZipFilename)
 
 	downloadRequired := true

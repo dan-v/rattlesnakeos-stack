@@ -119,7 +119,7 @@ func (t *Templates) renderLambdaFunction() ([]byte, error) {
 	}{
 		t.config,
 		string(regionAMIs),
-		stack.RattlesnakeOSStackReleasesURL,
+		stack.DefaultReleaseURL,
 	})
 }
 

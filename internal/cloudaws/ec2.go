@@ -1,21 +1,24 @@
 package cloudaws
 
 import (
+	"context"
 	"fmt"
-	"github.com/aws/aws-sdk-go/aws"
-	"github.com/aws/aws-sdk-go/service/ec2"
+	"github.com/aws/aws-sdk-go-v2/aws"
+	"github.com/aws/aws-sdk-go-v2/config"
+	"github.com/aws/aws-sdk-go-v2/service/ec2"
+	ec2types "github.com/aws/aws-sdk-go-v2/service/ec2/types"
 	"strings"
 )
 
-func TerminateEC2Instance(instanceID, region string) (*ec2.TerminateInstancesOutput, error) {
-	sess, err := getSession()
+func TerminateEC2Instance(ctx context.Context, instanceID, region string) (*ec2.TerminateInstancesOutput, error) {
+	cfg, err := config.LoadDefaultConfig(ctx, config.WithRegion(region))
 	if err != nil {
-		return nil, fmt.Errorf("failed to get session for terminating ec2 instance: %w", err)
+		return nil, err
 	}
 
-	ec2Client := ec2.New(sess, &aws.Config{Region: &region})
-	output, err := ec2Client.TerminateInstances(&ec2.TerminateInstancesInput{
-		InstanceIds: aws.StringSlice([]string{instanceID}),
+	ec2Client := ec2.NewFromConfig(cfg)
+	output, err := ec2Client.TerminateInstances(ctx, &ec2.TerminateInstancesInput{
+		InstanceIds: []string{instanceID},
 	})
 	if err != nil {
 		return nil, fmt.Errorf("failed to terminate ec2 instance '%v' in region '%v': output:%v error:%v", instanceID, region, output, err)
@@ -24,20 +27,22 @@ func TerminateEC2Instance(instanceID, region string) (*ec2.TerminateInstancesOut
 	return output, nil
 }
 
-func GetRunningEC2InstancesWithProfileName(profileName, listRegions string) ([]string, error) {
-	sess, err := getSession()
+func GetRunningEC2InstancesWithProfileName(ctx context.Context, profileName, listRegions string) ([]string, error) {
+	cfg, err := config.LoadDefaultConfig(ctx)
 	if err != nil {
-		return nil, fmt.Errorf("failed to get session for describing ec2 instance: %w", err)
+		return nil, err
 	}
 
-	instances := []string{}
+	var instances []string
 	for _, region := range strings.Split(listRegions, ",") {
-		ec2Client := ec2.New(sess, &aws.Config{Region: &region})
-		resp, err := ec2Client.DescribeInstances(&ec2.DescribeInstancesInput{
-			Filters: []*ec2.Filter{
+		ec2Client := ec2.NewFromConfig(cfg, func(o *ec2.Options) {
+			o.Region = region
+		})
+		resp, err := ec2Client.DescribeInstances(ctx, &ec2.DescribeInstancesInput{
+			Filters: []ec2types.Filter{
 				{
 					Name:   aws.String("instance-state-name"),
-					Values: []*string{aws.String("running")}},
+					Values: []string{"running"}},
 			},
 		},
 		)

@@ -72,6 +72,6 @@ func init() {
 
 var rootCmd = &cobra.Command{
 	Use: "rattlesnakeos-stack",
-	Short: "a cross platform tool that provisions all of the AWS infrastructure required to build your own privacy " +
+	Short: "a cross platform tool that provisions all of the cloud infrastructure required to build your own privacy " +
 		"focused Android OS on a continuous basis with OTA updates.",
 }
