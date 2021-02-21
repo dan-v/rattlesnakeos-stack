@@ -208,6 +208,7 @@ resource "aws_iam_role_policy" "rattlesnake_lambda_policy" {
         "Effect": "Allow",
         "Action": [
             "ec2:DescribeSubnets",
+            "ec2:DescribeSpotFleetInstances",
             "ec2:RequestSpotFleet",
             "ec2:DescribeSpotPriceHistory",
             "ec2:RunInstances",
@@ -340,7 +341,7 @@ resource "aws_lambda_function" "rattlesnake_lambda_build" {
   handler          = "lambda_spot_function.lambda_handler"
   source_code_hash = "${base64sha256(file("${var.lambda_build_zip_file}"))}"
   runtime          = "python3.6"
-  timeout          = "60"
+  timeout          = "180"
 }
 
 ###################

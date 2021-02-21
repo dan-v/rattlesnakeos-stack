@@ -16,7 +16,7 @@ var (
 	terminateInstanceID, terminateRegion, listRegions string
 	aospBuildID, aospTag string
 	forceBuild bool
-	defaultExecuteLambdaTimeout = time.Second * 60
+	defaultExecuteLambdaTimeout = time.Second * 200
 	defaultTerminateInstanceTimeout = time.Second * 10
 	defaultListInstancesTimeout = time.Second * 10
 )
@@ -91,9 +91,12 @@ var buildStartCmd = &cobra.Command{
 
 		log.Infof("calling lambda function to start manual build for stack %v", name)
 		output, err := cloudaws.ExecuteLambdaFunction(ctx, name, region, payload)
-		if err != nil || output.FunctionError != nil || output.StatusCode != 200  {
-			log.Fatalf("failed to start manual build for stack %v: err=%v, statuscode=%v logresult=%v funcerr=%v payload:%v",
-				name, err, output.StatusCode, output.LogResult, *output.FunctionError, string(output.Payload))
+		if err != nil {
+			log.Fatalf("failed to start manual build for stack %v: err=%v", name, err)
+		}
+		if output != nil && (output.FunctionError != nil || output.StatusCode != 200)  {
+			log.Fatalf("failed to start manual build for stack %v: statuscode=%v payload:%v",
+				name, output.StatusCode, output.Payload)
 		}
 
 		log.Infof("successfully started manual build for stack %v", name)

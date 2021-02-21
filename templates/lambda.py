@@ -2,6 +2,7 @@
 import boto3
 import base64
 import json
+import time
 from urllib.request import urlopen
 from datetime import datetime, timedelta
 from pkg_resources import packaging
@@ -166,13 +167,38 @@ runcmd:
         print(f"requesting spot instance in AZ {cheapest_az} with current price of {cheapest_price}")
         response = client.request_spot_fleet(SpotFleetRequestConfig=spot_fleet_request_config)
         print(f"spot request response: {response}")
+        spot_fleet_request_id = response.get('SpotFleetRequestId')
     except Exception as e:
         message = f"There was a problem requesting a spot instance {INSTANCE_TYPE}: {e}"
         send_sns_message("RattlesnakeOS Spot Instance FAILED", message)
         raise
 
-    subject = "RattlesnakeOS Spot Instance REQUESTED"
-    message = f"Successfully requested a spot instance.\n\n Stack Name: {NAME}\n Device: {DEVICE}\n Instance Type: {INSTANCE_TYPE}\n Cheapest Region: {cheapest_region}\n Cheapest Hourly Price: ${cheapest_price}\n Build Reason: {build_reasons} "
+    try:
+        found_instance = False
+        retry_interval = 5
+        retry_attempts = 30
+        for i in range(1, retry_attempts):
+            print(f"waiting for spot instance launch for spot fleet request id {spot_fleet_request_id}: {i}/{retry_attempts}")
+            response = client.describe_spot_fleet_instances(SpotFleetRequestId=spot_fleet_request_id)
+            print(response)
+            if len(response.get('ActiveInstances')) > 0:
+                found_instance = True
+                break
+            time.sleep(retry_interval)
+        if not found_instance:
+            raise Exception("max wait timeout for spot instance launch")
+    except Exception as e:
+        try:
+            print(f"attempting to cancel spot fleet request id {spot_fleet_request_id}")
+            client.cancel_spot_fleet_requests(SpotFleetRequestIds=[spot_fleet_request_id], TerminateInstances=True)
+        except Exception as ex:
+            print(f"failed to cancel spot fleet request: {ex}")
+        message = f"There was a problem waiting for active spot instance launch {INSTANCE_TYPE}: {e}"
+        send_sns_message("RattlesnakeOS Spot Instance FAILED", message)
+        raise
+
+    subject = "RattlesnakeOS Spot Instance LAUNCHED"
+    message = f"Successfully launched a spot instance.\n\n Stack Name: {NAME}\n Device: {DEVICE}\n Instance Type: {INSTANCE_TYPE}\n Cheapest Region: {cheapest_region}\n Cheapest Hourly Price: ${cheapest_price}\n Build Reason: {build_reasons} "
     send_sns_message(subject, message)
     return message.replace('\n', ' ')
 
