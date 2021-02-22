@@ -16,7 +16,7 @@ import (
 	"github.com/spf13/viper"
 )
 
-func init() {
+func configInit() {
 	rootCmd.AddCommand(configCmd)
 }
 
@@ -24,13 +24,13 @@ var configCmd = &cobra.Command{
 	Use:   "config",
 	Short: "setup config file for rattlesnakeos-stack",
 	Run: func(cmd *cobra.Command, args []string) {
-		color.Cyan(fmt.Sprintln("Device is the device codename (e.g. sailfish). Supported devices:", supportDevicesOutput))
+		color.Cyan(fmt.Sprintln("Device is the device codename (e.g. sunfish). Supported devices:", devices.GetSupportedDevicesOutput()))
 		validate := func(input string) error {
 			if len(input) < 1 {
 				return errors.New("Device name is too short")
 			}
 			if !devices.IsSupportedDevice(input) {
-				return errors.New("Invalid device")
+				return errors.New("invalid device")
 			}
 			return nil
 		}

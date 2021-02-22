@@ -10,7 +10,7 @@ type Region struct {
 	// Name is the name of the region (e.g. us-west-2)
 	Name string
 	// AMI is the AMI to use in this region
-	AMI  string
+	AMI string
 }
 
 func init() {

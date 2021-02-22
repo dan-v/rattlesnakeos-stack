@@ -344,6 +344,7 @@ resource "aws_lambda_function" "rattlesnake_lambda_build" {
   timeout          = "180"
 }
 
+<% if .Config.Schedule -%>
 ###################
 # Cloudwatch Event
 ###################
@@ -366,11 +367,4 @@ resource "aws_lambda_permission" "allow_cloudwatch_to_call_build_schedule" {
   principal = "events.amazonaws.com"
   source_arn = "${aws_cloudwatch_event_rule.build_schedule.arn}"
 }
-
-###################
-# Outputs
-###################
-output "sns_topic_arn" {
-  description = "The SNS ARN"
-  value = "${aws_sns_topic.rattlesnake.arn}"
-}
+<%- end %>

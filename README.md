@@ -6,7 +6,7 @@ Build your own customized Android OS for Google Pixel phones using [AWS](https:/
 * Software and firmware security updates delivered through built in OTA updater
 * Maintains [verified boot](https://source.android.com/security/verifiedboot/) with a locked bootloader just like official Android but with your own personal signing keys
 * Support for building latest stable Chromium [browser](https://www.chromium.org) and [webview](https://www.chromium.org/developers/how-tos/build-instructions-android-webview)
-* Advanced build customization options
+* Support for custom OS builds
 
 ## Overview
 The default OS built by this tool, `RattlesnakeOS`, is just stock AOSP and has all the baseline privacy and security features from there. Unlike other alternative Android OSes, it aims to keep security on par with stock Android by keeping critical security features like verified boot enabled and ensuring monthly OTA security updates not only update the OS but also the device specific drivers and firmware.
@@ -22,13 +22,12 @@ Rather than providing random binaries of an Android OS to install on your phone,
    * [Deployment](#deployment)
       * [Default Examples](#default-examples)
       * [Advanced Examples](#advanced-examples)
-      * [All Options](#all-options)
    * [First Time Setup After Deployment](#first-time-setup-after-deployment)
+   * [Customizations](#customizations)
    * [FAQ](#faq)
      * [General](#general)
      * [Costs](#costs)
      * [Builds](#builds)
-     * [Customizations](#customizations)
      * [Security](#security)
    * [Uninstalling](#uninstalling)
 
@@ -118,8 +117,10 @@ Or you can specify a different config file to use
 ...
 ```
 
+To see full list of options you can run `rattlesnakeos-stack deploy -h`. These flags can also be set as config values in the config file.
+
 #### Advanced Examples
-Here is an example of a more advanced config file that: disables chromium build, specifies a custom configuration repo, and uses a much larger c5.24xlarge instance type.
+Here is an example of a more advanced config file that: disables chromium build (warning: if you do this - you should provide your own up to date webview), disables scheduled monthly builds, specifies a custom configuration repo (more on that in customization section), and uses a much larger c5.24xlarge instance type.
 ```toml 
 chromium-build-disabled = true
 chromium-version = ""
@@ -134,13 +135,10 @@ latest-url = "https://raw.githubusercontent.com/RattlesnakeOS/latest/11.0/latest
 max-price = "5.00"
 name = "sunfish-cyoydyw3j2"
 region = "us-east-2"
-schedule = "cron(0 0 10 * ? *)"
+schedule = ""
 skip-price = "5.00"
 ssh-key = "rattlesnakeos"
 ```
-
-#### All Options
-To see full list of options you can pass rattlesnakeos-stack deploy the help flag (-h). These flags can also be set as config values in the config file.
 
 ## First Time Setup After Deployment
 * Click on the email confirmation link sent to your email in order to start getting build notifications.
@@ -170,6 +168,26 @@ To see full list of options you can pass rattlesnakeos-stack deploy the help fla
     ```sh 
     aws s3 sync s3://<rattlesnakeos-stackname>-keys/ .
     ```
+
+## Customizations
+### How do I customize builds?
+It is possible to customize OS builds to your liking by specifying a custom config repo with the config option `custom-config-repo = "https://github.com/yourrepo/name"`. This git repo needs to adhere to a specific format that will be covered below.
+
+<b>IMPORTANT: using any Git repo here that is not in your control is a security risk, as you are giving control of your build process to the owner of the repo. They could steal your signing keys, inject malicious code, etc.</b>
+
+### Custom Config Repo format
+The custom config git repo needs to be laid out in a specific format to work with the build process. The directory structure looks like this:
+```
+hooks/
+local_manifests/
+vendor/
+```
+* `hooks` - this directory can contain shell scripts that can hook into the build process at various steps along the way. There are `pre` and `post` entry points. The shell scripts need to be named `<build_function_function_to_hook>_<pre|post>.sh` (e.g. aosp_build_pre.sh). Right now these hooks scripts are sourced in a subshell, so all environment variables from the core build script are available to these hooks (e.g. AOSP_BUILD_DIR, etc), but it's best to limit environment dependencies, as backwards compatibility is not guaranteed as the core build script changes.
+* `local_manifests` - this is a directory for local AOSP manifests to be placed. These manifests will be synced to the AOSP build tree.
+* `vendor` - is a place to override vendor configuration. You can make use of the support for AOSP overlays to easily modify configuration settings. Under the `vendor` directory, there needs to be a mk file at `config/main.mk`.
+
+### Can I add microG to the build?
+Yes, but need to add example for this.
 
 ## FAQ
 ### General
@@ -218,26 +236,6 @@ There are a few steps required to be able to do this:
    * Tail the logfile to view progress `tail -f /var/log/cloud-init-output.log`
 #### Why did my EC2 instance randomly terminate?
 If there wasn't an error notification, this is likely because the [Spot Instance](https://aws.amazon.com/ec2/spot/) max price was not high enough or EC2 is low on capacity and needs to reclaim instances. You can see historical spot instance pricing in the [EC2 console](https://console.aws.amazon.com/ec2sp/v1/spot/home). Click `Pricing History`, select c5.4xlarge for `Instance Type` and pick a date range.
-
-### Customizations
-#### How do I customize builds?
-There are some advanced options that allow you to customize OS builds to your liking by specifying a custom config repo with the config option `custom-config-repo = "https://github.com/yourrepo/custom"`. This git repo needs to adhere to a specific format that will be covered below.
-
-<b>IMPORTANT: using any Git repo here that is not in your control is a security risk, as you are giving control of your build process to the owner of the repo. They could steal your signing keys, inject malicious code, etc.</b>
-
-#### Custom Config Repo format
-The custom config git repo needs to be laid out in a specific format to work with the build process. The directory structure looks like this:
-```
-hooks
-local_manifests
-vendor
-```
-* `hooks` - this directory can contain shell scripts that can hook into the build process at various steps along the way. There are `pre` and `post` entry points. The shell scripts need to be named `<build_function_function_to_hook>_<pre|post>.sh` (e.g. aosp_build_pre.sh).
-* `local_manifests` - this is a directory for local AOSP manifests to be placed. These manifests will be synced to the AOSP build tree.
-* `vendor` - is a place to override vendor configuration. You can make use of the support for AOSP overlays to easily modify configuration settings.
-
-#### Can I add microG to the build?
-Yes, but need to add example for this.
 
 ### Security
 #### How secure is this?

@@ -7,7 +7,7 @@ import (
 )
 
 const (
-	DefaultDeployTimeout          = time.Minute * 5
+	DefaultDeployTimeout = time.Minute * 5
 )
 
 type TemplateRenderer interface {
@@ -27,20 +27,20 @@ type TerraformApplier interface {
 }
 
 type Stack struct {
-	name              string
-	templateRenderer  TemplateRenderer
-	cloudSetup        CloudSetup
-	cloudSubscriber   CloudSubscriber
-	terraformApplier  TerraformApplier
+	name             string
+	templateRenderer TemplateRenderer
+	cloudSetup       CloudSetup
+	cloudSubscriber  CloudSubscriber
+	terraformApplier TerraformApplier
 }
 
 func New(name string, templateRenderer TemplateRenderer, cloudSetup CloudSetup, cloudSubscriber CloudSubscriber, terraformApplier TerraformApplier) *Stack {
 	return &Stack{
-		name:            	name,
-		templateRenderer:  	templateRenderer,
-		cloudSetup:     	cloudSetup,
-		cloudSubscriber: 	cloudSubscriber,
-		terraformApplier: 	terraformApplier,
+		name:             name,
+		templateRenderer: templateRenderer,
+		cloudSetup:       cloudSetup,
+		cloudSubscriber:  cloudSubscriber,
+		terraformApplier: terraformApplier,
 	}
 }
 
@@ -65,7 +65,7 @@ func (s *Stack) Deploy(ctx context.Context) error {
 		return err
 	} else {
 		if subscribed {
-			log.Infof("Successfully setup email notifications for stack %v - you'll need to click link in " +
+			log.Infof("Successfully setup email notifications for stack %v - you'll need to click link in "+
 				"confirmation email to get notifications.", s.name)
 		}
 	}

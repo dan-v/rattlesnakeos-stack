@@ -27,23 +27,15 @@ const (
 
 var (
 	name, region, email, device, sshKey, maxPrice, skipPrice, schedule, cloud string
-	instanceType, instanceRegions, chromiumVersion, latestURL string
-	skipDeploy, chromiumBuildDisabled bool
-	supportedDevicesFriendly = devices.GetDeviceFriendlyNames()
-	supportedDevicesCodename = devices.GetDeviceCodeNames()
-	supportDevicesOutput string
-	coreConfigRepo, customConfigRepo string
+	instanceType, instanceRegions, chromiumVersion, latestURL                 string
+	saveConfig, skipDeploy, chromiumBuildDisabled                             bool
+	supportedDevicesCodename                                                  = devices.GetDeviceCodeNames()
+	coreConfigRepo, customConfigRepo                                          string
+	coreConfigRepoBranch, customConfigRepoBranch                              string
 )
 
-func init() {
+func deployInit() {
 	rootCmd.AddCommand(deployCmd)
-
-	for i, d := range supportedDevicesCodename {
-		supportDevicesOutput += fmt.Sprintf("%v (%v)", d, supportedDevicesFriendly[i])
-		if i < len(supportedDevicesCodename)-1 {
-			supportDevicesOutput += ", "
-		}
-	}
 
 	flags := deployCmd.Flags()
 
@@ -83,7 +75,7 @@ func init() {
 	_ = viper.BindPFlag("instance-regions", flags.Lookup("instance-regions"))
 
 	flags.StringVar(&schedule, "schedule", "cron(0 0 10 * ? *)",
-		"cron expression that defines when to kick off builds. by default this is set to build on the 10th of every month. "+
+		"cron expression that defines when to kick off builds. by default this is set to build on the 10th of every month. you can also set to empty string to disable cron."+
 			"note: if you give an invalid expression it will fail to deploy the stack. "+
 			"see this for cron format details: https://docs.aws.amazon.com/AmazonCloudWatch/latest/events/ScheduledEvents.html#CronExpressions")
 	_ = viper.BindPFlag("schedule", flags.Lookup("schedule"))
@@ -98,14 +90,22 @@ func init() {
 	flags.StringVar(&coreConfigRepo, "core-config-repo", templates.DefaultCoreConfigRepo, "a specially formatted repo that contains core customizations on top of AOSP.")
 	_ = viper.BindPFlag("core-config-repo", flags.Lookup("core-config-repo"))
 
+	flags.StringVar(&coreConfigRepoBranch, "core-config-repo-branch", aospVersion, "the branch to use for the core config repo.")
+	_ = viper.BindPFlag("core-config-repo-branch", flags.Lookup("core-config-repo-branch"))
+
 	flags.StringVar(&customConfigRepo, "custom-config-repo", "", "a specially formatted repo that contains customizations on top of core.")
 	_ = viper.BindPFlag("custom-config-repo", flags.Lookup("custom-config-repo"))
 
-	flags.StringVar(&latestURL, "latest-url", templates.DefaultLatestURL, "url that is used to check versions of aosp/chromium and whether build is required.")
+	flags.StringVar(&customConfigRepoBranch, "custom-config-repo-branch", "", "the branch to use for the custom config repo. if left blanked the default branch will be checked out.")
+	_ = viper.BindPFlag("custom-config-repo-branch", flags.Lookup("custom-config-repo-branch"))
+
+	flags.StringVar(&latestURL, "latest-url", fmt.Sprintf(templates.DefaultLatestURLTemplate, aospVersion), "url that is used to check versions of aosp/chromium and whether build is required.")
 	_ = viper.BindPFlag("latest-url", flags.Lookup("latest-url"))
 
 	flags.StringVar(&cloud, "cloud", "aws", "cloud (aws only right now)")
 	_ = viper.BindPFlag("cloud", flags.Lookup("cloud"))
+
+	flags.BoolVar(&saveConfig, "save-config", false, "allows you to save all passed CLI flags to config file")
 
 	flags.BoolVar(&skipDeploy, "skip-deploy", false, "only generate the output, but do not deploy with terraform.")
 }
@@ -142,12 +142,34 @@ var deployCmd = &cobra.Command{
 				return fmt.Errorf("pinned chromium-version must have major version of at least %v", minimumChromiumVersion)
 			}
 		}
-		for _, device := range supportedDevicesCodename {
-			if device == viper.GetString("device") {
-				return nil
-			}
+		if !devices.IsSupportedDevice(viper.GetString("device")) {
+			return fmt.Errorf("must specify a supported device: %v", strings.Join(supportedDevicesCodename, ", "))
 		}
-		return fmt.Errorf("must specify a supported device: %v", strings.Join(supportedDevicesCodename, ", "))
+		if viper.GetBool("encrypted-keys") == true {
+			return fmt.Errorf("encrypted-keys functionality has been removed (it may return in the future). migration required to use non encrypted keys for now")
+		}
+		if viper.GetString("core-config-repo-branch") != aospVersion {
+			log.Warnf("core-config-repo-branch '%v' does not match aosp version '%v' - if this is not intended, update your config file",
+				viper.GetString("core-config-repo-branch"), aospVersion)
+		}
+
+		if viper.GetString("hosts-file") != "" {
+			log.Warn("hosts-file functionality has been removed - it can be removed from config file")
+		}
+		if viper.Get("custom-manifest-remotes") != nil {
+			return fmt.Errorf("custom-manifest-remotes has been deprecated in favor of --core-config-repo")
+		}
+		if viper.Get("custom-manifest-projects") != nil {
+			return fmt.Errorf("custom-manifest-projects has been deprecated in favor of --core-config-repo")
+		}
+		if viper.Get("custom-patches") != nil {
+			return fmt.Errorf("custom-patches has been deprecated in favor of --core-config-repo")
+		}
+		if viper.Get("custom-prebuilts") != nil {
+			return fmt.Errorf("custom-prebuilts has been deprecated in favor of --core-config-repo")
+		}
+
+		return nil
 	},
 	Run: func(cmd *cobra.Command, args []string) {
 		c := viper.AllSettings()
@@ -180,24 +202,26 @@ var deployCmd = &cobra.Command{
 		}
 
 		templateConfig := &templates.Config{
-			Version:               version,
-			Name:                  viper.GetString("name"),
-			Region:                viper.GetString("region"),
-			Device:                viper.GetString("device"),
-			DeviceDetails:         devices.GetDeviceDetails(viper.GetString("device")),
-			Email:                 viper.GetString("email"),
-			InstanceType:          viper.GetString("instance-type"),
-			InstanceRegions:       viper.GetString("instance-regions"),
-			SkipPrice:             viper.GetString("skip-price"),
-			MaxPrice:              viper.GetString("max-price"),
-			SSHKey:                viper.GetString("ssh-key"),
-			Schedule:              viper.GetString("schedule"),
-			ChromiumBuildDisabled: viper.GetBool("chromium-build-disabled"),
-			ChromiumVersion:       viper.GetString("chromium-version"),
-			CoreConfigRepo:        viper.GetString("core-config-repo"),
-			CustomConfigRepo:      viper.GetString("custom-config-repo"),
-			LatestURL:             viper.GetString("latest-url"),
-			Cloud:                 viper.GetString("cloud"),
+			Version:                stackVersion,
+			Name:                   viper.GetString("name"),
+			Region:                 viper.GetString("region"),
+			Device:                 viper.GetString("device"),
+			DeviceDetails:          devices.GetDeviceDetails(viper.GetString("device")),
+			Email:                  viper.GetString("email"),
+			InstanceType:           viper.GetString("instance-type"),
+			InstanceRegions:        viper.GetString("instance-regions"),
+			SkipPrice:              viper.GetString("skip-price"),
+			MaxPrice:               viper.GetString("max-price"),
+			SSHKey:                 viper.GetString("ssh-key"),
+			Schedule:               viper.GetString("schedule"),
+			ChromiumBuildDisabled:  viper.GetBool("chromium-build-disabled"),
+			ChromiumVersion:        viper.GetString("chromium-version"),
+			CoreConfigRepo:         viper.GetString("core-config-repo"),
+			CoreConfigRepoBranch:   viper.GetString("core-config-repo-branch"),
+			CustomConfigRepo:       viper.GetString("custom-config-repo"),
+			CustomConfigRepoBranch: viper.GetString("custom-config-repo-branch"),
+			LatestURL:              viper.GetString("latest-url"),
+			Cloud:                  viper.GetString("cloud"),
 		}
 
 		templateRenderer, err := templates.New(templateConfig, templatesFiles, outputDirFullPath)
@@ -205,9 +229,35 @@ var deployCmd = &cobra.Command{
 			log.Fatalf("failed to create template client: %v", err)
 		}
 
+		if saveConfig {
+			log.Printf("Saved settings to config file %v.", configFileFullPath)
+			err := viper.WriteConfigAs(configFileFullPath)
+			if err != nil {
+				log.Fatalf("Failed to write config file %v", configFileFullPath)
+			}
+		}
+
+		if skipDeploy {
+			log.Infof("rendering all templates to '%v'", outputDirFullPath)
+			err = templateRenderer.RenderAll()
+			if err != nil {
+				log.Fatal(err)
+			}
+			log.Info("skipping deployment as skip deploy option was specified")
+			return
+		}
+		if viper.GetString("cloud") != "aws" {
+			log.Fatal("'aws' is only supported option for cloud at the moment")
+		}
+
+		configFileFullPath, err := filepath.Abs(cfgFile)
+		if err != nil {
+			log.Fatal(err)
+		}
 		awsSetupClient, err := cloudaws.NewSetupClient(
 			viper.GetString("name"),
 			viper.GetString("region"),
+			configFileFullPath,
 		)
 		if err != nil {
 			log.Fatalf("failed to create aws setup client: %v", err)
@@ -232,15 +282,11 @@ var deployCmd = &cobra.Command{
 			log.Fatal(err)
 		}
 
-		if !skipDeploy {
-			ctx, cancel := context.WithTimeout(context.Background(), stack.DefaultDeployTimeout)
-			defer cancel()
+		ctx, cancel := context.WithTimeout(context.Background(), stack.DefaultDeployTimeout)
+		defer cancel()
 
-			if err := s.Deploy(ctx); err != nil {
-				log.Fatal(err)
-			}
-		} else {
-			log.Println("skipping deployment as --skip-deploy was specified")
+		if err := s.Deploy(ctx); err != nil {
+			log.Fatal(err)
 		}
 	},
 }

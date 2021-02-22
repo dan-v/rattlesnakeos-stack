@@ -18,14 +18,29 @@ var (
 	defaultConfigFile         = fmt.Sprintf("%v.%v", defaultConfigFileBase, defaultConfigFileFormat)
 	defaultConfigFileFullPath string
 	configFileFullPath        string
-	version                   string
+	stackVersion              string
+	aospVersion               string
 	templatesFiles            *templates.TemplateFiles
 )
 
 // Execute the CLI
-func Execute(ver string, templFiles *templates.TemplateFiles) {
-	version = ver
+func Execute(aospVer, stackVer string, templFiles *templates.TemplateFiles) {
+	aospVersion = aospVer
+	stackVersion = stackVer
 	templatesFiles = templFiles
+
+	// initialize cobra
+	cobra.OnInitialize(initConfig)
+	rootCmd.PersistentFlags().StringVar(&cfgFile, "config-file", "", fmt.Sprintf("config file (default location to look for config is $HOME/%s)", defaultConfigFile))
+
+	// init sub commands
+	buildInit()
+	configInit()
+	deployInit()
+	removeInit()
+	versionInit()
+
+	// execute root
 	if err := rootCmd.Execute(); err != nil {
 		log.Fatal(err)
 	}
@@ -63,11 +78,6 @@ func initConfig() {
 	if viper.ConfigFileUsed() != "" {
 		log.Printf("using config file: %v\n", viper.ConfigFileUsed())
 	}
-}
-
-func init() {
-	cobra.OnInitialize(initConfig)
-	rootCmd.PersistentFlags().StringVar(&cfgFile, "config-file", "", fmt.Sprintf("config file (default location to look for config is $HOME/%s)", defaultConfigFile))
 }
 
 var rootCmd = &cobra.Command{

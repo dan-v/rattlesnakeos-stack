@@ -12,7 +12,7 @@ import (
 	"path/filepath"
 )
 
-func init() {
+func removeInit() {
 	rootCmd.AddCommand(removeCmd)
 
 	removeCmd.Flags().StringVarP(&name, "name", "n", "",

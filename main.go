@@ -6,8 +6,11 @@ import (
 	"github.com/dan-v/rattlesnakeos-stack/internal/templates"
 )
 
+//go:embed AOSP_VERSION
+var aospVersion string
+
 //go:embed VERSION
-var version string
+var stackVersion string
 
 //go:embed templates/build.sh
 var buildScript string
@@ -22,7 +25,7 @@ var lambdaTemplate string
 var terraformTemplate string
 
 func main() {
-	cmd.Execute(version, &templates.TemplateFiles{
+	cmd.Execute(aospVersion, stackVersion, &templates.TemplateFiles{
 		BuildScript:       buildScript,
 		BuildScriptVars:   buildScriptVars,
 		LambdaTemplate:    lambdaTemplate,

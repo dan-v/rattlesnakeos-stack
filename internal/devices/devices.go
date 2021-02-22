@@ -1,5 +1,10 @@
 package devices
 
+import (
+	"fmt"
+	"strings"
+)
+
 const (
 	blueline         = "blueline"
 	crosshatch       = "crosshatch"
@@ -8,6 +13,7 @@ const (
 	flame            = "flame"
 	coral            = "coral"
 	sunfish          = "sunfish"
+	bramble          = "bramble"
 	redfin           = "redfin"
 	avbModeChained   = "vbmeta_chained"
 	avbModeChainedV2 = "vbmeta_chained_v2"
@@ -76,6 +82,12 @@ func init() {
 			AVBMode:  avbModeChainedV2,
 		},
 		Device{
+			Name:     bramble,
+			Friendly: "Pixel 4a 5G",
+			Family:   "bramble",
+			AVBMode:  avbModeChainedV2,
+		},
+		Device{
 			Name:     redfin,
 			Friendly: "Pixel 5",
 			Family:   "redfin",
@@ -116,4 +128,14 @@ func GetDeviceFriendlyNames() []string {
 // GetDeviceCodeNames returns list of all supported devices code names (e.g. redfin)
 func GetDeviceCodeNames() []string {
 	return deviceSortOrder
+}
+
+// GetSupportedDevicesOutput returns a nicely formatted comma separated list of codename (friendly name)
+func GetSupportedDevicesOutput() string {
+	var supportDevicesOutput []string
+	supportedDevicesFriendly := GetDeviceFriendlyNames()
+	for i, d := range deviceSortOrder {
+		supportDevicesOutput = append(supportDevicesOutput, fmt.Sprintf("%v (%v)", d, supportedDevicesFriendly[i]))
+	}
+	return strings.Join(supportDevicesOutput, ", ")
 }

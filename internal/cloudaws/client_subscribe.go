@@ -78,7 +78,7 @@ func (c *SubscribeClient) Subscribe(ctx context.Context) (bool, error) {
 }
 
 func checkSNSAccess(cfg aws.Config) error {
-	ctx, cancel := context.WithTimeout(context.Background(), time.Second * 10)
+	ctx, cancel := context.WithTimeout(context.Background(), time.Second*10)
 	defer cancel()
 
 	snsClient := sns.NewFromConfig(cfg)

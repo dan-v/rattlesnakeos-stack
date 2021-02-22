@@ -14,14 +14,14 @@ import (
 
 var (
 	terminateInstanceID, terminateRegion, listRegions string
-	aospBuildID, aospTag string
-	forceBuild bool
-	defaultExecuteLambdaTimeout = time.Second * 200
-	defaultTerminateInstanceTimeout = time.Second * 10
-	defaultListInstancesTimeout = time.Second * 10
+	aospBuildID, aospTag                              string
+	forceBuild                                        bool
+	defaultExecuteLambdaTimeout                       = time.Second * 200
+	defaultTerminateInstanceTimeout                   = time.Second * 10
+	defaultListInstancesTimeout                       = time.Second * 10
 )
 
-func init() {
+func buildInit() {
 	rootCmd.AddCommand(buildCmd)
 
 	buildCmd.AddCommand(buildListCmd)
@@ -94,7 +94,7 @@ var buildStartCmd = &cobra.Command{
 		if err != nil {
 			log.Fatalf("failed to start manual build for stack %v: err=%v", name, err)
 		}
-		if output != nil && (output.FunctionError != nil || output.StatusCode != 200)  {
+		if output != nil && (output.FunctionError != nil || output.StatusCode != 200) {
 			log.Fatalf("failed to start manual build for stack %v: statuscode=%v payload:%v",
 				name, output.StatusCode, output.Payload)
 		}

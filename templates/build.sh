@@ -81,11 +81,21 @@ setup_env() {
   # get core repo
   rm -rf "${CORE_DIR}"
   retry git clone "${CORE_CONFIG_REPO}" "${CORE_DIR}"
+  if [ -n "${CORE_CONFIG_REPO_BRANCH}" ]; then
+    pushd "${CORE_DIR}"
+    git checkout "${CORE_CONFIG_REPO_BRANCH}"
+    popd
+  fi
 
   # get custom repo if specified
   if [ -n "${CUSTOM_CONFIG_REPO}" ]; then
     rm -rf "${CUSTOM_DIR}"
     retry git clone "${CUSTOM_CONFIG_REPO}" "${CUSTOM_DIR}"
+    if [ -n "${CUSTOM_CONFIG_REPO_BRANCH}" ]; then
+      pushd "${CUSTOM_DIR}"
+      git checkout "${CUSTOM_CONFIG_REPO_BRANCH}"
+      popd
+    fi
   fi
 
   # mount keys directory as tmpfs

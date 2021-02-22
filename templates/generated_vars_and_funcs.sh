@@ -10,7 +10,9 @@ STACK_NAME="<% .Name %>"
 STACK_VERSION="<% .Version %>"
 CHROMIUM_BUILD_DISABLED="<% .ChromiumBuildDisabled %>"
 CORE_CONFIG_REPO="<% .CoreConfigRepo %>"
+CORE_CONFIG_REPO_BRANCH="<% .CoreConfigRepoBranch %>"
 CUSTOM_CONFIG_REPO="<% .CustomConfigRepo %>"
+CUSTOM_CONFIG_REPO_BRANCH="<% .CustomConfigRepoBranch %>"
 
 ##########################################
 ###### CLOUD SPECIFIC VARS AND FUNCS #####

@@ -16,9 +16,9 @@ import (
 )
 
 const (
-	DefaultLatestURL                 = "https://raw.githubusercontent.com/RattlesnakeOS/latest/11.0/latest.json"
+	DefaultLatestURLTemplate         = "https://raw.githubusercontent.com/RattlesnakeOS/latest/%v/latest.json"
 	DefaultCoreConfigRepo            = "https://github.com/rattlesnakeos/core"
-	DefaultReleaseURL             	 = "https://api.github.com/repos/dan-v/rattlesnakeos-stack/releases/latest"
+	DefaultReleaseURL                = "https://api.github.com/repos/dan-v/rattlesnakeos-stack/releases/latest"
 	defaultLambdaFunctionFilename    = "lambda_spot_function.py"
 	defaultLambdaZipFilename         = "lambda_spot.zip"
 	defaultBuildScriptFilename       = "build.sh"
@@ -29,35 +29,37 @@ const (
 // TemplateFiles are all of the template files as strings
 type TemplateFiles struct {
 	// BuildScript is the raw build shell script
-	BuildScript       string
+	BuildScript string
 	// BuildScriptVars is a template file with variables and functions that gets inserted into build script after render
-	BuildScriptVars   string
+	BuildScriptVars string
 	// LambdaTemplate is a template file of the python Lambda function
-	LambdaTemplate    string
+	LambdaTemplate string
 	// TerraformTemplate is a template file of the Terraform code
 	TerraformTemplate string
 }
 
 // Config contains all of the template config values
 type Config struct {
-	Version               string
-	Name                  string
-	Region                string
-	Device                string
-	DeviceDetails         devices.Device
-	Email                 string
-	InstanceType          string
-	InstanceRegions       string
-	SkipPrice             string
-	MaxPrice              string
-	SSHKey                string
-	Schedule              string
-	ChromiumBuildDisabled bool
-	ChromiumVersion       string
-	CoreConfigRepo        string
-	CustomConfigRepo      string
-	LatestURL             string
-	Cloud                 string
+	Version                string
+	Name                   string
+	Region                 string
+	Device                 string
+	DeviceDetails          devices.Device
+	Email                  string
+	InstanceType           string
+	InstanceRegions        string
+	SkipPrice              string
+	MaxPrice               string
+	SSHKey                 string
+	Schedule               string
+	ChromiumBuildDisabled  bool
+	ChromiumVersion        string
+	CoreConfigRepo         string
+	CoreConfigRepoBranch   string
+	CustomConfigRepo       string
+	CustomConfigRepoBranch string
+	LatestURL              string
+	Cloud                  string
 }
 
 // Templates provides the ability to render templates and write them to disk
@@ -69,7 +71,6 @@ type Templates struct {
 	lambdaZipFilePath      string
 	tfMainFilePath         string
 }
-
 
 // New returns an initialized Templates
 func New(config *Config, templateFiles *TemplateFiles, outputDir string) (*Templates, error) {
@@ -89,19 +90,28 @@ func (t *Templates) RenderAll() error {
 	if err != nil {
 		return err
 	}
-	t.writeBuildScript(renderedBuildScript)
+	err = t.writeBuildScript(renderedBuildScript)
+	if err != nil {
+		return err
+	}
 
 	renderedLambdaFunction, err := t.renderLambdaFunction()
 	if err != nil {
 		return err
 	}
-	t.writeLambdaFunction(renderedLambdaFunction)
+	err = t.writeLambdaFunction(renderedLambdaFunction)
+	if err != nil {
+		return err
+	}
 
 	renderedTerraform, err := t.renderTerraform()
 	if err != nil {
 		return err
 	}
-	t.writeTerraform(renderedTerraform)
+	err = t.writeTerraform(renderedTerraform)
+	if err != nil {
+		return err
+	}
 
 	return nil
 }
@@ -197,17 +207,23 @@ func zipFiles(filename string, files []string) error {
 	if err != nil {
 		return err
 	}
-	defer newFile.Close()
+	defer func() {
+		_ = newFile.Close()
+	}()
 
 	zipWriter := zip.NewWriter(newFile)
-	defer zipWriter.Close()
+	defer func() {
+		_ = zipWriter.Close()
+	}()
 
 	for _, file := range files {
 		zipfile, err := os.Open(file)
 		if err != nil {
 			return err
 		}
-		defer zipfile.Close()
+		defer func() {
+			_ = zipfile.Close()
+		}()
 
 		info, err := zipfile.Stat()
 		if err != nil {
