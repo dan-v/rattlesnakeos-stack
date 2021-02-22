@@ -89,7 +89,7 @@ var buildStartCmd = &cobra.Command{
 		ctx, cancel := context.WithTimeout(context.Background(), defaultExecuteLambdaTimeout)
 		defer cancel()
 
-		log.Infof("calling lambda function to start manual build for stack %v", name)
+		log.Infof("calling lambda function to start manual build for stack %v. waiting for spot instance launch...", name)
 		output, err := cloudaws.ExecuteLambdaFunction(ctx, name, region, payload)
 		if err != nil {
 			log.Fatalf("failed to start manual build for stack %v: err=%v", name, err)
@@ -124,7 +124,7 @@ var buildTerminateCmd = &cobra.Command{
 			log.Fatal(err)
 		}
 
-		log.Infof("terminated instance %v in region %v: %v", terminateInstanceID, terminateRegion, output)
+		log.Infof("terminated instance %v in region %v: %v", terminateInstanceID, terminateRegion, output.TerminatingInstances)
 	},
 }
 

@@ -81,8 +81,8 @@ func (c *SetupClient) s3BucketSetup(ctx context.Context) error {
 	s3Client := s3.NewFromConfig(c.cfg)
 	_, err := s3Client.HeadBucket(ctx, &s3.HeadBucketInput{Bucket: &c.name})
 	if err != nil {
-		var noSuchBucket *s3types.NoSuchBucket
-		if !errors.As(err, &noSuchBucket) {
+		var notFound *s3types.NotFound
+		if !errors.As(err, &notFound) {
 			return fmt.Errorf("unknown S3 error: %w", err)
 		}
 

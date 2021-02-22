@@ -19,7 +19,7 @@ type CloudSetup interface {
 }
 
 type CloudSubscriber interface {
-	Subscribe(ctx context.Context) error
+	Subscribe(ctx context.Context) (bool, error)
 }
 
 type TerraformApplier interface {
@@ -61,8 +61,13 @@ func (s *Stack) Deploy(ctx context.Context) error {
 	}
 
 	log.Infof("Ensuring notifications enabled for stack %v", s.name)
-	if err := s.cloudSubscriber.Subscribe(ctx); err != nil {
+	if subscribed, err := s.cloudSubscriber.Subscribe(ctx); err != nil {
 		return err
+	} else {
+		if subscribed {
+			log.Infof("Successfully setup email notifications for stack %v - you'll need to click link in " +
+				"confirmation email to get notifications.", s.name)
+		}
 	}
 
 	log.Infof("Successfully deployed/updated resources for stack %v", s.name)

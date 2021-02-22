@@ -10,6 +10,7 @@ import (
 	"time"
 )
 
+// SubscribeClient is a client that allows subscription to SNS topic
 type SubscribeClient struct {
 	cfg    aws.Config
 	name   string
@@ -17,6 +18,7 @@ type SubscribeClient struct {
 	email  string
 }
 
+// NewSubscribeClient provides an initialized SubscribeClient
 func NewSubscribeClient(name, region, email string) (*SubscribeClient, error) {
 	cfg, err := config.LoadDefaultConfig(context.Background(), config.WithRegion(region))
 	if err != nil {
@@ -35,11 +37,12 @@ func NewSubscribeClient(name, region, email string) (*SubscribeClient, error) {
 	}, nil
 }
 
-func (c *SubscribeClient) Subscribe(ctx context.Context) error {
+// Subscribe look for a topic with name and subscribes email. If subscribe happens, returns true, otherwise false.
+func (c *SubscribeClient) Subscribe(ctx context.Context) (bool, error) {
 	snsClient := sns.NewFromConfig(c.cfg)
 	resp, err := snsClient.ListTopics(ctx, &sns.ListTopicsInput{NextToken: aws.String("")})
 	if err != nil {
-		return fmt.Errorf("failed to list sns topics: %w", err)
+		return false, fmt.Errorf("failed to list sns topics: %w", err)
 	}
 
 	for _, topic := range resp.Topics {
@@ -49,13 +52,13 @@ func (c *SubscribeClient) Subscribe(ctx context.Context) error {
 				TopicArn:  aws.String(*topic.TopicArn),
 			})
 			if err != nil {
-				return fmt.Errorf("failed to list SNS subscriptions for topic %v: %w", *topic.TopicArn, err)
+				return false, fmt.Errorf("failed to list SNS subscriptions for topic %v: %w", *topic.TopicArn, err)
 			}
 
 			// if subscription already exists return
 			for _, subscription := range resp.Subscriptions {
 				if *subscription.Endpoint == c.email {
-					return nil
+					return false, nil
 				}
 			}
 
@@ -66,12 +69,12 @@ func (c *SubscribeClient) Subscribe(ctx context.Context) error {
 				Endpoint: aws.String(c.email),
 			})
 			if err != nil {
-				return fmt.Errorf("failed to setup email notifications: %w", err)
+				return false, fmt.Errorf("failed to setup email notifications: %w", err)
 			}
-			return nil
+			return true, nil
 		}
 	}
-	return fmt.Errorf("failed to subscribe to notifications - unable to find topic %v", c.name)
+	return false, fmt.Errorf("failed to subscribe to notifications - unable to find topic %v", c.name)
 }
 
 func checkSNSAccess(cfg aws.Config) error {
