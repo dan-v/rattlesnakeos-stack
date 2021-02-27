@@ -5,7 +5,6 @@ import (
 	"errors"
 	"fmt"
 	"github.com/dan-v/rattlesnakeos-stack/internal/cloudaws"
-	"github.com/dan-v/rattlesnakeos-stack/internal/devices"
 	"github.com/dan-v/rattlesnakeos-stack/internal/stack"
 	"github.com/dan-v/rattlesnakeos-stack/internal/templates"
 	"github.com/dan-v/rattlesnakeos-stack/internal/terraform"
@@ -29,7 +28,6 @@ var (
 	name, region, email, device, sshKey, maxPrice, skipPrice, schedule, cloud string
 	instanceType, instanceRegions, chromiumVersion, latestURL                 string
 	saveConfig, skipDeploy, chromiumBuildDisabled                             bool
-	supportedDevicesCodename                                                  = devices.GetDeviceCodeNames()
 	coreConfigRepo, customConfigRepo                                          string
 	coreConfigRepoBranch, customConfigRepoBranch                              string
 )
@@ -142,10 +140,10 @@ var deployCmd = &cobra.Command{
 				return fmt.Errorf("pinned chromium-version must have major version of at least %v", minimumChromiumVersion)
 			}
 		}
-		if !devices.IsSupportedDevice(viper.GetString("device")) {
-			return fmt.Errorf("must specify a supported device: %v", strings.Join(supportedDevicesCodename, ", "))
+		if !supportedDevices.IsSupportedDevice(viper.GetString("device")) {
+			return fmt.Errorf("must specify a supported device: %v", strings.Join(supportedDevices.GetDeviceCodeNames(), ", "))
 		}
-		if viper.GetBool("encrypted-keys") == true {
+		if viper.GetBool("encrypted-keys") {
 			return fmt.Errorf("encrypted-keys functionality has been removed (it may return in the future). migration required to use non encrypted keys for now")
 		}
 		if viper.GetString("core-config-repo-branch") != aospVersion {
@@ -206,7 +204,7 @@ var deployCmd = &cobra.Command{
 			Name:                   viper.GetString("name"),
 			Region:                 viper.GetString("region"),
 			Device:                 viper.GetString("device"),
-			DeviceDetails:          devices.GetDeviceDetails(viper.GetString("device")),
+			DeviceDetails:          supportedDevices.GetDeviceDetails(viper.GetString("device")),
 			Email:                  viper.GetString("email"),
 			InstanceType:           viper.GetString("instance-type"),
 			InstanceRegions:        viper.GetString("instance-regions"),

@@ -44,6 +44,13 @@ func init() {
 	)
 }
 
+func addRegions(regions ...Region) {
+	for _, region := range regions {
+		supportedRegions[region.Name] = region
+		regionSortOrder = append(regionSortOrder, region.Name)
+	}
+}
+
 // GetSupportedRegions returns a list of all supported regions
 func GetSupportedRegions() []string {
 	return regionSortOrder
@@ -64,11 +71,4 @@ func GetAMIs() map[string]string {
 		amis[region] = supportedRegions[region].AMI
 	}
 	return amis
-}
-
-func addRegions(regions ...Region) {
-	for _, region := range regions {
-		supportedRegions[region.Name] = region
-		regionSortOrder = append(regionSortOrder, region.Name)
-	}
 }

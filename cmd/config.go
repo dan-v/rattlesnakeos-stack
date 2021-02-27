@@ -4,7 +4,6 @@ import (
 	"errors"
 	"fmt"
 	"github.com/dan-v/rattlesnakeos-stack/internal/cloudaws"
-	"github.com/dan-v/rattlesnakeos-stack/internal/devices"
 	"math/rand"
 	"strings"
 	"time"
@@ -24,12 +23,12 @@ var configCmd = &cobra.Command{
 	Use:   "config",
 	Short: "setup config file for rattlesnakeos-stack",
 	Run: func(cmd *cobra.Command, args []string) {
-		color.Cyan(fmt.Sprintln("Device is the device codename (e.g. sunfish). Supported devices:", devices.GetSupportedDevicesOutput()))
+		color.Cyan(fmt.Sprintln("Device is the device codename (e.g. sunfish). Supported devices:", supportedDevices.GetSupportedDevicesOutput()))
 		validate := func(input string) error {
 			if len(input) < 1 {
 				return errors.New("Device name is too short")
 			}
-			if !devices.IsSupportedDevice(input) {
+			if !supportedDevices.IsSupportedDevice(input) {
 				return errors.New("invalid device")
 			}
 			return nil

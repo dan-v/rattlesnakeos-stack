@@ -100,7 +100,10 @@ func (c *SetupClient) backupConfigFile(ctx context.Context) error {
 	fileInfo, _ := file.Stat()
 	var size int64 = fileInfo.Size()
 	buffer := make([]byte, size)
-	file.Read(buffer)
+	_, err = file.Read(buffer)
+	if err != nil {
+		return err
+	}
 
 	_, err = s3Client.PutObject(ctx, &s3.PutObjectInput{
 		Bucket:               aws.String(c.name),

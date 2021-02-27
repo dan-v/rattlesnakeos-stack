@@ -7,25 +7,31 @@ import (
 )
 
 const (
+	// DefaultDeployTimeout is the default timeout for deployments
 	DefaultDeployTimeout = time.Minute * 5
 )
 
+// TemplateRenderer is an interface for template rendering
 type TemplateRenderer interface {
 	RenderAll() error
 }
 
+// CloudSetup is an interface for cloud setup
 type CloudSetup interface {
 	Setup(ctx context.Context) error
 }
 
+// CloudSubscriber is an interface for cloud subscription
 type CloudSubscriber interface {
 	Subscribe(ctx context.Context) (bool, error)
 }
 
+// TerraformApplier is an interface for applying terraform
 type TerraformApplier interface {
 	Apply(ctx context.Context) ([]byte, error)
 }
 
+// Stack contains all the necessary pieces to generate and deploy a stack
 type Stack struct {
 	name             string
 	templateRenderer TemplateRenderer
@@ -34,6 +40,7 @@ type Stack struct {
 	terraformApplier TerraformApplier
 }
 
+// New returns an initialized Stack that is ready for deployment
 func New(name string, templateRenderer TemplateRenderer, cloudSetup CloudSetup, cloudSubscriber CloudSubscriber, terraformApplier TerraformApplier) *Stack {
 	return &Stack{
 		name:             name,
@@ -44,6 +51,7 @@ func New(name string, templateRenderer TemplateRenderer, cloudSetup CloudSetup, 
 	}
 }
 
+// Deploy renders files, runs cloud setup, runs terraform apply, and ensures notifications are setup
 func (s *Stack) Deploy(ctx context.Context) error {
 	log.Infof("Rendering all templates files for stack %v", s.name)
 	if err := s.templateRenderer.RenderAll(); err != nil {
@@ -61,13 +69,13 @@ func (s *Stack) Deploy(ctx context.Context) error {
 	}
 
 	log.Infof("Ensuring notifications enabled for stack %v", s.name)
-	if subscribed, err := s.cloudSubscriber.Subscribe(ctx); err != nil {
+	subscribed, err := s.cloudSubscriber.Subscribe(ctx)
+	if err != nil {
 		return err
-	} else {
-		if subscribed {
-			log.Infof("Successfully setup email notifications for stack %v - you'll need to click link in "+
-				"confirmation email to get notifications.", s.name)
-		}
+	}
+	if subscribed {
+		log.Infof("Successfully setup email notifications for stack %v - you'll need to click link in "+
+			"confirmation email to get notifications.", s.name)
 	}
 
 	log.Infof("Successfully deployed/updated resources for stack %v", s.name)

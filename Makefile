@@ -6,27 +6,22 @@ VERSION := $(shell cat VERSION)
 
 OS := darwin linux windows
 ARCH := amd64
+PKGS := $(shell go list ./internal/... ./cmd...)
 
 .PHONY: \
 	help \
-	default \
 	clean \
-	clean-artifacts \
 	tools \
 	deps \
 	test \
-	coverage \
 	vet \
-	errors \
 	lint \
 	fmt \
 	build \
 	build-all \
-	doc \
-	check \
 	version
 
-all: fmt lint vet shellcheck build-all
+all: fmt lint vet shellcheck test build-all
 
 help:
 	@echo 'Usage: make <OPTIONS> ... <TARGETS>'
@@ -35,31 +30,22 @@ help:
 	@echo ''
 	@echo '    help               Show this help screen.'
 	@echo '    clean              Remove binaries, artifacts and releases.'
-	@echo '    clean-artifacts    Remove build artifacts only.'
-	@echo '    clean-vendor       Remove content of the vendor directory.'
 	@echo '    tools              Install tools needed by the project.'
 	@echo '    deps               Download and install build time dependencies.'
 	@echo '    test               Run unit tests.'
-	@echo '    coverage           Report code tests coverage.'
 	@echo '    vet                Run go vet.'
 	@echo '    lint               Run golint.'
 	@echo '    fmt                Run go fmt.'
 	@echo '    env                Display Go environment.'
 	@echo '    build              Build project for current platform.'
 	@echo '    build-all          Build project for all supported platforms.'
-	@echo '    check              Verify compiled binary.'
 	@echo ''
 
 print-%:
 	@echo $* = $($*)
 
-clean: clean-artifacts
-	rm -vf $(CURDIR)/coverage.*
-
-clean-artifacts:
+clean:
 	rm -Rf build
-
-clean-all: clean clean-artifacts clean-vendor
 
 tools:
 	go get golang.org/x/lint/golint
@@ -72,29 +58,16 @@ deps:
 	go mod tidy
 
 test:
-	go test -v $(go list ./internal/...)
-
-coverage: 
-	gocov test $(go list ./internal/...) > $(CURDIR)/coverage.out 2>/dev/null
-	gocov report $(CURDIR)/coverage.out
-	if test -z "$$CI"; then \
-	  gocov-html $(CURDIR)/coverage.out > $(CURDIR)/coverage.html; \
-	  if which open &>/dev/null; then \
-	    open $(CURDIR)/coverage.html; \
-	  fi; \
-	fi
+	go test -v ${PKGS}
 
 vet:
-	go vet $(go list ./cmd/...)
-	go vet $(go list ./internal/...)
+	go vet ${PKGS}
 
 lint:
-	golint $(go list ./cmd/...)
-	golint $(go list ./internal/...)
+	golangci-lint run cmd/... internal/...
 
 fmt:
-	go fmt $(go list ./cmd/...)
-	go fmt $(go list ./internal/...)
+	go fmt ${PKGS}
 
 shellcheck:
 	shellcheck --severity=warning templates/build.sh
@@ -109,14 +82,6 @@ build-all:
 	    -output "$(CURDIR)/build/$(VERSION)/{{.OS}}/$(TARGET)" .
 	cp -v -f \
 	   $(CURDIR)/build/$(VERSION)/$$(go env GOOS)/$(TARGET) .
-
-check:
-	@test -x $(CURDIR)/$(TARGET) || exit 1
-	if $(CURDIR)/$(TARGET) --version | grep -qF '$(VERSION)'; then \
-	  echo "$(CURDIR)/$(TARGET): OK"; \
-	else \
-	  exit 1; \
-	fi
 
 zip: all
 	mkdir -p build/zips

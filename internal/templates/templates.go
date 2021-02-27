@@ -4,6 +4,7 @@ import (
 	"archive/zip"
 	"bytes"
 	"encoding/json"
+	"errors"
 	"fmt"
 	"github.com/dan-v/rattlesnakeos-stack/internal/cloudaws"
 	"github.com/dan-v/rattlesnakeos-stack/internal/devices"
@@ -16,19 +17,31 @@ import (
 )
 
 const (
-	DefaultLatestURLTemplate         = "https://raw.githubusercontent.com/RattlesnakeOS/latest/%v/latest.json"
-	DefaultCoreConfigRepo            = "https://github.com/rattlesnakeos/core"
-	DefaultReleaseURL                = "https://api.github.com/repos/dan-v/rattlesnakeos-stack/releases/latest"
+	// DefaultLatestURLTemplate is the URL to use for gathering latest versions of components for builds. This is
+	// template string and should be provided a branch name (e.g. 11.0)
+	DefaultLatestURLTemplate = "https://raw.githubusercontent.com/RattlesnakeOS/latest/%v/latest.json"
+	// DefaultCoreConfigRepo is the default core config repo to use
+	DefaultCoreConfigRepo = "https://github.com/rattlesnakeos/core-config-repo"
+	// DefaultReleaseURL is the default rattlesnakeos-stack api releases github page
+	DefaultReleaseURL = "https://api.github.com/repos/dan-v/rattlesnakeos-stack/releases/latest"
+)
+
+const (
+	defaultBuildScriptFilename       = "build.sh"
 	defaultLambdaFunctionFilename    = "lambda_spot_function.py"
 	defaultLambdaZipFilename         = "lambda_spot.zip"
-	defaultBuildScriptFilename       = "build.sh"
 	defaultTFMainFilename            = "main.tf"
 	defaultGeneratedVarReplaceString = "#### <generated_vars_and_funcs.sh> ####"
 )
 
-// TemplateFiles are all of the template files as strings
+var (
+	// ErrTemplateExecute is returned if there is an error executing template
+	ErrTemplateExecute = errors.New("error executing template")
+)
+
+// TemplateFiles are all of the files from the root templates directory
 type TemplateFiles struct {
-	// BuildScript is the raw build shell script
+	// BuildScript is just the raw build shell script (no templating in this file)
 	BuildScript string
 	// BuildScriptVars is a template file with variables and functions that gets inserted into build script after render
 	BuildScriptVars string
@@ -40,26 +53,46 @@ type TemplateFiles struct {
 
 // Config contains all of the template config values
 type Config struct {
-	Version                string
-	Name                   string
-	Region                 string
-	Device                 string
-	DeviceDetails          devices.Device
-	Email                  string
-	InstanceType           string
-	InstanceRegions        string
-	SkipPrice              string
-	MaxPrice               string
-	SSHKey                 string
-	Schedule               string
-	ChromiumBuildDisabled  bool
-	ChromiumVersion        string
-	CoreConfigRepo         string
-	CoreConfigRepoBranch   string
-	CustomConfigRepo       string
+	// Version is the version of stack
+	Version string
+	// Name is the name of the stack
+	Name string
+	// Region is the region to deploy stack
+	Region string
+	// Device is the device to build for
+	Device string
+	// Device details is full device details
+	DeviceDetails *devices.Device
+	// Email is the email address to subscribe to notifications for stack
+	Email string
+	// InstanceType is the instance type to use for builds
+	InstanceType string
+	// InstanceRegions is the comma separated list of regions to use for builds
+	InstanceRegions string
+	// SkipPrice is the spot price at which the build should not start
+	SkipPrice string
+	// MaxPrice is the maximum spot price to set
+	MaxPrice string
+	// SSHKey is the name of the SSH key to use for launched spot instances
+	SSHKey string
+	// Schedule is the cron schedule for builds, can be left empty to disable
+	Schedule string
+	// ChromiumBuildDisabled can be used to turn of building Chromium
+	ChromiumBuildDisabled bool
+	// ChromiumVersion can be used to lock Chromium to a specific version
+	ChromiumVersion string
+	// CoreConfigRepo is the git repo to use for the core configuration of the OS
+	CoreConfigRepo string
+	// CoreConfigRepoBranch specifies which branch to use for the core configuration repo
+	CoreConfigRepoBranch string
+	// CustomConfigRepo is the git repo to use for customization on top of core
+	CustomConfigRepo string
+	// CustomConfigRepoBranch is the branch to use for the custom configuration repo
 	CustomConfigRepoBranch string
-	LatestURL              string
-	Cloud                  string
+	// LatestURL is the URL to use for gathering latest versions of components for builds
+	LatestURL string
+	// Cloud specifies which cloud to build on (only aws supported right now)
+	Cloud string
 }
 
 // Templates provides the ability to render templates and write them to disk
@@ -191,7 +224,7 @@ func renderTemplate(templateStr string, params interface{}) ([]byte, error) {
 
 	buffer := new(bytes.Buffer)
 	if err = temp.Execute(buffer, params); err != nil {
-		return nil, fmt.Errorf("failed to execute templates: %w", err)
+		return nil, fmt.Errorf("%v: %w", err, ErrTemplateExecute)
 	}
 
 	outputBytes, err := ioutil.ReadAll(buffer)

@@ -170,13 +170,12 @@ ssh-key = "rattlesnakeos"
     ```
 
 ## Customizations
-### How do I customize builds?
 It is possible to customize OS builds to your liking by specifying a custom config repo with the config option `custom-config-repo = "https://github.com/yourrepo/name"`. This git repo needs to adhere to a specific format that will be covered below.
 
 <b>IMPORTANT: using any Git repo here that is not in your control is a security risk, as you are giving control of your build process to the owner of the repo. They could steal your signing keys, inject malicious code, etc.</b>
 
 ### Custom Config Repo format
-The custom config git repo needs to be laid out in a specific format to work with the build process. The directory structure looks like this:
+The custom config git repo needs to be laid out in a specific format to work with the build process. An example repo can be found here: https://github.com/RattlesnakeOS/example-custom-config-repo. The directory structure looks like this:
 ```
 hooks/
 local_manifests/
@@ -185,9 +184,6 @@ vendor/
 * `hooks` - this directory can contain shell scripts that can hook into the build process at various steps along the way. There are `pre` and `post` entry points. The shell scripts need to be named `<build_function_function_to_hook>_<pre|post>.sh` (e.g. aosp_build_pre.sh). Right now these hooks scripts are sourced in a subshell, so all environment variables from the core build script are available to these hooks (e.g. AOSP_BUILD_DIR, etc), but it's best to limit environment dependencies, as backwards compatibility is not guaranteed as the core build script changes.
 * `local_manifests` - this is a directory for local AOSP manifests to be placed. These manifests will be synced to the AOSP build tree.
 * `vendor` - is a place to override vendor configuration. You can make use of the support for AOSP overlays to easily modify configuration settings. Under the `vendor` directory, there needs to be a mk file at `config/main.mk`.
-
-### Can I add microG to the build?
-Yes, but need to add example for this.
 
 ## FAQ
 ### General

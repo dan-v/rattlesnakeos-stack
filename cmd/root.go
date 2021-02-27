@@ -2,6 +2,7 @@ package cmd
 
 import (
 	"fmt"
+	"github.com/dan-v/rattlesnakeos-stack/internal/devices"
 	"github.com/dan-v/rattlesnakeos-stack/internal/templates"
 	"os"
 
@@ -18,16 +19,18 @@ var (
 	defaultConfigFile         = fmt.Sprintf("%v.%v", defaultConfigFileBase, defaultConfigFileFormat)
 	defaultConfigFileFullPath string
 	configFileFullPath        string
+	supportedDevices          *devices.SupportedDevices
 	stackVersion              string
 	aospVersion               string
 	templatesFiles            *templates.TemplateFiles
 )
 
 // Execute the CLI
-func Execute(aospVer, stackVer string, templFiles *templates.TemplateFiles) {
-	aospVersion = aospVer
-	stackVersion = stackVer
-	templatesFiles = templFiles
+func Execute(_supportedDevices *devices.SupportedDevices, _aospVersion, _stackVersion string, _templatesFiles *templates.TemplateFiles) {
+	supportedDevices = _supportedDevices
+	aospVersion = _aospVersion
+	stackVersion = _stackVersion
+	templatesFiles = _templatesFiles
 
 	// initialize cobra
 	cobra.OnInitialize(initConfig)

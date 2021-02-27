@@ -19,8 +19,8 @@ import (
 )
 
 const (
-	// TODO: this version of Terraform is getting quite old, but don't have a great plan for seamless major version upgrade.
 	// Version is the Terraform version that is downloaded and used
+	// TODO: this version of Terraform is getting quite old, but don't have a great plan for seamless major version upgrade.
 	Version = "0.11.14"
 	// DefaultTerraformDestroyTimeout is the default timeout for running Terraform destroy
 	DefaultTerraformDestroyTimeout = time.Minute * 2
@@ -59,18 +59,18 @@ func (c *Client) Apply(ctx context.Context) ([]byte, error) {
 		return output, err
 	}
 
-	cmd := c.setup(ctx, append([]string{"apply", "-auto-approve", c.rootDir}))
+	cmd := c.setup(ctx, []string{"apply", "-auto-approve", c.rootDir})
 	return c.run(cmd)
 }
 
 // Destroy runs terraform destroy
 func (c *Client) Destroy(ctx context.Context) ([]byte, error) {
-	cmd := c.setup(ctx, append([]string{"destroy", "-auto-approve", c.rootDir}))
+	cmd := c.setup(ctx, []string{"destroy", "-auto-approve", c.rootDir})
 	return c.run(cmd)
 }
 
 func (c *Client) init(ctx context.Context) ([]byte, error) {
-	cmd := c.setup(ctx, append([]string{"init", c.rootDir}))
+	cmd := c.setup(ctx, []string{"init", c.rootDir})
 	return c.run(cmd)
 }
 
@@ -100,20 +100,23 @@ func (c *Client) run(cmd *exec.Cmd) ([]byte, error) {
 		b.WriteString(scanner.Text() + "\n")
 	}
 
-	cmd.Wait()
+	err = cmd.Wait()
+	if err != nil {
+		return nil, err
+	}
 	return b.Bytes(), nil
 }
 
 func getTerraformURL() (string, error) {
-	os := runtime.GOOS
-	if os == "darwin" {
+	osName := runtime.GOOS
+	if osName == "darwin" {
 		return darwinBinaryURL, nil
-	} else if os == "linux" {
+	} else if osName == "linux" {
 		return linuxBinaryURL, nil
-	} else if os == "windows" {
+	} else if osName == "windows" {
 		return windowsBinaryURL, nil
 	}
-	return "", fmt.Errorf("unknown os: `%s`", os)
+	return "", fmt.Errorf("unknown os: `%s`", osName)
 }
 
 func setupBinary(outputDir string) (string, error) {
@@ -131,7 +134,9 @@ func setupBinary(outputDir string) (string, error) {
 		if err != nil {
 			return "", err
 		}
-		defer fileHandler.Close()
+		defer func(){
+			_ = fileHandler.Close()
+		}()
 
 		url, err := getTerraformURL()
 		if err != nil {
@@ -143,7 +148,9 @@ func setupBinary(outputDir string) (string, error) {
 		if err != nil {
 			return "", err
 		}
-		defer resp.Body.Close()
+		defer func(){
+			_ = resp.Body.Close()
+		}()
 
 		if _, err := io.Copy(fileHandler, resp.Body); err != nil {
 			return "", err
@@ -175,14 +182,15 @@ func unzip(src, dest string) error {
 	if err != nil {
 		return err
 	}
-	defer r.Close()
+	defer func() {
+		_ = r.Close()
+	}()
 
 	for _, f := range r.File {
 		rc, err := f.Open()
 		if err != nil {
 			return err
 		}
-		defer rc.Close()
 
 		fpath := filepath.Join(dest, f.Name)
 		if f.FileInfo().IsDir() {
@@ -198,7 +206,6 @@ func unzip(src, dest string) error {
 
 			err = os.MkdirAll(fdir, f.Mode())
 			if err != nil {
-				log.Fatal(err)
 				return err
 			}
 			f, err := os.OpenFile(
@@ -206,13 +213,14 @@ func unzip(src, dest string) error {
 			if err != nil {
 				return err
 			}
-			defer f.Close()
 
 			_, err = io.Copy(f, rc)
 			if err != nil {
 				return err
 			}
+			_ = f.Close()
 		}
+		_ = rc.Close()
 	}
 	return nil
 }
