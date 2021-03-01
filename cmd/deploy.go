@@ -27,9 +27,10 @@ const (
 var (
 	name, region, email, device, sshKey, maxPrice, skipPrice, schedule, cloud string
 	instanceType, instanceRegions, chromiumVersion, releasesURL               string
-	saveConfig, skipDeploy, chromiumBuildDisabled                             bool
+	saveConfig, dryRun, chromiumBuildDisabled                          bool
 	coreConfigRepo, customConfigRepo                                          string
 	coreConfigRepoBranch, customConfigRepoBranch                              string
+	outputDir 																  string
 )
 
 func deployInit() {
@@ -105,7 +106,7 @@ func deployInit() {
 
 	flags.BoolVar(&saveConfig, "save-config", false, "allows you to save all passed CLI flags to config file")
 
-	flags.BoolVar(&skipDeploy, "skip-deploy", false, "only generate the output, but do not deploy with terraform.")
+	flags.BoolVar(&dryRun, "dry-run", false, "only generate the output files, but do not deploy with terraform.")
 }
 
 var deployCmd = &cobra.Command{
@@ -178,7 +179,7 @@ var deployCmd = &cobra.Command{
 		log.Println("Current settings:")
 		fmt.Println(string(bs))
 
-		if !skipDeploy {
+		if !dryRun {
 			prompt := promptui.Prompt{
 				Label:     "Do you want to continue ",
 				IsConfirm: true,
@@ -235,7 +236,7 @@ var deployCmd = &cobra.Command{
 			}
 		}
 
-		if skipDeploy {
+		if dryRun {
 			log.Infof("rendering all templates to '%v'", outputDirFullPath)
 			err = templateRenderer.RenderAll()
 			if err != nil {
