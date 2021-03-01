@@ -27,10 +27,10 @@ const (
 var (
 	name, region, email, device, sshKey, maxPrice, skipPrice, schedule, cloud string
 	instanceType, instanceRegions, chromiumVersion, releasesURL               string
-	saveConfig, dryRun, chromiumBuildDisabled                          bool
+	saveConfig, dryRun, chromiumBuildDisabled                                 bool
 	coreConfigRepo, customConfigRepo                                          string
 	coreConfigRepoBranch, customConfigRepoBranch                              string
-	outputDir 																  string
+	outputDir                                                                 string
 )
 
 func deployInit() {
@@ -104,6 +104,9 @@ func deployInit() {
 	flags.StringVar(&cloud, "cloud", "aws", "cloud (aws only right now)")
 	_ = viper.BindPFlag("cloud", flags.Lookup("cloud"))
 
+	flags.StringVar(&outputDir, "output-dir", "", "where to generate all files used for the deployment")
+	_ = viper.BindPFlag("output-dir", flags.Lookup("output-dir"))
+
 	flags.BoolVar(&saveConfig, "save-config", false, "allows you to save all passed CLI flags to config file")
 
 	flags.BoolVar(&dryRun, "dry-run", false, "only generate the output files, but do not deploy with terraform.")
@@ -144,6 +147,8 @@ var deployCmd = &cobra.Command{
 		if !supportedDevices.IsSupportedDevice(viper.GetString("device")) {
 			return fmt.Errorf("must specify a supported device: %v", strings.Join(supportedDevices.GetDeviceCodeNames(), ", "))
 		}
+
+		// deprecated checks
 		if viper.GetBool("encrypted-keys") {
 			return fmt.Errorf("encrypted-keys functionality has been removed (it may return in the future). migration required to use non encrypted keys for now")
 		}
@@ -151,7 +156,6 @@ var deployCmd = &cobra.Command{
 			log.Warnf("core-config-repo-branch '%v' does not match aosp version '%v' - if this is not intended, update your config file",
 				viper.GetString("core-config-repo-branch"), aospVersion)
 		}
-
 		if viper.GetString("hosts-file") != "" {
 			log.Warn("hosts-file functionality has been removed - it can be removed from config file")
 		}
@@ -190,15 +194,11 @@ var deployCmd = &cobra.Command{
 			}
 		}
 
-		// TODO: make this configurable
-		outputDirFullPath, err := filepath.Abs(fmt.Sprintf("output_%v", viper.GetString("name")))
+		configuredOutputDir, err := getOutputDir()
 		if err != nil {
 			log.Fatal(err)
 		}
-
-		if err := os.MkdirAll(outputDirFullPath, os.ModePerm); err != nil {
-			log.Fatal(err)
-		}
+		log.Infof("all generated files will be placed in %v", configuredOutputDir)
 
 		templateConfig := &templates.Config{
 			Version:                stackVersion,
@@ -223,7 +223,7 @@ var deployCmd = &cobra.Command{
 			Cloud:                  viper.GetString("cloud"),
 		}
 
-		templateRenderer, err := templates.New(templateConfig, templatesFiles, outputDirFullPath)
+		templateRenderer, err := templates.New(templateConfig, templatesFiles, configuredOutputDir)
 		if err != nil {
 			log.Fatalf("failed to create template client: %v", err)
 		}
@@ -237,7 +237,7 @@ var deployCmd = &cobra.Command{
 		}
 
 		if dryRun {
-			log.Infof("rendering all templates to '%v'", outputDirFullPath)
+			log.Infof("rendering all templates to '%v'", configuredOutputDir)
 			err = templateRenderer.RenderAll()
 			if err != nil {
 				log.Fatal(err)
@@ -271,7 +271,7 @@ var deployCmd = &cobra.Command{
 			log.Fatalf("failed to create aws subscribe client: %v", err)
 		}
 
-		terraformClient, err := terraform.New(outputDirFullPath)
+		terraformClient, err := terraform.New(configuredOutputDir)
 		if err != nil {
 			log.Fatalf("failed to create terraform client: %v", err)
 		}
@@ -288,4 +288,19 @@ var deployCmd = &cobra.Command{
 			log.Fatal(err)
 		}
 	},
+}
+
+func getOutputDir() (string, error) {
+	configuredOutputDir := viper.GetString("output-dir")
+	if configuredOutputDir == "" {
+		configuredOutputDir = fmt.Sprintf("output_%v", viper.GetString("name"))
+	}
+	configuredOutputDir, err := filepath.Abs(configuredOutputDir)
+	if err != nil {
+		return "", err
+	}
+	if err := os.MkdirAll(configuredOutputDir, os.ModePerm); err != nil {
+		log.Fatal(err)
+	}
+	return configuredOutputDir, nil
 }

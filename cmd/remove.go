@@ -9,7 +9,6 @@ import (
 	log "github.com/sirupsen/logrus"
 	"github.com/spf13/cobra"
 	"github.com/spf13/viper"
-	"path/filepath"
 )
 
 func removeInit() {
@@ -58,14 +57,12 @@ var removeCmd = &cobra.Command{
 			log.Fatalf("Exiting %v", err)
 		}
 
-		// TODO: this requires directory to already exist
-		// TODO: make this configurable and not duplicated
-		outputDirFullPath, err := filepath.Abs(fmt.Sprintf("output_%v", viper.GetString("name")))
+		configuredOutputDir, err := getOutputDir()
 		if err != nil {
 			log.Fatal(err)
 		}
 
-		terraformClient, err := terraform.New(outputDirFullPath)
+		terraformClient, err := terraform.New(configuredOutputDir)
 		if err != nil {
 			log.Fatalf("failed to create terraform client: %v", err)
 		}
