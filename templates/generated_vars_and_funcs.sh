@@ -57,8 +57,8 @@ notify() {
   INSTANCE_IP=$(curl -s http://169.254.169.254/latest/meta-data/public-ipv4)
   ELAPSED="$((SECONDS / 3600))hrs $(((SECONDS / 60) % 60))min $((SECONDS % 60))sec"
   aws sns publish --region ${REGION} --topic-arn "${AWS_SNS_ARN}" \
-    --message="$(printf "$1\n  Device: %s\n  Stack Name: %s\n  Stack Version: %s\n  Stack Region: %s\n  Release Channel: %s\n  Instance Type: %s\n  Instance Region: %s\n  Instance IP: %s\n  Elapsed Time: %s\n  AOSP Build ID: %s\n  AOSP Tag: %s\n  %s" \
-      "${DEVICE}" "${STACK_NAME}" "${STACK_VERSION}" "${REGION}" "${RELEASE_CHANNEL}" "${INSTANCE_TYPE}" "${INSTANCE_REGION}" "${INSTANCE_IP}" "${ELAPSED}" "${AOSP_BUILD_ID}" "${AOSP_TAG}" "${LOGOUTPUT}")" || true
+    --message="$(printf "$1\n  Stack Name: %s\n  Device: %s\n  Stack Version: %s\n  Stack Region: %s\n  Instance Type: %s\n  Instance Region: %s\n  Instance IP: %s\n  Elapsed Time: %s\n  Release: %s\n  Tag: %s\n  Build ID: %s\n  %s" \
+      "${STACK_NAME}" "${DEVICE}" "${STACK_VERSION}" "${REGION}" "${INSTANCE_TYPE}" "${INSTANCE_REGION}" "${INSTANCE_IP}" "${ELAPSED}" "${RELEASE}" "${AOSP_TAG}" "${AOSP_BUILD_ID}" "${LOGOUTPUT}")" || true
   <%- else %>
   echo "todo"
   <%- end %>

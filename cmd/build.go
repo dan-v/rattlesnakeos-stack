@@ -96,7 +96,7 @@ var buildStartCmd = &cobra.Command{
 		}
 		if output != nil && (output.FunctionError != nil || output.StatusCode != 200) {
 			log.Fatalf("failed to start manual build for stack %v: statuscode=%v payload:%v",
-				name, output.StatusCode, output.Payload)
+				name, output.StatusCode, string(output.Payload))
 		}
 
 		log.Infof("successfully started manual build for stack %v", name)

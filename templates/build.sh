@@ -3,13 +3,15 @@
 ########################################
 ######## BUILD ARGS ####################
 ########################################
-AOSP_BUILD_ID=$1
+RELEASE=$1
+echo "RELEASE=${RELEASE}"
+AOSP_BUILD_ID=$2
 echo "AOSP_BUILD_ID=${AOSP_BUILD_ID}"
-AOSP_TAG=$2
+AOSP_TAG=$3
 echo "AOSP_TAG=${AOSP_TAG}"
-CHROMIUM_VERSION=$3
+CHROMIUM_VERSION=$4
 echo "CHROMIUM_VERSION=${CHROMIUM_VERSION}"
-LOCAL_MANIFEST_REVISIONS=$4
+LOCAL_MANIFEST_REVISIONS=$5
 echo "LOCAL_MANIFEST_REVISIONS=${LOCAL_MANIFEST_REVISIONS}"
 
 #### <generated_vars_and_funcs.sh> ####
@@ -360,8 +362,9 @@ checkpoint_versions() {
   log_header "${FUNCNAME[0]}"
   run_hook_if_exists "checkpoint_versions_pre"
 
-  set_current_metadata "rattlesnakeos-stack/revision" "${STACK_VERSION}"
   set_current_metadata "${DEVICE}-vendor" "${AOSP_BUILD_ID}" "public"
+  set_current_metadata "release" "${RELEASE}"
+  set_current_metadata "rattlesnakeos-stack/revision" "${STACK_VERSION}"
   if [ "${CHROMIUM_BUILD_DISABLED}" == "false" ]; then
       set_current_metadata "chromium/included" "yes"
   fi
