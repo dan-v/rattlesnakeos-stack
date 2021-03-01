@@ -9,7 +9,7 @@ from pkg_resources import packaging
 
 STACK_VERSION = '<% .Config.Version %>'
 NAME = '<% .Config.Name %>'
-LATEST_JSON_URL = "<% .Config.LatestURL %>"
+LATEST_JSON_URL = "<% .Config.ReleasesURL %>"
 STACK_VERSION_LATEST_URL = "<% .RattlesnakeOSStackReleasesURL %>"
 BUILD_SCRIPT_S3_LOCATION = 's3://<% .Config.Name %>-script/build.sh'
 RELEASE_BUCKET = '<% .Config.Name %>-release'

@@ -134,7 +134,7 @@ func setupBinary(outputDir string) (string, error) {
 		if err != nil {
 			return "", err
 		}
-		defer func(){
+		defer func() {
 			_ = fileHandler.Close()
 		}()
 
@@ -148,7 +148,7 @@ func setupBinary(outputDir string) (string, error) {
 		if err != nil {
 			return "", err
 		}
-		defer func(){
+		defer func() {
 			_ = resp.Body.Close()
 		}()
 

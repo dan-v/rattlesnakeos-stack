@@ -216,7 +216,7 @@ var testConfig = &Config{
 	CoreConfigRepoBranch:   "core-config-repo-branch",
 	CustomConfigRepo:       "custom-config-repo",
 	CustomConfigRepoBranch: "custom-config-repo-branch",
-	LatestURL:              "latest url",
+	ReleasesURL:            "latest url",
 	Cloud:                  "cloud",
 }
 

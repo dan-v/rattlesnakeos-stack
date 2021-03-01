@@ -17,13 +17,13 @@ import (
 )
 
 const (
-	// DefaultLatestURLTemplate is the URL to use for gathering latest versions of components for builds. This is
+	// DefaultReleasesURLTemplate is the URL to use for gathering latest versions of components for builds. This is
 	// template string and should be provided a branch name (e.g. 11.0)
-	DefaultLatestURLTemplate = "https://raw.githubusercontent.com/RattlesnakeOS/latest/%v/latest.json"
+	DefaultReleasesURLTemplate = "https://raw.githubusercontent.com/RattlesnakeOS/releases/%v/latest.json"
 	// DefaultCoreConfigRepo is the default core config repo to use
 	DefaultCoreConfigRepo = "https://github.com/rattlesnakeos/core-config-repo"
-	// DefaultReleaseURL is the default rattlesnakeos-stack api releases github page
-	DefaultReleaseURL = "https://api.github.com/repos/dan-v/rattlesnakeos-stack/releases/latest"
+	// DefaultRattlesnakeOSStackReleaseURL is the default rattlesnakeos-stack api releases github page
+	DefaultRattlesnakeOSStackReleaseURL = "https://api.github.com/repos/dan-v/rattlesnakeos-stack/releases/latest"
 )
 
 const (
@@ -89,8 +89,8 @@ type Config struct {
 	CustomConfigRepo string
 	// CustomConfigRepoBranch is the branch to use for the custom configuration repo
 	CustomConfigRepoBranch string
-	// LatestURL is the URL to use for gathering latest versions of components for builds
-	LatestURL string
+	// ReleasesURL is the URL to use for gathering latest versions of components for builds
+	ReleasesURL string
 	// Cloud specifies which cloud to build on (only aws supported right now)
 	Cloud string
 }
@@ -174,7 +174,7 @@ func (t *Templates) renderLambdaFunction() ([]byte, error) {
 	}{
 		t.config,
 		string(regionAMIs),
-		DefaultReleaseURL,
+		DefaultRattlesnakeOSStackReleaseURL,
 	})
 }
 

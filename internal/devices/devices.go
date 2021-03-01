@@ -8,22 +8,22 @@ import (
 
 const (
 	// AVBModeChained is chained AVB mode in build script
-	AVBModeChained                    = "vbmeta_chained"
+	AVBModeChained = "vbmeta_chained"
 	// AVBModeChainedV2 is chained AVB v2 mode in build script
-	AVBModeChainedV2                  = "vbmeta_chained_v2"
+	AVBModeChainedV2 = "vbmeta_chained_v2"
 	// ExtraOTARetrofitDynamicPartitions is additional OTA option to retrofit dynamics partitions
 	ExtraOTARetrofitDynamicPartitions = "(--retrofit_dynamic_partitions)"
 )
 
 var (
 	// ErrMissingName is returned if device is missing name
-	ErrMissingName     = errors.New("supported device is missing required name")
+	ErrMissingName = errors.New("supported device is missing required name")
 	// ErrMissingFriendly is returned if friendly name for device is missing
 	ErrMissingFriendly = errors.New("supported device is missing required friendly name")
 	// ErrMissingFamily is returned if family name for device is missing
-	ErrMissingFamily   = errors.New("supported device is missing required family name")
+	ErrMissingFamily = errors.New("supported device is missing required family name")
 	// ErrMissingAVBMode is returned if avb mode is missing for device
-	ErrMissingAVBMode  = errors.New("supported device is missing required avb mode")
+	ErrMissingAVBMode = errors.New("supported device is missing required avb mode")
 )
 
 // Device contains details and metadata about a device

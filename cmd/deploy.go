@@ -26,7 +26,7 @@ const (
 
 var (
 	name, region, email, device, sshKey, maxPrice, skipPrice, schedule, cloud string
-	instanceType, instanceRegions, chromiumVersion, latestURL                 string
+	instanceType, instanceRegions, chromiumVersion, releasesURL               string
 	saveConfig, skipDeploy, chromiumBuildDisabled                             bool
 	coreConfigRepo, customConfigRepo                                          string
 	coreConfigRepoBranch, customConfigRepoBranch                              string
@@ -97,8 +97,8 @@ func deployInit() {
 	flags.StringVar(&customConfigRepoBranch, "custom-config-repo-branch", "", "the branch to use for the custom config repo. if left blanked the default branch will be checked out.")
 	_ = viper.BindPFlag("custom-config-repo-branch", flags.Lookup("custom-config-repo-branch"))
 
-	flags.StringVar(&latestURL, "latest-url", fmt.Sprintf(templates.DefaultLatestURLTemplate, aospVersion), "url that is used to check versions of aosp/chromium and whether build is required.")
-	_ = viper.BindPFlag("latest-url", flags.Lookup("latest-url"))
+	flags.StringVar(&releasesURL, "releases-url", fmt.Sprintf(templates.DefaultReleasesURLTemplate, aospVersion), "url that is used to check versions of aosp/chromium and whether build is required.")
+	_ = viper.BindPFlag("releases-url", flags.Lookup("releases-url"))
 
 	flags.StringVar(&cloud, "cloud", "aws", "cloud (aws only right now)")
 	_ = viper.BindPFlag("cloud", flags.Lookup("cloud"))
@@ -155,16 +155,16 @@ var deployCmd = &cobra.Command{
 			log.Warn("hosts-file functionality has been removed - it can be removed from config file")
 		}
 		if viper.Get("custom-manifest-remotes") != nil {
-			return fmt.Errorf("custom-manifest-remotes has been deprecated in favor of --core-config-repo")
+			return fmt.Errorf("custom-manifest-remotes has been deprecated in favor of custom-config-repo option")
 		}
 		if viper.Get("custom-manifest-projects") != nil {
-			return fmt.Errorf("custom-manifest-projects has been deprecated in favor of --core-config-repo")
+			return fmt.Errorf("custom-manifest-projects has been deprecated in favor of custom-config-repo option")
 		}
 		if viper.Get("custom-patches") != nil {
-			return fmt.Errorf("custom-patches has been deprecated in favor of --core-config-repo")
+			return fmt.Errorf("custom-patches has been deprecated in favor of custom-config-repo option")
 		}
 		if viper.Get("custom-prebuilts") != nil {
-			return fmt.Errorf("custom-prebuilts has been deprecated in favor of --core-config-repo")
+			return fmt.Errorf("custom-prebuilts has been deprecated in favor of custom-config-repo option")
 		}
 
 		return nil
@@ -218,7 +218,7 @@ var deployCmd = &cobra.Command{
 			CoreConfigRepoBranch:   viper.GetString("core-config-repo-branch"),
 			CustomConfigRepo:       viper.GetString("custom-config-repo"),
 			CustomConfigRepoBranch: viper.GetString("custom-config-repo-branch"),
-			LatestURL:              viper.GetString("latest-url"),
+			ReleasesURL:            viper.GetString("releases-url"),
 			Cloud:                  viper.GetString("cloud"),
 		}
 
