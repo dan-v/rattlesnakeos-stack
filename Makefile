@@ -58,19 +58,20 @@ deps:
 	go mod tidy
 
 test:
-	go test -v ${PKGS}
+	go test ${PKGS}
 
 vet:
 	go vet ${PKGS}
 
 lint:
-	golangci-lint run cmd/... internal/...
+	golint ${PKGS}
+	golangci-lint run cmd/... internal/... || true
 
 fmt:
 	go fmt ${PKGS}
 
 shellcheck:
-	shellcheck --severity=warning templates/build.sh
+	shellcheck --severity=warning templates/build.sh || true
 
 build:
 	go build -race -ldflags "-X github.com/dan-v/rattlesnakeos-stack/cli.version=$(VERSION)" -v -o "$(TARGET)" .
