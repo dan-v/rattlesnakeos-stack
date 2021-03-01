@@ -1,8 +1,9 @@
-package cli
+package cmd
 
 import (
 	"errors"
 	"fmt"
+	"github.com/dan-v/rattlesnakeos-stack/internal/cloudaws"
 	"math/rand"
 	"strings"
 	"time"
@@ -14,28 +15,21 @@ import (
 	"github.com/spf13/viper"
 )
 
-func init() {
+func configInit() {
 	rootCmd.AddCommand(configCmd)
 }
 
 var configCmd = &cobra.Command{
 	Use:   "config",
-	Short: "Setup config file for rattlesnakeos-stack",
+	Short: "setup config file for rattlesnakeos-stack",
 	Run: func(cmd *cobra.Command, args []string) {
-		color.Cyan(fmt.Sprintln("Device is the device codename (e.g. sailfish). Supported devices:", supportDevicesOutput))
+		color.Cyan(fmt.Sprintln("Device is the device codename (e.g. sunfish). Supported devices:", supportedDevices.GetSupportedDevicesOutput()))
 		validate := func(input string) error {
 			if len(input) < 1 {
 				return errors.New("Device name is too short")
 			}
-			found := false
-			for _, d := range supportedDevicesCodename {
-				if input == d {
-					found = true
-					break
-				}
-			}
-			if !found {
-				return errors.New("Invalid device")
+			if !supportedDevices.IsSupportedDevice(input) {
+				return errors.New("invalid device")
 			}
 			return nil
 		}
@@ -46,7 +40,7 @@ var configCmd = &cobra.Command{
 		}
 		result, err := devicePrompt.Run()
 		if err != nil {
-			log.Fatalf("Prompt failed %v\n", err)
+			log.Fatalf("prompt failed %v\n", err)
 		}
 		viper.Set("device", result)
 
@@ -68,24 +62,17 @@ var configCmd = &cobra.Command{
 		}
 		result, err = namePrompt.Run()
 		if err != nil {
-			log.Fatalf("Prompt failed %v\n", err)
+			log.Fatalf("prompt failed %v\n", err)
 		}
 		viper.Set("name", result)
 
 		color.Cyan(fmt.Sprintf("Stack region is the AWS region where you would like to deploy your stack. Valid options: %v\n",
-			strings.Join(supportedRegions, ", ")))
+			strings.Join(cloudaws.GetSupportedRegions(), ", ")))
 		validate = func(input string) error {
 			if len(input) < 1 {
 				return errors.New("Stack region is too short")
 			}
-			found := false
-			for _, region := range supportedRegions {
-				if input == region {
-					found = true
-					break
-				}
-			}
-			if !found {
+			if !cloudaws.IsSupportedRegion(input) {
 				return errors.New("Invalid region")
 			}
 			return nil
@@ -97,7 +84,7 @@ var configCmd = &cobra.Command{
 		}
 		result, err = regionPrompt.Run()
 		if err != nil {
-			log.Fatalf("Prompt failed %v\n", err)
+			log.Fatalf("prompt failed %v\n", err)
 		}
 		viper.Set("region", result)
 
@@ -115,7 +102,7 @@ var configCmd = &cobra.Command{
 		}
 		result, err = emailPrompt.Run()
 		if err != nil {
-			log.Fatalf("Prompt failed %v\n", err)
+			log.Fatalf("prompt failed %v\n", err)
 		}
 		viper.Set("email", result)
 
@@ -137,7 +124,7 @@ var configCmd = &cobra.Command{
 		}
 		result, err = keypairPrompt.Run()
 		if err != nil {
-			log.Fatalf("Prompt failed %v\n", err)
+			log.Fatalf("prompt failed %v\n", err)
 		}
 		viper.Set("ssh-key", result)
 

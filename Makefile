@@ -6,29 +6,22 @@ VERSION := $(shell cat VERSION)
 
 OS := darwin linux windows
 ARCH := amd64
+PKGS := $(shell go list ./internal/... ./cmd...)
 
 .PHONY: \
 	help \
-	default \
 	clean \
-	clean-artifacts \
-	clean-vendor \
 	tools \
 	deps \
 	test \
-	coverage \
 	vet \
-	errors \
 	lint \
 	fmt \
-	env \
 	build \
 	build-all \
-	doc \
-	check \
 	version
 
-all: fmt lint vet build-all
+all: fmt lint vet shellcheck test build-all
 
 help:
 	@echo 'Usage: make <OPTIONS> ... <TARGETS>'
@@ -37,39 +30,22 @@ help:
 	@echo ''
 	@echo '    help               Show this help screen.'
 	@echo '    clean              Remove binaries, artifacts and releases.'
-	@echo '    clean-artifacts    Remove build artifacts only.'
-	@echo '    clean-vendor       Remove content of the vendor directory.'
 	@echo '    tools              Install tools needed by the project.'
 	@echo '    deps               Download and install build time dependencies.'
 	@echo '    test               Run unit tests.'
-	@echo '    coverage           Report code tests coverage.'
 	@echo '    vet                Run go vet.'
 	@echo '    lint               Run golint.'
 	@echo '    fmt                Run go fmt.'
 	@echo '    env                Display Go environment.'
 	@echo '    build              Build project for current platform.'
 	@echo '    build-all          Build project for all supported platforms.'
-	@echo '    doc                Start Go documentation server on port 8080.'
-	@echo '    check              Verify compiled binary.'
-	@echo '    version            Display Go version.'
-	@echo ''
-	@echo 'Targets run by default are: imports, fmt, lint, vet, errors and build.'
 	@echo ''
 
 print-%:
 	@echo $* = $($*)
 
-clean: clean-artifacts
-	go clean -i ./...
-	rm -vf $(CURDIR)/coverage.*
-
-clean-artifacts:
-	rm -Rf artifacts
-
-clean-vendor:
-	find $(CURDIR)/vendor -type d -print0 2>/dev/null | xargs -0 rm -Rf
-
-clean-all: clean clean-artifacts clean-vendor
+clean:
+	rm -Rf build
 
 tools:
 	go get golang.org/x/lint/golint
@@ -79,60 +55,37 @@ tools:
 	go get github.com/mitchellh/gox
 
 deps:
-	dep ensure
+	go mod tidy
 
 test:
-	go test -v ./...
-
-coverage: 
-	gocov test ./... > $(CURDIR)/coverage.out 2>/dev/null
-	gocov report $(CURDIR)/coverage.out
-	if test -z "$$CI"; then \
-	  gocov-html $(CURDIR)/coverage.out > $(CURDIR)/coverage.html; \
-	  if which open &>/dev/null; then \
-	    open $(CURDIR)/coverage.html; \
-	  fi; \
-	fi
+	go test ${PKGS}
 
 vet:
-	go vet -v ./...
+	go vet ${PKGS}
 
 lint:
-	golint $(go list ./... | grep -v /vendor/)
+	golint ${PKGS}
+	golangci-lint run cmd/... internal/... || true
 
 fmt:
-	go fmt ./...
+	go fmt ${PKGS}
 
-env:
-	@go env
+shellcheck:
+	shellcheck --severity=warning templates/build.sh || true
 
 build:
 	go build -race -ldflags "-X github.com/dan-v/rattlesnakeos-stack/cli.version=$(VERSION)" -v -o "$(TARGET)" .
 
 build-all:
-	mkdir -v -p $(CURDIR)/artifacts/$(VERSION)
+	mkdir -v -p $(CURDIR)/build/$(VERSION)
 	gox -verbose -ldflags "-X github.com/dan-v/rattlesnakeos-stack/cli.version=$(VERSION)" \
 	    -os "$(OS)" -arch "$(ARCH)" \
-	    -output "$(CURDIR)/artifacts/$(VERSION)/{{.OS}}/$(TARGET)" .
+	    -output "$(CURDIR)/build/$(VERSION)/{{.OS}}/$(TARGET)" .
 	cp -v -f \
-	   $(CURDIR)/artifacts/$(VERSION)/$$(go env GOOS)/$(TARGET) .
-
-doc:
-	godoc -http=:8080 -index
-
-check:
-	@test -x $(CURDIR)/$(TARGET) || exit 1
-	if $(CURDIR)/$(TARGET) --version | grep -qF '$(VERSION)'; then \
-	  echo "$(CURDIR)/$(TARGET): OK"; \
-	else \
-	  exit 1; \
-	fi
-
-version:
-	@go version
+	   $(CURDIR)/build/$(VERSION)/$$(go env GOOS)/$(TARGET) .
 
 zip: all
-	mkdir -p artifacts/zips
-	pushd artifacts/$(VERSION)/darwin && zip -r ../../../artifacts/zips/rattlesnakeos-stack-osx-${VERSION}.zip $(TARGET) && popd
-	pushd artifacts/$(VERSION)/windows && zip -r ../../../artifacts/zips/rattlesnakeos-stack-windows-${VERSION}.zip $(TARGET).exe && popd
-	pushd artifacts/$(VERSION)/linux && zip -r ../../../artifacts/zips/rattlesnakeos-stack-linux-${VERSION}.zip $(TARGET) && popd
+	mkdir -p build/zips
+	pushd build/$(VERSION)/darwin && zip -r ../../../build/zips/rattlesnakeos-stack-osx-${VERSION}.zip $(TARGET) && popd
+	pushd build/$(VERSION)/windows && zip -r ../../../build/zips/rattlesnakeos-stack-windows-${VERSION}.zip $(TARGET).exe && popd
+	pushd build/$(VERSION)/linux && zip -r ../../../build/zips/rattlesnakeos-stack-linux-${VERSION}.zip $(TARGET) && popd

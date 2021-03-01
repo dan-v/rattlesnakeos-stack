@@ -7,7 +7,7 @@ about: Create a report to help us improve
 ### Prerequisites
 
 * [ ] I am running the [latest version](https://github.com/dan-v/rattlesnakeos-stack/releases) of rattlesnakeos-stack
-* [ ] I am able to reproduce this issue without any advanced customization options
+* [ ] I am able to reproduce this issue without any customization options
 
 ### Description
 
@@ -31,8 +31,6 @@ You can mask stack name and email from here.
 ```
 chromium-version = ""
 device = "crosshatch"
-encrypted-keys = true
-ignore-version-checks = false
 instance-regions = "us-west-2,us-west-1,us-east-1,us-east-2"
 instance-type = "c5.4xlarge"
 max-price = "1.00"
@@ -47,7 +45,7 @@ ssh-key = "rattlesnakeos"
 e.g. T-mobile, etc
 
 ### Email Notification Output
-Should look something like this. You can mask stack name from here and you may want to verify contents of log output before pasting.
+Should look something like this. You can mask stack name from here, and you may want to verify contents of log output before pasting.
 ```
 RattlesnakeOS build FAILED
  Device: crosshatch

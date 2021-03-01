@@ -2,7 +2,7 @@ version: 2
 jobs:
   build:
     docker:
-      - image: circleci/golang:1.12
+      - image: circleci/golang:1.16
 
     steps:
       - checkout
@@ -10,4 +10,4 @@ jobs:
       - run: make tools && make zip
 
       - store_artifacts:
-          path: artifacts/zips
+          path: build/zips

@@ -1,8 +1,9 @@
-package cli
+package cmd
 
 import (
-	"errors"
 	"fmt"
+	"github.com/dan-v/rattlesnakeos-stack/internal/devices"
+	"github.com/dan-v/rattlesnakeos-stack/internal/templates"
 	"os"
 
 	homedir "github.com/mitchellh/go-homedir"
@@ -12,20 +13,39 @@ import (
 )
 
 var (
-	version                   string
 	cfgFile                   string
 	defaultConfigFileBase     = ".rattlesnakeos"
 	defaultConfigFileFormat   = "toml"
 	defaultConfigFile         = fmt.Sprintf("%v.%v", defaultConfigFileBase, defaultConfigFileFormat)
 	defaultConfigFileFullPath string
 	configFileFullPath        string
+	supportedDevices          *devices.SupportedDevices
+	stackVersion              string
+	aospVersion               string
+	templatesFiles            *templates.TemplateFiles
 )
 
 // Execute the CLI
-func Execute() {
+func Execute(_supportedDevices *devices.SupportedDevices, _aospVersion, _stackVersion string, _templatesFiles *templates.TemplateFiles) {
+	supportedDevices = _supportedDevices
+	aospVersion = _aospVersion
+	stackVersion = _stackVersion
+	templatesFiles = _templatesFiles
+
+	// initialize cobra
+	cobra.OnInitialize(initConfig)
+	rootCmd.PersistentFlags().StringVar(&cfgFile, "config-file", "", fmt.Sprintf("config file (default location to look for config is $HOME/%s)", defaultConfigFile))
+
+	// init sub commands
+	buildInit()
+	configInit()
+	deployInit()
+	removeInit()
+	versionInit()
+
+	// execute root
 	if err := rootCmd.Execute(); err != nil {
-		fmt.Println(err)
-		os.Exit(1)
+		log.Fatal(err)
 	}
 }
 
@@ -40,10 +60,10 @@ func initConfig() {
 		viper.SetConfigFile(cfgFile)
 		configFileFullPath = cfgFile
 		if _, err := os.Stat(configFileFullPath); os.IsNotExist(err) {
-			log.Infof("Config file %v doesn't exist yet - creating it", configFileFullPath)
+			log.Infof("config file %v doesn't exist yet - creating it", configFileFullPath)
 			_, err := os.Create(configFileFullPath)
 			if err != nil {
-				log.Fatalf("Failed to create config file %v", configFileFullPath)
+				log.Fatalf("failed to create config file %v", configFileFullPath)
 			}
 		}
 	} else {
@@ -55,31 +75,16 @@ func initConfig() {
 
 	if err := viper.ReadInConfig(); err != nil {
 		if viper.ConfigFileUsed() != "" {
-			log.Fatalf("Failed to parse config file %v. Error: %v", viper.ConfigFileUsed(), err)
-		} else {
-			log.Printf("No config file found. Using CLI options only.")
+			log.Fatalf("failed to parse config file %v. error: %v", viper.ConfigFileUsed(), err)
 		}
 	}
 	if viper.ConfigFileUsed() != "" {
-		log.Printf("Using config file: %v\n", viper.ConfigFileUsed())
+		log.Printf("using config file: %v\n", viper.ConfigFileUsed())
 	}
-}
-
-func init() {
-	cobra.OnInitialize(initConfig)
-	rootCmd.PersistentFlags().StringVar(&cfgFile, "config-file", "", fmt.Sprintf("config file (default location to look for config is $HOME/%s)", defaultConfigFile))
 }
 
 var rootCmd = &cobra.Command{
 	Use: "rattlesnakeos-stack",
-	Short: "A cross platform tool that provisions all of the AWS infrastructure required to build your own privacy " +
+	Short: "a cross platform tool that provisions all of the cloud infrastructure required to build your own privacy " +
 		"focused Android OS on a continuous basis with OTA updates.",
-	Version: version,
-	Args: func(cmd *cobra.Command, args []string) error {
-		if len(args) == 0 {
-			return errors.New("Need to specify a subcommand")
-		}
-		return nil
-	},
-	Run: func(cmd *cobra.Command, args []string) {},
 }

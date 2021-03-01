@@ -63,11 +63,6 @@ Therefore, the public key needs to be set before locking the bootloader again. F
 ```
 aws s3 cp s3://<rattlesnakeos-stackname>-keys/crosshatch/avb_pkmd.bin .
 ```
-Or if you used the `encrypted-keys` option, you will need to download the encrypted key and decrypt it.
-```
-aws s3 cp s3://<rattlesnakeos-stackname>-keys-encrypted/crosshatch/avb_pkmd.bin.gpg .
-gpg -d avb_pkmd.bin.gpg > avb_pkmd.bin
-```
 
 Now use fastboot to flash the avb_custom_key
 ```
