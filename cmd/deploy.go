@@ -175,6 +175,11 @@ var deployCmd = &cobra.Command{
 		return nil
 	},
 	Run: func(cmd *cobra.Command, args []string) {
+		configFileFullPath, err := filepath.Abs(cfgFile)
+		if err != nil {
+			log.Fatal(err)
+		}
+
 		c := viper.AllSettings()
 		bs, err := yaml.Marshal(c)
 		if err != nil {
@@ -249,10 +254,6 @@ var deployCmd = &cobra.Command{
 			log.Fatal("'aws' is only supported option for cloud at the moment")
 		}
 
-		configFileFullPath, err := filepath.Abs(cfgFile)
-		if err != nil {
-			log.Fatal(err)
-		}
 		awsSetupClient, err := cloudaws.NewSetupClient(
 			viper.GetString("name"),
 			viper.GetString("region"),

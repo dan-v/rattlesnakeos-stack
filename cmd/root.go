@@ -58,19 +58,18 @@ func initConfig() {
 
 	if cfgFile != "" {
 		viper.SetConfigFile(cfgFile)
-		configFileFullPath = cfgFile
-		if _, err := os.Stat(configFileFullPath); os.IsNotExist(err) {
-			log.Infof("config file %v doesn't exist yet - creating it", configFileFullPath)
-			_, err := os.Create(configFileFullPath)
+		if _, err := os.Stat(cfgFile); os.IsNotExist(err) {
+			log.Infof("config file %v doesn't exist yet - creating it", cfgFile)
+			_, err := os.Create(cfgFile)
 			if err != nil {
-				log.Fatalf("failed to create config file %v", configFileFullPath)
+				log.Fatalf("failed to create config file %v", cfgFile)
 			}
 		}
 	} else {
 		viper.SetConfigName(defaultConfigFileBase)
 		viper.SetConfigType(defaultConfigFileFormat)
 		viper.AddConfigPath(home)
-		configFileFullPath = defaultConfigFileFullPath
+		cfgFile = defaultConfigFileFullPath
 	}
 
 	if err := viper.ReadInConfig(); err != nil {
