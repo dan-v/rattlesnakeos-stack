@@ -128,11 +128,11 @@ var configCmd = &cobra.Command{
 		}
 		viper.Set("ssh-key", result)
 
-		err = viper.WriteConfigAs(configFileFullPath)
+		err = viper.WriteConfigAs(cfgFile)
 		if err != nil {
-			log.WithError(err).Fatalf("failed to write config file %s", configFileFullPath)
+			log.WithError(err).Fatalf("failed to write config file %s", cfgFile)
 		}
-		log.Infof("rattlesnakeos-stack config file has been written to %v", configFileFullPath)
+		log.Infof("rattlesnakeos-stack config file has been written to %v", cfgFile)
 	},
 }
 

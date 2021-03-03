@@ -18,7 +18,6 @@ var (
 	defaultConfigFileFormat   = "toml"
 	defaultConfigFile         = fmt.Sprintf("%v.%v", defaultConfigFileBase, defaultConfigFileFormat)
 	defaultConfigFileFullPath string
-	configFileFullPath        string
 	supportedDevices          *devices.SupportedDevices
 	stackVersion              string
 	aospVersion               string
