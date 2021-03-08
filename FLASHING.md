@@ -9,18 +9,18 @@ You need the unlocked variant of one of the supported devices, not a locked carr
 It's best practice to update the stock OS on the device to make sure it's running the latest firmware before proceeding with these instructions. This avoids running into bugs in older firmware versions. It's known that the early Pixel 2 and Pixel 2 XL bootloader versions have weird quirks with unlocking. There aren't known issues on other devices, but this is still a good idea. You can either do this via over-the-air updates or sideload a full update from their full update package page.
 
 ## Obtaining fastboot
-You need an updated copy of the fastboot tool and it needs to be included in your PATH environment variable. You can run fastboot --version to determine the current version. It should be at least 28.0.0. You can use a distribution package for this, but most of them mistakenly package development snapshots of fastboot, clobber the standard version scheme for platform-tools (adb, fastboot, etc.) with their own scheme and don't keep it up-to-date despite that being crucial.
+You need an updated copy of the fastboot tool and it needs to be included in your PATH environment variable. You can run fastboot --version to determine the current version. It should be at least 30.0.0. You can use a distribution package for this, but most of them mistakenly package development snapshots of fastboot, clobber the standard version scheme for platform-tools (adb, fastboot, etc.) with their own scheme and don't keep it up-to-date despite that being crucial.
 
 If your distribution doesn't have a proper fastboot package, which is likely, consider using the official releases of platform-tools from Google. You can either obtain these as part of the standalone SDK or Android Studio which are self-updating or via the standalone platform-tools releases. For one time usage, it's easiest to obtain the latest standalone platform-tools release, extract it and add it to your PATH in the current shell. For example:
 
 ```
-unzip platform-tools_r29.0.2-linux.zip
+unzip platform-tools_r30.0.0-linux.zip
 export PATH="$PWD/platform-tools:$PATH"
 ```
 
 Sample output from `fastboot --version` afterwards:
 ```
-fastboot version 29.0.2-5738569
+fastboot version 30.0.0-6374843
 Installed as /home/username/downloads/platform-tools/fastboot
 ```
 
@@ -46,7 +46,7 @@ The command needs to be confirmed on the device.
 ## Obtaining factory images
 Extract the factory image you just created for RattlesnakeOS and run the script to flash them. 
 ```
-tar xvf crosshatch-factory-latest.tar.xz
+unzip crosshatch-factory-latest.zip
 cd crosshatch-pq3a.190605.003
 ./flash-all.sh
 ```
@@ -55,9 +55,7 @@ Wait for the flashing process to complete and for the device to boot up using th
 You should now proceed to setting custom AVB key and locking the bootloader before using the device as locking wipes the data again.
 
 ## Setting custom AVB key
-On the <b>Pixel 1 and Pixel 1 XL</b>, a locked bootloader will blindly accept whatever public key is embedded in the image.  It will display a yellow screen if an unknown public key is used, and skip the warning if Google's key is used.  This provides only limited protection from tampering when running custom images.  On these units, there is no way to set a custom AVB key.
-
-On newer Pixel devices (everything other than the original Pixel), a locked bootloader will verify the signing key to make sure it matches the same key set by the user (or Google's master key).  If the image was signed using the avb\_custom\_key, a yellow warning screen will be displayed. If the image was signed with Google's key, no warning will be shown.  If the image was signed with an unrecognized key, the device will refuse to boot.
+On newer Pixel devices, a locked bootloader will verify the signing key to make sure it matches the same key set by the user (or Google's master key).  If the image was signed using the avb\_custom\_key, a yellow warning screen will be displayed. If the image was signed with Google's key, no warning will be shown.  If the image was signed with an unrecognized key, the device will refuse to boot.
 
 Therefore, the public key needs to be set before locking the bootloader again. First get the generated public key from S3:
 ```
@@ -66,6 +64,12 @@ aws s3 cp s3://<rattlesnakeos-stackname>-keys/crosshatch/avb_pkmd.bin .
 
 Now use fastboot to flash the avb_custom_key
 ```
+fastboot flash avb_custom_key avb_pkmd.bin
+```
+
+If you get an error like `Failed flash avb custom key Device Error`, first try to erase any existing custom key and then flash key
+```
+fastboot erase avb_custom_key
 fastboot flash avb_custom_key avb_pkmd.bin
 ```
 
