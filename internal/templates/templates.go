@@ -185,8 +185,8 @@ func (t *Templates) renderTerraform() ([]byte, error) {
 		BuildScriptFileLocation string
 	}{
 		*t.config,
-		t.lambdaZipFilePath,
-		t.buildScriptFilePath,
+		strings.Replace(t.lambdaZipFilePath, "\\", "\\\\", -1),
+		strings.Replace(t.buildScriptFilePath, "\\", "\\\\", -1),
 	})
 }
 
