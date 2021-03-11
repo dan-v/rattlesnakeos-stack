@@ -158,7 +158,9 @@ func (t *Templates) renderBuildScript() ([]byte, error) {
 	// insert the generated vars and funcs into raw build script
 	updatedBuildScript := strings.Replace(t.templateFiles.BuildScript, defaultGeneratedVarReplaceString, string(renderedBuildScriptTemplate), 1)
 
-	return []byte(updatedBuildScript), nil
+	fixedBuildScript := strings.Replace(updatedBuildScript, "\r\n", "\n", -1)
+
+	return []byte(fixedBuildScript), nil
 }
 
 func (t *Templates) renderLambdaFunction() ([]byte, error) {
