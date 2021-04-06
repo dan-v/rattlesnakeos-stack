@@ -11,7 +11,9 @@ AOSP_TAG=$3
 echo "AOSP_TAG=${AOSP_TAG}"
 CHROMIUM_VERSION=$4
 echo "CHROMIUM_VERSION=${CHROMIUM_VERSION}"
-LOCAL_MANIFEST_REVISIONS=$5
+CHROMIUM_FORCE_BUILD=$5
+echo "CHROMIUM_FORCE_BUILD=${CHROMIUM_FORCE_BUILD}"
+LOCAL_MANIFEST_REVISIONS=$6
 echo "LOCAL_MANIFEST_REVISIONS=${LOCAL_MANIFEST_REVISIONS}"
 
 #### <generated_vars_and_funcs.sh> ####
@@ -39,12 +41,12 @@ full_run() {
   notify "RattlesnakeOS Build STARTED"
   setup_env
   import_keys
-  chromium_build_if_required
   aosp_repo_init
   aosp_local_repo_additions
   aosp_repo_sync
-  setup_vendor
+  chromium_build_if_required
   chromium_copy_to_build_tree_if_required
+  setup_vendor
   aosp_build
   release
   upload
@@ -482,7 +484,7 @@ chromium_build_if_required() {
   log "Chromium current: ${current}"
 
   log "Chromium requested: ${CHROMIUM_VERSION}"
-  if [ "${CHROMIUM_VERSION}" == "${current}" ]; then
+  if [ "${CHROMIUM_VERSION}" == "${current}" ] && [ "${CHROMIUM_FORCE_BUILD}" != "true" ]; then
     log "Chromium requested (${CHROMIUM_VERSION}) matches current (${current})"
   else
     log "Building chromium ${CHROMIUM_VERSION}"
@@ -538,24 +540,11 @@ build_chromium() {
     trichrome_certdigest=$(keytool -export-cert -alias chromium -keystore "${KEYSTORE}" -storepass chromium | sha256sum | awk '{print $1}')
     log "trichrome_certdigest=${trichrome_certdigest}"
     mkdir -p out/Default
-    cat <<EOF > out/Default/args.gn
-target_os = "android"
-target_cpu = "arm64"
-android_channel = "stable"
+    cp -f "${AOSP_BUILD_DIR}/external/chromium/args.gn" out/Default/args.gn
+    cat <<EOF >> out/Default/args.gn
+
 android_default_version_name = "${CHROMIUM_REVISION}"
 android_default_version_code = "${CHROMIUM_DEFAULT_VERSION}"
-is_component_build = false
-is_debug = false
-is_official_build = true
-symbol_level = 1
-fieldtrial_testing_like_official_build = true
-ffmpeg_branding = "Chrome"
-proprietary_codecs = true
-is_cfi = true
-enable_gvr_services = false
-enable_remoting = false
-enable_reporting = true
-
 trichrome_certdigest = "${trichrome_certdigest}"
 chrome_public_manifest_package = "org.chromium.chrome"
 system_webview_package_name = "org.chromium.webview"

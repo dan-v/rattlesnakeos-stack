@@ -61,6 +61,10 @@ def lambda_handler(event, context):
     # build time overrides
     force_build = event.get('force-build') or False
     print("force_build", force_build)
+    force_chromium_build_string = "true" if event.get('force-chromium-build') else "false"
+    print("force_chromium_build_string", force_chromium_build_string)
+    if force_chromium_build_string == "true":
+        force_build = True
     aosp_build_id = event.get('aosp-build-id') or latest_aosp_build_id
     print("aosp_build_id", aosp_build_id)
     aosp_tag = event.get('aosp-tag') or latest_aosp_tag
@@ -103,8 +107,8 @@ def lambda_handler(event, context):
 
     # userdata to deploy with spot instance
     copy_build_command = f"sudo -u ubuntu aws s3 --region {STACK_REGION} cp {BUILD_SCRIPT_S3_LOCATION} /home/ubuntu/build.sh"
-    build_args_command = f"echo \\\"/home/ubuntu/build.sh {latest_release} {aosp_build_id} {aosp_tag} {chromium_version} {revisions_string}\\\" > /home/ubuntu/build_cmd"
-    build_start_command = f"sudo -u ubuntu bash /home/ubuntu/build.sh \\\"{latest_release}\\\" \\\"{aosp_build_id}\\\" \\\"{aosp_tag}\\\" \\\"{chromium_version}\\\" \\\"{revisions_string}\\\""
+    build_args_command = f"echo \\\"/home/ubuntu/build.sh {latest_release} {aosp_build_id} {aosp_tag} {chromium_version} {force_chromium_build_string} {revisions_string}\\\" > /home/ubuntu/build_cmd"
+    build_start_command = f"sudo -u ubuntu bash /home/ubuntu/build.sh \\\"{latest_release}\\\" \\\"{aosp_build_id}\\\" \\\"{aosp_tag}\\\" \\\"{chromium_version}\\\" \\\"{force_chromium_build_string}\\\" \\\"{revisions_string}\\\""
     userdata = base64.b64encode(f"""
 #cloud-config
 output : {{ all : '| tee -a /var/log/cloud-init-output.log' }}

@@ -15,7 +15,7 @@ import (
 var (
 	terminateInstanceID, terminateRegion, listRegions string
 	aospBuildID, aospTag                              string
-	forceBuild                                        bool
+	forceBuild, forceChromiumBuild                    bool
 	defaultExecuteLambdaTimeout                       = time.Second * 200
 	defaultTerminateInstanceTimeout                   = time.Second * 10
 	defaultListInstancesTimeout                       = time.Second * 10
@@ -31,6 +31,7 @@ func buildInit() {
 	buildCmd.AddCommand(buildStartCmd)
 	buildStartCmd.Flags().StringVar(&name, "name", "", "name of stack")
 	buildStartCmd.Flags().BoolVar(&forceBuild, "force-build", false, "force build even if there are no changes in component versions")
+	buildStartCmd.Flags().BoolVar(&forceChromiumBuild, "force-chromium-build", false, "force chromium build even if not required")
 	buildStartCmd.Flags().StringVar(&aospBuildID, "aosp-build-id", "", "advanced option - specify the specific the AOSP build id (e.g. RQ1A.210205.004)")
 	buildStartCmd.Flags().StringVar(&aospTag, "aosp-tag", "", "advanced option - specify the corresponding AOSP tag to use for build (e.g. android-11.0.0_r29)")
 
@@ -74,13 +75,15 @@ var buildStartCmd = &cobra.Command{
 		}
 
 		payload, err := json.Marshal(struct {
-			ForceBuild  bool   `json:"force-build"`
-			AOSPBuildID string `json:"aosp-build-id"`
-			AOSPTag     string `json:"aosp-tag"`
+			ForceBuild         bool   `json:"force-build"`
+			ForceChromiumBuild bool   `json:"force-chromium-build"`
+			AOSPBuildID        string `json:"aosp-build-id"`
+			AOSPTag            string `json:"aosp-tag"`
 		}{
-			ForceBuild:  forceBuild,
-			AOSPBuildID: aospBuildID,
-			AOSPTag:     aospTag,
+			ForceBuild:         forceBuild,
+			ForceChromiumBuild: forceChromiumBuild,
+			AOSPBuildID:        aospBuildID,
+			AOSPTag:            aospTag,
 		})
 		if err != nil {
 			log.Fatalf("failed to create payload for lambda function: %v", err)
