@@ -21,7 +21,7 @@ import (
 const (
 	// Version is the Terraform version that is downloaded and used
 	// TODO: this version of Terraform is getting quite old, but don't have a great plan for seamless major version upgrade.
-	Version = "0.11.14"
+	Version = "0.11.15"
 	// DefaultTerraformDestroyTimeout is the default timeout for running Terraform destroy
 	DefaultTerraformDestroyTimeout = time.Minute * 2
 )
