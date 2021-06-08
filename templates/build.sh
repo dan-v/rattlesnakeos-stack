@@ -535,6 +535,11 @@ build_chromium() {
     # reset any modifications
     git checkout -- .
 
+    # apply required patches
+    if [ -n "$(ls -A ${AOSP_BUILD_DIR}/external/chromium/patches)" ]; then
+      git am --whitespace=nowarn ${AOSP_BUILD_DIR}/external/chromium/patches/*.patch
+    fi
+
     # generate configuration
     KEYSTORE="${KEYS_DIR}/${DEVICE}/chromium.keystore"
     trichrome_certdigest=$(keytool -export-cert -alias chromium -keystore "${KEYSTORE}" -storepass chromium | sha256sum | awk '{print $1}')
@@ -555,22 +560,16 @@ EOF
     run_hook_if_exists "build_chromium_pre"
 
     log "Building trichrome"
-    autoninja -C out/Default/ trichrome_webview_apk trichrome_chrome_bundle trichrome_library_apk
+    autoninja -C out/Default/ trichrome_webview_64_32_apk trichrome_chrome_64_32_apk trichrome_library_64_32_apk
 
     log "Signing trichrome"
-    BUNDLETOOL="${CHROMIUM_BUILD_DIR}/src/build/android/gyp/bundletool.py"
-    AAPT2="${CHROMIUM_BUILD_DIR}/src/third_party/android_build_tools/aapt2/aapt2"
     APKSIGNER="${CHROMIUM_BUILD_DIR}/src/third_party/android_sdk/public/build-tools/30.0.1/apksigner"
     cd out/Default/apks
     rm -rf release
     mkdir release
     cd release
-    "${BUNDLETOOL}" build-apks --aapt2 "${AAPT2}" --bundle "../TrichromeChrome.aab" --output "TrichromeChrome.apks" \
-        --mode=universal --ks "${KEYSTORE}" --ks-pass pass:chromium --ks-key-alias chromium
-    unzip "TrichromeChrome.apks" "universal.apk"
-    mv "universal.apk" "TrichromeChrome.apk"
-    for app in TrichromeLibrary TrichromeWebView; do
-      "${APKSIGNER}" sign --ks "${KEYSTORE}" --ks-pass pass:chromium --ks-key-alias chromium --in "../${app}.apk" --out "${app}.apk"
+    for app in TrichromeChrome TrichromeLibrary TrichromeWebView; do
+      "${APKSIGNER}" sign --ks "${KEYSTORE}" --ks-pass pass:chromium --ks-key-alias chromium --in "../${app}6432.apk" --out "${app}.apk"
     done
 
     log "Uploading trichrome apks"
