@@ -82,6 +82,12 @@ var allDevices = []*devices.Device{
 		Family:   "redfin",
 		AVBMode:  devices.AVBModeChainedV2,
 	},
+	&devices.Device{
+		Name:     "barbet",
+		Friendly: "Pixel 5a",
+		Family:   "barbet",
+		AVBMode:  devices.AVBModeChainedV2,
+	},
 }
 
 func main() {
