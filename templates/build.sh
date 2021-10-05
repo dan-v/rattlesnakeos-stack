@@ -563,7 +563,7 @@ EOF
     autoninja -C out/Default/ trichrome_webview_64_32_apk trichrome_chrome_64_32_apk trichrome_library_64_32_apk
 
     log "Signing trichrome"
-    APKSIGNER="${CHROMIUM_BUILD_DIR}/src/third_party/android_sdk/public/build-tools/30.0.1/apksigner"
+    APKSIGNER="${CHROMIUM_BUILD_DIR}/src/third_party/android_sdk/public/build-tools/31.0.0/apksigner"
     cd out/Default/apks
     rm -rf release
     mkdir release
