@@ -59,7 +59,7 @@ setup_env() {
 
   # install required packages
   sudo apt-get update
-  sudo DEBIAN_FRONTEND=noninteractive apt-get -y install python python2 python3 gperf jq default-jdk git-core gnupg \
+  sudo DEBIAN_FRONTEND=noninteractive apt-get -y install apt-transport-https ca-certificates python python2 python3 gperf jq default-jdk git-core gnupg \
       flex bison build-essential zip curl zlib1g-dev gcc-multilib g++-multilib libc6-dev-i386 lib32ncurses5-dev \
       x11proto-core-dev libx11-dev lib32z-dev ccache libgl1-mesa-dev libxml2-utils xsltproc unzip liblz4-tool \
       libncurses5 wget parallel rsync python-protobuf python3-protobuf python3-pip
