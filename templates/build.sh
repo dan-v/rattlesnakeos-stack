@@ -62,7 +62,7 @@ setup_env() {
   sudo DEBIAN_FRONTEND=noninteractive apt-get -y install apt-transport-https ca-certificates python python2 python3 gperf jq default-jdk git-core gnupg \
       flex bison build-essential zip curl zlib1g-dev gcc-multilib g++-multilib libc6-dev-i386 lib32ncurses5-dev \
       x11proto-core-dev libx11-dev lib32z-dev ccache libgl1-mesa-dev libxml2-utils xsltproc unzip liblz4-tool \
-      libncurses5 wget parallel rsync python-protobuf python3-protobuf python3-pip
+      libncurses5 wget parallel rsync python-protobuf python3-protobuf python3-pip libarchive-tools
 
   retry curl --fail -s https://storage.googleapis.com/git-repo-downloads/repo > /tmp/repo
   chmod +x /tmp/repo
@@ -178,7 +178,7 @@ setup_vendor() {
   fi
 
   # get vendor files (with timeout)
-  timeout 30m "${AOSP_BUILD_DIR}/vendor/android-prepare-vendor/execute-all.sh" --debugfs --yes --device "${DEVICE}" \
+  timeout 30m "${AOSP_BUILD_DIR}/vendor/android-prepare-vendor/execute-all.sh" --yes --device "${DEVICE}" \
       --buildID "${AOSP_BUILD_ID}" --output "${AOSP_BUILD_DIR}/vendor/android-prepare-vendor"
 
   # copy vendor files to build tree
@@ -214,12 +214,18 @@ env_setup_script() {
   cd "${AOSP_BUILD_DIR}"
 
   source build/envsetup.sh
-  export LANG=C
+  export LANG=en_US.UTF-8
   export _JAVA_OPTIONS=-XX:-UsePerfData
   # shellcheck disable=SC2155
-  export BUILD_NUMBER=$(cat out/soong/build_number.txt 2>/dev/null || date --utc +%Y.%m.%d.%H)
-  log "BUILD_NUMBER=${BUILD_NUMBER}"
+  export BUILD_DATETIME=$(cat out/build_date.txt 2>/dev/null || date -u +%s)
+  echo "BUILD_DATETIME=$BUILD_DATETIME"
+  # shellcheck disable=SC2155
+  export BUILD_NUMBER=$(cat out/soong/build_number.txt 2>/dev/null || date -u -d @$BUILD_DATETIME +%Y%m%d%H)
+  echo "BUILD_NUMBER=$BUILD_NUMBER"
   export DISPLAY_BUILD_NUMBER=true
+  export BUILD_USERNAME=aosp
+  export BUILD_HOSTNAME=aosp
+  export OVERRIDE_TARGET_FLATTEN_APEX=true
   chrt -b -p 0 $$
 }
 
@@ -311,19 +317,19 @@ release() {
     export PATH="${AOSP_BUILD_DIR}/prebuilts/jdk/jdk9/linux-x86/bin:${PATH}"
 
     log "Running sign_target_files_apks"
-    "${RELEASE_TOOLS_DIR}/releasetools/sign_target_files_apks" \
+    "${RELEASE_TOOLS_DIR}/bin/sign_target_files_apks" \
       -o -d "${KEY_DIR}" \
-      -k "${AOSP_BUILD_DIR}/build/target/product/security/networkstack=${KEY_DIR}/networkstack" "${AVB_SWITCHES[@]}" \
+      --extra_apks OsuLogin.apk,ServiceConnectivityResources.apk,ServiceWifiResources.apk="$KEY_DIR/releasekey" "${AVB_SWITCHES[@]}" \
       "${AOSP_BUILD_DIR}/out/target/product/${DEVICE}/obj/PACKAGING/target_files_intermediates/${PREFIX}${DEVICE}-target_files-${BUILD_NUMBER}.zip" \
       "${OUT}/${TARGET_FILES}"
 
     log "Running ota_from_target_files"
     # shellcheck disable=SC2068
-    "${RELEASE_TOOLS_DIR}/releasetools/ota_from_target_files" --block -k "${KEY_DIR}/releasekey" ${DEVICE_EXTRA_OTA[@]} "${OUT}/${TARGET_FILES}" \
+    "${RELEASE_TOOLS_DIR}/bin/ota_from_target_files" --block -k "${KEY_DIR}/releasekey" ${DEVICE_EXTRA_OTA[@]} "${OUT}/${TARGET_FILES}" \
       "${OUT}/${DEVICE}-ota_update-${BUILD}.zip"
 
     log "Running img_from_target_files"
-    "${RELEASE_TOOLS_DIR}/releasetools/img_from_target_files" "${OUT}/${TARGET_FILES}" "${OUT}/${DEVICE}-img-${BUILD}.zip"
+    "${RELEASE_TOOLS_DIR}/bin/img_from_target_files" "${OUT}/${TARGET_FILES}" "${OUT}/${DEVICE}-img-${BUILD}.zip"
 
     log "Running generate-factory-images"
     cd "${OUT}"
@@ -348,7 +354,7 @@ upload() {
 
   # upload ota and set metadata
   upload_build_artifact "${AOSP_BUILD_DIR}/out/release-${DEVICE}-${build_date}/${DEVICE}-ota_update-${build_date}.zip" "${DEVICE}-ota_update-${build_date}.zip" "public"
-  set_current_metadata "${release_channel}" "${build_date} ${build_timestamp} ${AOSP_BUILD_ID}" "public"
+  set_current_metadata "${release_channel}" "${build_date} ${build_timestamp} ${AOSP_BUILD_ID} ${build_channel}" "public"
   set_current_metadata "${release_channel}-true-timestamp" "${build_timestamp}" "public"
 
   # cleanup old ota

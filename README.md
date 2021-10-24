@@ -1,12 +1,12 @@
 Build your own customized Android OS for Google Pixel phones using [AWS](https://aws.amazon.com/) cloud infrastructure. The default OS that this tools builds without any customizations is called `RattlesnakeOS`.  If there is something you don't like about the default OS, you can add customizations on top of it or start with a completely blank slate and build your own OS.
 
 ## Features
-* Support for Google Pixel phones
-* Based on latest [AOSP](https://source.android.com/) 11.0
+* Based on latest [AOSP](https://source.android.com/) 12.0
+* Supports Google Pixel phones
 * Software and firmware security updates delivered through built in OTA updater
 * Maintains [verified boot](https://source.android.com/security/verifiedboot/) with a locked bootloader just like official Android but with your own personal signing keys
 * Support for building latest stable Chromium [browser](https://www.chromium.org) and [webview](https://www.chromium.org/developers/how-tos/build-instructions-android-webview)
-* Support for custom OS builds
+* Supports OS customization
 
 ## Overview
 The default OS built by this tool, `RattlesnakeOS`, is just stock AOSP and has all the baseline privacy and security features from there. Unlike other alternative Android OSes, it aims to keep security on par with stock Android by keeping critical security features like verified boot enabled and ensuring monthly OTA security updates not only update the OS but also the device specific drivers and firmware.

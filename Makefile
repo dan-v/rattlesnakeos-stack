@@ -48,10 +48,6 @@ clean:
 	rm -Rf build
 
 tools:
-	go get golang.org/x/lint/golint
-	go get github.com/axw/gocov/gocov
-	go get github.com/matm/gocov-html
-	go get github.com/tools/godep
 	go get github.com/mitchellh/gox
 
 deps:
@@ -64,7 +60,6 @@ vet:
 	go vet ${PKGS}
 
 lint:
-	golint ${PKGS}
 	golangci-lint run cmd/... internal/... || true
 
 fmt:
