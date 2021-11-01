@@ -388,7 +388,7 @@ gen_keys() {
   retry curl --fail -s "https://android.googlesource.com/platform/development/+/refs/tags/${AOSP_TAG}/tools/make_key?format=TEXT" | base64 --decode > "${make_key}"
   chmod +x "${make_key}"
   avb_tool="${MISC_DIR}/avbtool"
-  retry curl --fail -s "https://android.googlesource.com/platform/external/avb/+/refs/tags/${AOSP_TAG}/avbtool?format=TEXT" | base64 --decode > "${avb_tool}"
+  retry curl --fail -s "https://android.googlesource.com/platform/external/avb/+/refs/tags/${AOSP_TAG}/avbtool.py?format=TEXT" | base64 --decode > "${avb_tool}"
   chmod +x "${avb_tool}"
 
   # generate releasekey,platform,shared,media,networkstack keys
