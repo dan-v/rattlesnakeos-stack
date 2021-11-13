@@ -93,6 +93,13 @@ type Config struct {
 	ReleasesURL string
 	// Cloud specifies which cloud to build on (only aws supported right now)
 	Cloud string
+	// TODO: apv workaround - remove once alternative is built
+	// ApvRemote is the git remote that contains an android-prepare-vendor repo
+	ApvRemote string
+	// ApvBranch is the branch to use for the android-prepare-vendor repo
+	ApvBranch string
+	// ApvRevision is the revision to lock to for android-prepare-vendor repo
+	ApvRevision string
 }
 
 // Templates provides the ability to render templates and write them to disk

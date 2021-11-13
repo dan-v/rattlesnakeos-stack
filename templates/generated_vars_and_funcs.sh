@@ -13,6 +13,10 @@ CORE_CONFIG_REPO="<% .CoreConfigRepo %>"
 CORE_CONFIG_REPO_BRANCH="<% .CoreConfigRepoBranch %>"
 CUSTOM_CONFIG_REPO="<% .CustomConfigRepo %>"
 CUSTOM_CONFIG_REPO_BRANCH="<% .CustomConfigRepoBranch %>"
+#TODO: apv workaround - remove once alternative is built
+APV_REMOTE="<% .ApvRemote %>"
+APV_BRANCH="<% .ApvBranch %>"
+APV_REVISION="<% .ApvRevision %>"
 
 ##########################################
 ###### CLOUD SPECIFIC VARS AND FUNCS #####

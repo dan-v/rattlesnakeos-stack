@@ -31,6 +31,8 @@ var (
 	coreConfigRepo, customConfigRepo                                          string
 	coreConfigRepoBranch, customConfigRepoBranch                              string
 	outputDir                                                                 string
+	// TODO: apv workaround - remove once alternative is built
+	apvRemote, apvBranch, apvRevision                                         string
 )
 
 func deployInit() {
@@ -110,6 +112,16 @@ func deployInit() {
 	flags.BoolVar(&saveConfig, "save-config", false, "allows you to save all passed CLI flags to config file")
 
 	flags.BoolVar(&dryRun, "dry-run", false, "only generate the output files, but do not deploy with terraform.")
+
+	// TODO: apv workaround - remove once alternative is built
+	flags.StringVar(&apvRemote, "apv-remote", "", "remote that contains android-prepare-vendor repo (e.g. https://github.com/example/)")
+	_ = viper.BindPFlag("apv-remote", flags.Lookup("apv-remote"))
+
+	flags.StringVar(&apvBranch, "apv-branch", "", "the branch to use for android-prepare-vendor repo (e.g. 12)")
+	_ = viper.BindPFlag("apv-branch", flags.Lookup("apv-branch"))
+
+	flags.StringVar(&apvRevision, "apv-revision", "", "the git revision to use for android-prepare-vendor repo.")
+	_ = viper.BindPFlag("apv-revision", flags.Lookup("apv-revision"))
 }
 
 var deployCmd = &cobra.Command{
@@ -146,6 +158,16 @@ var deployCmd = &cobra.Command{
 		}
 		if !supportedDevices.IsSupportedDevice(viper.GetString("device")) {
 			return fmt.Errorf("must specify a supported device: %v", strings.Join(supportedDevices.GetDeviceCodeNames(), ", "))
+		}
+		// TODO: apv workaround - remove once alternative is built
+		if viper.Get("apv-remote") == "" {
+			return fmt.Errorf("TEMPORARY: need to specify apv-remote in config (e.g. https://github.com/example/)")
+		}
+		if viper.Get("apv-branch") == "" {
+			return fmt.Errorf("TEMPORARY: need to specify apv-branch in config (e.g. 12)")
+		}
+		if viper.Get("apv-revision") == "" {
+			return fmt.Errorf("TEMPORARY: need to specify apv-revision in config (e.g. f1d2d2f924e986ac86fdf7b36c94bcdf32beec15)")
 		}
 
 		// deprecated checks
@@ -226,6 +248,9 @@ var deployCmd = &cobra.Command{
 			CustomConfigRepoBranch: viper.GetString("custom-config-repo-branch"),
 			ReleasesURL:            viper.GetString("releases-url"),
 			Cloud:                  viper.GetString("cloud"),
+			ApvRemote:              viper.GetString("apv-remote"),
+			ApvBranch:              viper.GetString("apv-branch"),
+			ApvRevision:            viper.GetString("apv-revision"),
 		}
 
 		templateRenderer, err := templates.New(templateConfig, templatesFiles, configuredOutputDir)
