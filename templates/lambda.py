@@ -149,7 +149,7 @@ runcmd:
                         'DeviceName': '/dev/sda1',
                         'Ebs': {
                             'DeleteOnTermination': True,
-                            'VolumeSize': 300,
+                            'VolumeSize': 350,
                             'VolumeType': 'gp3'
                         },
                     },
