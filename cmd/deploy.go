@@ -31,6 +31,7 @@ var (
 	coreConfigRepo, customConfigRepo                                          string
 	coreConfigRepoBranch, customConfigRepoBranch                              string
 	outputDir                                                                 string
+	instanceDebugDelayTermination                                             bool
 	// TODO: apv workaround - remove once alternative is built
 	apvRemote, apvBranch, apvRevision                                         string
 )
@@ -112,6 +113,9 @@ func deployInit() {
 	flags.BoolVar(&saveConfig, "save-config", false, "allows you to save all passed CLI flags to config file")
 
 	flags.BoolVar(&dryRun, "dry-run", false, "only generate the output files, but do not deploy with terraform.")
+
+	flags.BoolVar(&instanceDebugDelayTermination, "instance-debug-delay-termination", false, "delay instance shutdown/termination if there are active SSH sessions")
+	_ = viper.BindPFlag("instance-debug-delay-termination", flags.Lookup("instance-debug-delay-termination"))
 
 	// TODO: apv workaround - remove once alternative is built
 	flags.StringVar(&apvRemote, "apv-remote", "", "remote that contains android-prepare-vendor repo (e.g. https://github.com/example/)")
@@ -228,29 +232,30 @@ var deployCmd = &cobra.Command{
 		log.Infof("all generated files will be placed in %v", configuredOutputDir)
 
 		templateConfig := &templates.Config{
-			Version:                stackVersion,
-			Name:                   viper.GetString("name"),
-			Region:                 viper.GetString("region"),
-			Device:                 viper.GetString("device"),
-			DeviceDetails:          supportedDevices.GetDeviceDetails(viper.GetString("device")),
-			Email:                  viper.GetString("email"),
-			InstanceType:           viper.GetString("instance-type"),
-			InstanceRegions:        viper.GetString("instance-regions"),
-			SkipPrice:              viper.GetString("skip-price"),
-			MaxPrice:               viper.GetString("max-price"),
-			SSHKey:                 viper.GetString("ssh-key"),
-			Schedule:               viper.GetString("schedule"),
-			ChromiumBuildDisabled:  viper.GetBool("chromium-build-disabled"),
-			ChromiumVersion:        viper.GetString("chromium-version"),
-			CoreConfigRepo:         viper.GetString("core-config-repo"),
-			CoreConfigRepoBranch:   viper.GetString("core-config-repo-branch"),
-			CustomConfigRepo:       viper.GetString("custom-config-repo"),
-			CustomConfigRepoBranch: viper.GetString("custom-config-repo-branch"),
-			ReleasesURL:            viper.GetString("releases-url"),
-			Cloud:                  viper.GetString("cloud"),
-			ApvRemote:              viper.GetString("apv-remote"),
-			ApvBranch:              viper.GetString("apv-branch"),
-			ApvRevision:            viper.GetString("apv-revision"),
+			Version:                       stackVersion,
+			Name:                          viper.GetString("name"),
+			Region:                        viper.GetString("region"),
+			Device:                        viper.GetString("device"),
+			DeviceDetails:                 supportedDevices.GetDeviceDetails(viper.GetString("device")),
+			Email:                         viper.GetString("email"),
+			InstanceType:                  viper.GetString("instance-type"),
+			InstanceRegions:               viper.GetString("instance-regions"),
+			SkipPrice:                     viper.GetString("skip-price"),
+			MaxPrice:                      viper.GetString("max-price"),
+			SSHKey:                        viper.GetString("ssh-key"),
+			Schedule:                      viper.GetString("schedule"),
+			ChromiumBuildDisabled:         viper.GetBool("chromium-build-disabled"),
+			ChromiumVersion:               viper.GetString("chromium-version"),
+			CoreConfigRepo:                viper.GetString("core-config-repo"),
+			CoreConfigRepoBranch:          viper.GetString("core-config-repo-branch"),
+			CustomConfigRepo:              viper.GetString("custom-config-repo"),
+			CustomConfigRepoBranch:        viper.GetString("custom-config-repo-branch"),
+			ReleasesURL:                   viper.GetString("releases-url"),
+			Cloud:                         viper.GetString("cloud"),
+			InstanceDebugDelayTermination: viper.GetBool("instance-debug-delay-termination"),
+			ApvRemote:                     viper.GetString("apv-remote"),
+			ApvBranch:                     viper.GetString("apv-branch"),
+			ApvRevision:                   viper.GetString("apv-revision"),
 		}
 
 		templateRenderer, err := templates.New(templateConfig, templatesFiles, configuredOutputDir)

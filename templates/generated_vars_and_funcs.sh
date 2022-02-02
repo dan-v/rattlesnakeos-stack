@@ -79,6 +79,11 @@ cleanup() {
   if [ $rv -ne 0 ]; then
     notify "RattlesnakeOS Build FAILED" 1
   fi
+  <% if .InstanceDebugDelayTermination -%>
+  while pgrep -u ubuntu sshd > /dev/null 2>&1; do
+    sleep 300
+  done
+  <%- end %>
   sudo shutdown -h now
   <%- else %>
   echo "todo"

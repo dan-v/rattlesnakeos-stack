@@ -93,6 +93,8 @@ type Config struct {
 	ReleasesURL string
 	// Cloud specifies which cloud to build on (only aws supported right now)
 	Cloud string
+	// Delay instance shutdown/termination if there are active SSH sessions
+	InstanceDebugDelayTermination bool
 	// TODO: apv workaround - remove once alternative is built
 	// ApvRemote is the git remote that contains an android-prepare-vendor repo
 	ApvRemote string
