@@ -1,3 +1,6 @@
+# NOTICE: This project is no longer being maintained
+
+## Overview
 Build your own customized Android OS for Google Pixel phones using [AWS](https://aws.amazon.com/) cloud infrastructure. The default OS that this tools builds without any customizations is called `RattlesnakeOS`.  If there is something you don't like about the default OS, you can add customizations on top of it or start with a completely blank slate and build your own OS.
 
 ## Features
